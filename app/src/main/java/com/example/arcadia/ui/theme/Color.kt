@@ -26,9 +26,15 @@ val DarkIndigo = Color(0xFF1B1A55)
 val SlateBlue = Color(0xFF535C91)
 val LightSlate = Color(0xFF9290C3)
 
-// Theme-based background gradient
+
+val GrayDarker = Color(0xFFEBEBEB)
 val Surface = Color(0xFF00123B)
 val TextPrimary = Color(0xFFDCDCDC)
 val ButtonPrimary = Color(0xFF62B4DA)
 
 val YellowAccent = Color(0xFFFBB02E)
+
+val TextSecondary = Color(0xFF00123B)
+
+val ButtonSecondary = GrayDarker
+val ButtonDisabled = GrayDarker

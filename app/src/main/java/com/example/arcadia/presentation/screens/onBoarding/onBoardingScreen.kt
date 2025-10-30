@@ -39,9 +39,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.domain.model.OnBoardingPage
+import com.example.arcadia.presentation.componenets.PrimaryButton
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.EXTRA_LARGE_PADDING
 import com.example.arcadia.ui.theme.MEDIUM_PADDING
+import com.example.arcadia.ui.theme.RobotoCondensedFont
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextPrimary
 import com.example.arcadia.ui.theme.YellowAccent
@@ -160,6 +162,8 @@ fun PagerScreen(onBoardingPage: OnBoardingPage) {
                     .padding(horizontal = EXTRA_LARGE_PADDING),
                 text = onBoardingPage.description,
                 fontSize = 24.sp,
+                fontFamily = RobotoCondensedFont,
+                lineHeight = 28.sp,
                 letterSpacing = 1.2.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
@@ -182,24 +186,11 @@ fun FinishButton(
             modifier = modifier,
             contentAlignment = Alignment.Center
         ) {
-            Button(
+            PrimaryButton(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                text = "Get Started",
                 onClick = onClick,
-                colors = ButtonColors(
-                    containerColor = ButtonPrimary,
-                    contentColor = Color.White,
-                    disabledContainerColor = ButtonPrimary,
-                    disabledContentColor = Color.White
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = EXTRA_LARGE_PADDING)
-            ) {
-                Text(
-                    text = "Get Started",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
+            )
         }
     }
 }
