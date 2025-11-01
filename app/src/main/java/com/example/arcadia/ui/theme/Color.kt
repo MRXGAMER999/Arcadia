@@ -29,12 +29,12 @@ val LightSlate = Color(0xFF9290C3)
 
 val GrayDarker = Color(0xFFEBEBEB)
 val Surface = Color(0xFF00123B)
-val TextPrimary = Color(0xFFDCDCDC)
+val TextPrimary = Surface
 val ButtonPrimary = Color(0xFF62B4DA)
 
 val YellowAccent = Color(0xFFFBB02E)
 
-val TextSecondary = Color(0xFF00123B)
+val TextSecondary = Color(0xFFDCDCDC)
 
 val ButtonSecondary = GrayDarker
 val ButtonDisabled = GrayDarker
