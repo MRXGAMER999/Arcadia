@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.example.arcadia.R
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.FontSize
+import com.example.arcadia.ui.theme.GrayDarker
 import com.example.arcadia.ui.theme.TextPrimary
 
 @ExperimentalMaterial3ExpressiveApi
@@ -45,7 +46,7 @@ fun GoogleButton(
     secondaryText: String = "Please wait...",
     icon: Int = R.drawable.google_logo,
     shape: Shape = RoundedCornerShape(size = 99.dp),
-    backgroundColor: Color = TextPrimary,
+    backgroundColor: Color = GrayDarker,
     borderColor: Color = ButtonPrimary,
     progressIndicatorColor: Color = ButtonPrimary,
     onClick: () -> Unit
@@ -60,7 +61,7 @@ fun GoogleButton(
         modifier = Modifier
             .clip(shape)
             .border(
-                width = 1.dp,
+                width = 3.dp,
                 color = borderColor,
                 shape = shape
             )
