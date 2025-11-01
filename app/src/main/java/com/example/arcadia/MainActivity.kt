@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.example.arcadia.navigation.NavigationRoot
 import com.example.arcadia.ui.theme.ArcadiaTheme
 
 class MainActivity : ComponentActivity() {
@@ -21,30 +22,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ArcadiaTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                NavigationRoot(
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ArcadiaTheme {
-        Greeting("Android")
-    }
-}
 
