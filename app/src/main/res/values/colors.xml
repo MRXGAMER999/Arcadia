@@ -7,4 +7,9 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- Arcadia brand colors - Dark blue theme -->
+    <color name="arcadia_background">#FF00123B</color>
+    <color name="arcadia_surface">#FF00123B</color>
+    <color name="arcadia_button_blue">#FF62B4DA</color>
 </resources>

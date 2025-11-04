@@ -24,39 +24,50 @@ class GamerRepositoryImpl: GamerRepository {
         onError: (String) -> Unit
     ) {
         try {
+            android.util.Log.d("GamerRepository", "createUser called for user: ${user?.uid}")
+            
             if (user != null){
                 val database = Firebase.firestore
+                android.util.Log.d("GamerRepository", "Got Firestore instance")
+                
                 val userCollection = database.collection("users")
+                android.util.Log.d("GamerRepository", "Checking if user document exists...")
+                
                 val userDoc = userCollection.document(user.uid).get().await()
+                android.util.Log.d("GamerRepository", "User doc exists: ${userDoc.exists()}")
+                
                 if(userDoc.exists()){
                     // Existing user - return their profile completion status
                     val gamer = userDoc.toObject(Gamer::class.java)
+                    android.util.Log.d("GamerRepository", "Existing user, profileComplete: ${gamer?.profileComplete}")
                     onSuccess(gamer?.profileComplete ?: false)
                 } else {
                     // New user - create user with profileComplete = false
+                    android.util.Log.d("GamerRepository", "Creating new user document")
                     val userData = hashMapOf(
                         "id" to user.uid,
-                        "firstName" to (user.displayName?.split(" ")?.firstOrNull() ?: "Unknown"),
-                        "lastName" to (user.displayName?.split(" ")?.lastOrNull() ?: "Unknown"),
+                        "name" to (user.displayName ?: "Unknown"),
                         "email" to (user.email ?: "Unknown"),
-                        "profileComplete" to false,
-                        "cart" to emptyList<Any>()
+                        "username" to "",
+                        "country" to null,
+                        "city" to null,
+                        "gender" to null,
+                        "description" to "",
+                        "profileComplete" to false
                     )
 
                     userCollection.document(user.uid).set(userData).await()
-                    userCollection.document(user.uid)
-                        .collection("privateData")
-                        .document("role")
-                        .set(mapOf("isAdmin" to false))
-                        .await()
+                    android.util.Log.d("GamerRepository", "User document created successfully")
                     onSuccess(false) // New user, profile not complete
                 }
 
             } else {
+                android.util.Log.e("GamerRepository", "User is null")
                 onError("User is not available")
             }
 
         } catch (e: Exception) {
+            android.util.Log.e("GamerRepository", "Error in createUser: ${e.message}", e)
             onError(e.message ?: "Error while creating customer")
         }
     }
@@ -80,9 +91,38 @@ class GamerRepositoryImpl: GamerRepository {
                         }
 
                         if (documentSnapshot.exists()) {
-                            val customer = documentSnapshot.toObject(Gamer::class.java)
-                            if (customer != null) {
-                                send(RequestState.Success(customer))
+                            // Try to parse as Gamer
+                            var gamer = documentSnapshot.toObject(Gamer::class.java)
+                            
+                            // Migration: Handle old data structure with firstName/lastName
+                            if (gamer != null && gamer.name.isBlank()) {
+                                val firstName = documentSnapshot.getString("firstName") ?: ""
+                                val lastName = documentSnapshot.getString("lastName") ?: ""
+                                val fullName = "$firstName $lastName".trim()
+                                
+                                if (fullName.isNotBlank()) {
+                                    // Migrate old structure to new
+                                    gamer = gamer.copy(name = fullName)
+                                    
+                                    // Update Firestore with new structure
+                                    try {
+                                        database.collection("users")
+                                            .document(userId)
+                                            .update(
+                                                mapOf(
+                                                    "name" to fullName,
+                                                    "username" to (gamer.username.ifBlank { "" })
+                                                )
+                                            )
+                                            .await()
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("GamerRepository", "Migration failed: ${e.message}")
+                                    }
+                                }
+                            }
+                            
+                            if (gamer != null) {
+                                send(RequestState.Success(gamer))
                             } else {
                                 send(RequestState.Error("Error parsing customer data"))
                             }
@@ -95,6 +135,45 @@ class GamerRepositoryImpl: GamerRepository {
             }
         } catch (e: Exception) {
             send(RequestState.Error("Error fetching customer data: ${e.message}"))
+        }
+    }
+
+    override suspend fun updateGamer(
+        gamer: Gamer,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        try {
+            val userId = getCurrentUserId()
+            if (userId != null) {
+                val firestore = Firebase.firestore
+                val userCollection = firestore.collection("users")
+                val existingUser = userCollection
+                    .document(gamer.id)
+                    .get()
+                    .await()
+                if (existingUser.exists()) {
+                    userCollection
+                        .document(gamer.id)
+                        .update(
+                            "name", gamer.name,
+                            "username", gamer.username,
+                            "country", gamer.country,
+                            "city", gamer.city,
+                            "gender", gamer.gender,
+                            "description", gamer.description,
+                            "profileComplete", gamer.profileComplete
+                        )
+                        .await()
+                    onSuccess()
+                } else {
+                    onError("User not found")
+                }
+            } else {
+                onError("User is not available")
+            }
+        } catch (e: Exception) {
+            onError(e.message ?: "Error updating user")
         }
     }
 

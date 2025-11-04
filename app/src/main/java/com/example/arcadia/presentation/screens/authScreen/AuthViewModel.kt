@@ -28,8 +28,16 @@ class AuthViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             gamerRepository.createUser(
                 user = user,
-                onSuccess = onSuccess,
-                onError = onError
+                onSuccess = { profileComplete ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        onSuccess(profileComplete)
+                    }
+                },
+                onError = { error ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        onError(error)
+                    }
+                }
             )
         }
     }

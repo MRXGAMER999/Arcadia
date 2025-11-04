@@ -25,6 +25,7 @@ class GoogleAuthUiClient(
                 buildSignInRequest()
             ).await()
         } catch (e: Exception) {
+            android.util.Log.e("GoogleAuthUiClient", "Sign-in failed: ${e.message}", e)
             e.printStackTrace()
             if (e is CancellationException) throw e
             null
