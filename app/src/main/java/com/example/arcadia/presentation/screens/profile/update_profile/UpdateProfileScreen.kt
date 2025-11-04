@@ -243,7 +243,6 @@ fun ProfileTextField(
     readOnly: Boolean = false,
     enabled: Boolean = true
 ) {
-
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
