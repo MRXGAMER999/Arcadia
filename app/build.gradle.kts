@@ -58,8 +58,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
-
-
     // Firebase (🔥)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
