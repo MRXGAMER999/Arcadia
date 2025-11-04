@@ -14,5 +14,12 @@ interface GamerRepository {
     )
 
     fun readCustomerFlow(): Flow<RequestState<Gamer>>
+    
+    suspend fun updateGamer(
+        gamer: Gamer,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    )
+    
     suspend fun signOut(): RequestState<Unit>
 }

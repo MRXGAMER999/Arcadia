@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.Arcadia" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Base application theme with dark blue background to match Arcadia -->
+    <style name="Theme.Arcadia" parent="android:Theme.Material.NoActionBar">
+        <!-- Set the dark blue background color -->
+        <item name="android:windowBackground">@color/arcadia_background</item>
+        <item name="android:statusBarColor">@color/arcadia_background</item>
+        <item name="android:navigationBarColor">@color/arcadia_background</item>
+        <!-- Set status bar icons to light (for visibility on dark background) -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
 </resources>

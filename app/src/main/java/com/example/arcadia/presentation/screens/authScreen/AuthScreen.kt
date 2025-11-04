@@ -99,32 +99,58 @@ fun AuthScreen(
                 }
 
                 LaunchedEffect(state.isSignInSuccessful, state.signInError) {
-                    if (state.isSignInSuccessful) {
-                        val currentUser = signInViewModel.getCurrentUser()
+                    try {
+                        if (state.isSignInSuccessful) {
+                            Log.d("AuthScreen", "Sign-in successful, getting current user")
+                            val currentUser = signInViewModel.getCurrentUser()
+                            Log.d("AuthScreen", "Current user: ${currentUser?.uid}")
 
-                        authViewModel.createCustomer(
-                            user = currentUser,
-                            onSuccess = { profileComplete ->
+                            if (currentUser == null) {
+                                Log.e("AuthScreen", "Current user is null after successful sign-in")
+                                Toast.makeText(context, "Sign-in succeeded but user is null", Toast.LENGTH_LONG).show()
                                 signInViewModel.resetState()
-                                coroutineScope.launch {
-                                    kotlinx.coroutines.delay(800)
-                                    // Navigate based on profile completion status
-                                    if (profileComplete) {
-                                        onNavigateToHome()
-                                    } else {
-                                        onNavigateToProfile()
-                                    }
-                                }
-                            },
-                            onError = { error ->
-                                Log.e("AuthScreen", "Error creating customer: $error")
-                                Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
                                 loading = false
+                                return@LaunchedEffect
                             }
-                        )
-                    } else if (state.signInError != null) {
-                        Log.e("AuthScreen", "Sign in error: ${state.signInError}")
-                        Toast.makeText(context, "Sign in failed: ${state.signInError}", Toast.LENGTH_LONG).show()
+
+                            Log.d("AuthScreen", "Creating/fetching customer document")
+                            authViewModel.createCustomer(
+                                user = currentUser,
+                                onSuccess = { profileComplete ->
+                                    Log.d("AuthScreen", "Customer created/fetched, profileComplete: $profileComplete")
+                                    signInViewModel.resetState()
+                                    coroutineScope.launch {
+                                        try {
+                                            kotlinx.coroutines.delay(800)
+                                            // Navigate based on profile completion status
+                                            Log.d("AuthScreen", "Navigating to ${if (profileComplete) "Home" else "Profile"}")
+                                            if (profileComplete) {
+                                                onNavigateToHome()
+                                            } else {
+                                                onNavigateToProfile()
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e("AuthScreen", "Navigation error: ${e.message}", e)
+                                            Toast.makeText(context, "Navigation error: ${e.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                onError = { error ->
+                                    Log.e("AuthScreen", "Error creating customer: $error")
+                                    Toast.makeText(context, "Error: $error", Toast.LENGTH_LONG).show()
+                                    loading = false
+                                    signInViewModel.resetState()
+                                }
+                            )
+                        } else if (state.signInError != null) {
+                            Log.e("AuthScreen", "Sign in error: ${state.signInError}")
+                            Toast.makeText(context, "Sign in failed: ${state.signInError}", Toast.LENGTH_LONG).show()
+                            signInViewModel.resetState()
+                            loading = false
+                        }
+                    } catch (e: Exception) {
+                        Log.e("AuthScreen", "Unexpected error in LaunchedEffect: ${e.message}", e)
+                        Toast.makeText(context, "Unexpected error: ${e.message}", Toast.LENGTH_LONG).show()
                         signInViewModel.resetState()
                         loading = false
                     }
