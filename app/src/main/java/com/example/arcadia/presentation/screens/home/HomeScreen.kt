@@ -22,12 +22,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.presentation.screens.authScreen.AuthViewModel
+import com.example.arcadia.ui.theme.ButtonPrimary
+import com.example.arcadia.ui.theme.Surface
+import com.example.arcadia.ui.theme.TextSecondary
 import org.koin.androidx.compose.koinViewModel
-
-// Colors from EditProfileScreen
-val Background = Color(0xFF00123B)
-val TextColor = Color(0xFFDCDCDC)
-val ButtonBlue = Color(0xFF62B4DA)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,13 +35,13 @@ fun HomeScreen(
     val authViewModel: AuthViewModel = koinViewModel()
     
     Scaffold(
-        containerColor = Background,
+        containerColor = Surface,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = "Arcadia Home",
-                        color = TextColor,
+                        color = TextSecondary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -58,13 +56,13 @@ fun HomeScreen(
                         Icon(
                             imageVector = Icons.Default.ExitToApp,
                             contentDescription = "Sign Out",
-                            tint = ButtonBlue
+                            tint = ButtonPrimary
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Background,
-                    titleContentColor = TextColor
+                    containerColor = Surface,
+                    titleContentColor = TextSecondary
                 )
             )
         }
@@ -81,18 +79,18 @@ fun HomeScreen(
             ) {
                 Text(
                     text = "🎮 Welcome to Arcadia! 🎮",
-                    color = TextColor,
+                    color = TextSecondary,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Your gaming social platform",
-                    color = TextColor.copy(alpha = 0.7f),
+                    color = TextSecondary.copy(alpha = 0.7f),
                     fontSize = 18.sp
                 )
                 Text(
                     text = "(Home screen coming soon...)",
-                    color = ButtonBlue,
+                    color = ButtonPrimary,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(top = 32.dp)
                 )

@@ -12,7 +12,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.arcadia.presentation.screens.authScreen.AuthScreen
-import com.example.arcadia.presentation.screens.home.HomeScreen
+import com.example.arcadia.presentation.screens.home.NewHomeScreen
 import com.example.arcadia.presentation.screens.onBoarding.OnBoardingScreen
 import com.example.arcadia.presentation.screens.profile.update_profile.EditProfileScreen
 import com.example.arcadia.ui.theme.Surface
@@ -78,10 +78,12 @@ fun NavigationRoot(
                     NavEntry(
                         key = key,
                     ) {
-                        HomeScreen(
-                            onSignOut = {
-                                backStack.clear()
-                                backStack.add(AuthScreenKey)
+                        NewHomeScreen(
+                            onNavigateToProfile = {
+                                backStack.add(EditProfileScreenKey)
+                            },
+                            onGameClick = { gameId ->
+                                // TODO: Navigate to game details screen
                             }
                         )
                     }
