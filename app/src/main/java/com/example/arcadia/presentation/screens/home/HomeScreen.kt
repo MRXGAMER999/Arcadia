@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.arcadia.navigation.HomeTabsNavContent
@@ -23,6 +24,9 @@ import com.example.arcadia.presentation.screens.home.components.HomeBottomBar
 import com.example.arcadia.presentation.screens.home.components.HomeTopBar
 import com.example.arcadia.ui.theme.Surface
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 
 data class NotificationData(
     val message: String,
@@ -44,20 +48,28 @@ fun NewHomeScreen(
     var isProcessingQueue by remember { mutableStateOf(false) }
 
     // Process notification queue
-    LaunchedEffect(notificationQueue.size, isProcessingQueue) {
-        if (notificationQueue.isNotEmpty() && !isProcessingQueue) {
-            isProcessingQueue = true
-            val notification = notificationQueue.removeAt(0)
-            notificationMessage = notification.message
-            isSuccess = notification.isSuccess
-            showNotification = true
-            
-            // Wait for notification to be dismissed (2000ms display + 300ms animation)
-            delay(2300)
-            showNotification = false
-            delay(100) // Small gap between notifications
-            isProcessingQueue = false
-        }
+    LaunchedEffect(Unit) {
+        snapshotFlow { notificationQueue.size }
+            .collectLatest {
+                if (!isProcessingQueue && notificationQueue.isNotEmpty()) {
+                    isProcessingQueue = true
+                    while (notificationQueue.isNotEmpty()) {
+                        val notification = notificationQueue.removeAt(0)
+                        notificationMessage = notification.message
+                        isSuccess = notification.isSuccess
+                        showNotification = true
+
+                        // Wait until notification is dismissed
+                        snapshotFlow { showNotification }
+                            .filter { !it }
+                            .first()
+
+                        // Small gap between notifications
+                        delay(100)
+                    }
+                    isProcessingQueue = false
+                }
+            }
     }
 
     Box(

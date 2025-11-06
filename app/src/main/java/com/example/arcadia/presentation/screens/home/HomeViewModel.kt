@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.UserGamesRepository
 import com.example.arcadia.util.RequestState
@@ -17,20 +18,26 @@ data class HomeScreenState(
     val upcomingGames: RequestState<List<Game>> = RequestState.Idle,
     val recommendedGames: RequestState<List<Game>> = RequestState.Idle,
     val newReleases: RequestState<List<Game>> = RequestState.Idle,
-    val gamesInLibrary: Set<Int> = emptySet() // Track rawgIds of games in library
+    val gamesInLibrary: Set<Int> = emptySet(), // Track rawgIds of games in library
+    val gameListIds: Set<Int> = emptySet() // Track rawgIds of games in game list (WANT, PLAYING, etc.)
 )
 
 class HomeViewModel(
     private val gameRepository: GameRepository,
-    private val userGamesRepository: UserGamesRepository
+    private val userGamesRepository: UserGamesRepository,
+    private val gameListRepository: GameListRepository
 ) : ViewModel() {
     
     var screenState by mutableStateOf(HomeScreenState())
         private set
     
+    // Cache unfiltered recommendations for reapplying filters
+    private var lastRecommended: List<Game> = emptyList()
+    
     init {
         loadAllData()
         loadGamesInLibrary()
+        loadGameListIds()
     }
     
     fun loadAllData() {
@@ -39,6 +46,7 @@ class HomeViewModel(
         loadRecommendedGames()
         loadNewReleases()
         loadGamesInLibrary()
+        loadGameListIds()
     }
     
     private fun loadGamesInLibrary() {
@@ -47,6 +55,21 @@ class HomeViewModel(
                 if (state is RequestState.Success) {
                     val gameIds = state.data.map { it.rawgId }.toSet()
                     screenState = screenState.copy(gamesInLibrary = gameIds)
+                    // Reapply recommendation filter when library changes
+                    applyRecommendationFilter()
+                }
+            }
+        }
+    }
+    
+    private fun loadGameListIds() {
+        viewModelScope.launch {
+            gameListRepository.getGameList().collectLatest { state ->
+                if (state is RequestState.Success) {
+                    val gameIds = state.data.map { it.rawgId }.toSet()
+                    screenState = screenState.copy(gameListIds = gameIds)
+                    // Reapply recommendation filter when game list changes
+                    applyRecommendationFilter()
                 }
             }
         }
@@ -71,10 +94,24 @@ class HomeViewModel(
     private fun loadRecommendedGames() {
         viewModelScope.launch {
             // Using popular tags for recommendations: singleplayer, multiplayer, action
-            gameRepository.getRecommendedGames(tags = "singleplayer,multiplayer", page = 1, pageSize = 10).collectLatest { state ->
-                screenState = screenState.copy(recommendedGames = state)
+            // Fetch more games (50) to ensure we have enough after filtering
+            gameRepository.getRecommendedGames(tags = "singleplayer,multiplayer", page = 1, pageSize = 50).collectLatest { state ->
+                if (state is RequestState.Success) {
+                    lastRecommended = state.data
+                    applyRecommendationFilter()
+                } else {
+                    screenState = screenState.copy(recommendedGames = state)
+                }
             }
         }
+    }
+    
+    private fun applyRecommendationFilter() {
+        if (lastRecommended.isEmpty()) return
+        
+        val excludeIds = screenState.gamesInLibrary + screenState.gameListIds
+        val filtered = lastRecommended.filter { it.id !in excludeIds }
+        screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
     }
     
     private fun loadNewReleases() {
@@ -90,7 +127,7 @@ class HomeViewModel(
     }
     
     fun isGameInLibrary(gameId: Int): Boolean {
-        return screenState.gamesInLibrary.contains(gameId)
+        return screenState.gamesInLibrary.contains(gameId) || screenState.gameListIds.contains(gameId)
     }
     
     fun addGameToLibrary(
