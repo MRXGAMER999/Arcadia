@@ -13,6 +13,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.arcadia.presentation.screens.authScreen.AuthScreen
 import com.example.arcadia.presentation.screens.home.NewHomeScreen
+import com.example.arcadia.presentation.screens.myGames.MyGamesScreen
 import com.example.arcadia.presentation.screens.onBoarding.OnBoardingScreen
 import com.example.arcadia.presentation.screens.profile.update_profile.EditProfileScreen
 import com.example.arcadia.ui.theme.Surface
@@ -31,6 +32,9 @@ object EditProfileScreenKey : NavKey
 
 @Serializable
 object OnboardingScreenKey : NavKey
+
+@Serializable
+object MyGamesScreenKey : NavKey
 
 @Composable
 fun NavigationRoot(
@@ -82,6 +86,9 @@ fun NavigationRoot(
                             onNavigateToProfile = {
                                 backStack.add(EditProfileScreenKey)
                             },
+                            onNavigateToMyGames = {
+                                backStack.add(MyGamesScreenKey)
+                            },
                             onGameClick = { gameId ->
                                 // TODO: Navigate to game details screen
                             }
@@ -114,6 +121,20 @@ fun NavigationRoot(
                                 // Navigate to auth screen
                                 backStack.remove(key)
                                 backStack.add(AuthScreenKey)
+                            }
+                        )
+                    }
+                }
+                is MyGamesScreenKey -> {
+                    NavEntry(
+                        key = key,
+                    ) {
+                        MyGamesScreen(
+                            onNavigateBack = {
+                                backStack.remove(key)
+                            },
+                            onGameClick = { gameId ->
+                                // TODO: Navigate to game details screen
                             }
                         )
                     }
