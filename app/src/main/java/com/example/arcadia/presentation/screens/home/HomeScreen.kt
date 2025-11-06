@@ -1,101 +1,107 @@
 package com.example.arcadia.presentation.screens.home
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.arcadia.presentation.screens.authScreen.AuthViewModel
-import com.example.arcadia.ui.theme.ButtonPrimary
+import com.example.arcadia.navigation.HomeTabsNavContent
+import com.example.arcadia.presentation.components.TopNotification
+import com.example.arcadia.presentation.screens.home.components.HomeBottomBar
+import com.example.arcadia.presentation.screens.home.components.HomeTopBar
 import com.example.arcadia.ui.theme.Surface
-import com.example.arcadia.ui.theme.TextSecondary
-import org.koin.androidx.compose.koinViewModel
+import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
+data class NotificationData(
+    val message: String,
+    val isSuccess: Boolean
+)
+
 @Composable
-fun HomeScreen(
-    onSignOut: () -> Unit = {}
+fun NewHomeScreen(
+    onNavigateToProfile: () -> Unit = {},
+    onNavigateToMyGames: () -> Unit = {},
+    onGameClick: (Int) -> Unit = {}
 ) {
-    val authViewModel: AuthViewModel = koinViewModel()
-    
-    Scaffold(
-        containerColor = Surface,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Arcadia Home",
-                        color = TextSecondary,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                actions = {
-                    IconButton(onClick = {
-                        authViewModel.signOut(
-                            onSuccess = onSignOut,
-                            onError = { }
-                        )
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = "Sign Out",
-                            tint = ButtonPrimary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Surface,
-                    titleContentColor = TextSecondary
-                )
-            )
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showNotification by remember { mutableStateOf(false) }
+    var notificationMessage by remember { mutableStateOf("") }
+    var isSuccess by remember { mutableStateOf(false) }
+    val notificationQueue = remember { mutableStateListOf<NotificationData>() }
+    var isProcessingQueue by remember { mutableStateOf(false) }
+
+    // Process notification queue
+    LaunchedEffect(notificationQueue.size, isProcessingQueue) {
+        if (notificationQueue.isNotEmpty() && !isProcessingQueue) {
+            isProcessingQueue = true
+            val notification = notificationQueue.removeAt(0)
+            notificationMessage = notification.message
+            isSuccess = notification.isSuccess
+            showNotification = true
+            
+            // Wait for notification to be dismissed (2000ms display + 300ms animation)
+            delay(2300)
+            showNotification = false
+            delay(100) // Small gap between notifications
+            isProcessingQueue = false
         }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentAlignment = Alignment.Center
-        ) {
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Scaffold(
+            containerColor = Surface,
+            topBar = {
+                HomeTopBar(
+                    selectedIndex = selectedTab,
+                    onSearchClick = { /* TODO: Search */ },
+                    onNotificationsClick = { /* TODO: Notifications */ },
+                    onSettingsClick = { onNavigateToProfile() }
+                )
+            },
+            bottomBar = {
+                HomeBottomBar(
+                    selectedItemIndex = selectedTab,
+                    onSelectedItemIndexChange = { selectedTab = it }
+                )
+            }
+        ) { paddingValues ->
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.padding(paddingValues)
             ) {
-                Text(
-                    text = "🎮 Welcome to Arcadia! 🎮",
-                    color = TextSecondary,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Your gaming social platform",
-                    color = TextSecondary.copy(alpha = 0.7f),
-                    fontSize = 18.sp
-                )
-                Text(
-                    text = "(Home screen coming soon...)",
-                    color = ButtonPrimary,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 32.dp)
+                HomeTabsNavContent(
+                    selectedIndex = selectedTab,
+                    onGameClick = onGameClick,
+                    snackbarHostState = snackbarHostState,
+                    onShowNotification = { message, success ->
+                        notificationQueue.add(NotificationData(message, success))
+                    }
                 )
             }
         }
+
+        // Top notification banner
+        TopNotification(
+            visible = showNotification,
+            message = notificationMessage,
+            isSuccess = isSuccess,
+            onDismiss = { showNotification = false },
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 
