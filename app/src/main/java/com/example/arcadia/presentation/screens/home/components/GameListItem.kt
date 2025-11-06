@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,6 +39,7 @@ import com.example.arcadia.domain.model.Game
 fun GameListItem(
     game: Game,
     modifier: Modifier = Modifier,
+    isInLibrary: Boolean = false,
     onClick: () -> Unit = {},
     onAddToLibrary: () -> Unit = {}
 ) {
@@ -149,12 +151,13 @@ fun GameListItem(
                 
                 IconButton(
                     onClick = onAddToLibrary,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(32.dp),
+                    enabled = !isInLibrary
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add to library",
-                        tint = Color(0xFF62B4DA)
+                        imageVector = if (isInLibrary) Icons.Default.Check else Icons.Default.Add,
+                        contentDescription = if (isInLibrary) "In library" else "Add to library",
+                        tint = if (isInLibrary) Color(0xFF4CAF50) else Color(0xFF62B4DA)
                     )
                 }
             }

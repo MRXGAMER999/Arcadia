@@ -16,7 +16,8 @@ data class HomeScreenState(
     val popularGames: RequestState<List<Game>> = RequestState.Idle,
     val upcomingGames: RequestState<List<Game>> = RequestState.Idle,
     val recommendedGames: RequestState<List<Game>> = RequestState.Idle,
-    val newReleases: RequestState<List<Game>> = RequestState.Idle
+    val newReleases: RequestState<List<Game>> = RequestState.Idle,
+    val gamesInLibrary: Set<Int> = emptySet() // Track rawgIds of games in library
 )
 
 class HomeViewModel(
@@ -29,6 +30,7 @@ class HomeViewModel(
     
     init {
         loadAllData()
+        loadGamesInLibrary()
     }
     
     fun loadAllData() {
@@ -36,6 +38,18 @@ class HomeViewModel(
         loadUpcomingGames()
         loadRecommendedGames()
         loadNewReleases()
+        loadGamesInLibrary()
+    }
+    
+    private fun loadGamesInLibrary() {
+        viewModelScope.launch {
+            userGamesRepository.getUserGames().collectLatest { state ->
+                if (state is RequestState.Success) {
+                    val gameIds = state.data.map { it.rawgId }.toSet()
+                    screenState = screenState.copy(gamesInLibrary = gameIds)
+                }
+            }
+        }
     }
     
     private fun loadPopularGames() {
@@ -75,12 +89,23 @@ class HomeViewModel(
         loadAllData()
     }
     
+    fun isGameInLibrary(gameId: Int): Boolean {
+        return screenState.gamesInLibrary.contains(gameId)
+    }
+    
     fun addGameToLibrary(
         game: Game,
         onSuccess: () -> Unit = {},
-        onError: (String) -> Unit = {}
+        onError: (String) -> Unit = {},
+        onAlreadyInLibrary: () -> Unit = {}
     ) {
         viewModelScope.launch {
+            // Check if game is already in library
+            if (isGameInLibrary(game.id)) {
+                onAlreadyInLibrary()
+                return@launch
+            }
+            
             when (val result = userGamesRepository.addGame(game)) {
                 is RequestState.Success -> onSuccess()
                 is RequestState.Error -> onError(result.message)

@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext traffic for debugging purposes -->
-    <base-config cleartextTrafficPermitted="true">
-        <trust-anchors>
-            <!-- Trust preinstalled CAs -->
-            <certificates src="system" />
-            <!-- Additionally trust user added CAs -->
-            <certificates src="user" />
-        </trust-anchors>
-    </base-config>
+    <!-- Allow cleartext traffic to localhost and emulator addresses for Firebase Emulator -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">192.168.1.5</domain>
+    </domain-config>
 </network-security-config>
-
