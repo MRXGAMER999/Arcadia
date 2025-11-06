@@ -55,7 +55,8 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun MyGamesScreen(
     onNavigateBack: () -> Unit = {},
-    onGameClick: (Int) -> Unit = {}
+    onGameClick: (Int) -> Unit = {},
+    showBackButton: Boolean = false
 ) {
     val viewModel: MyGamesViewModel = koinViewModel()
     val screenState = viewModel.screenState
@@ -64,38 +65,40 @@ fun MyGamesScreen(
     Scaffold(
         containerColor = Surface,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "My Game List",
-                        color = TextSecondary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+            if (showBackButton) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "My Game List",
+                            color = TextSecondary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = ButtonPrimary
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { /* TODO: More options */ }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                tint = ButtonPrimary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Surface,
+                        titleContentColor = TextSecondary
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = ButtonPrimary
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* TODO: More options */ }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More options",
-                            tint = ButtonPrimary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Surface,
-                    titleContentColor = TextSecondary
                 )
-            )
+            }
         }
     ) { paddingValues ->
         Column(

@@ -135,7 +135,8 @@ fun NavigationRoot(
                             },
                             onGameClick = { gameId ->
                                 // TODO: Navigate to game details screen
-                            }
+                            },
+                            showBackButton = true
                         )
                     }
                 }
