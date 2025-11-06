@@ -33,20 +33,23 @@ class HomeViewModel(
     
     // Cache unfiltered recommendations for reapplying filters
     private var lastRecommended: List<Game> = emptyList()
+    private var recommendationPage = 1
+    private var isLoadingMoreRecommendations = false
     
     init {
-        loadAllData()
+        // Start real-time flows only once
         loadGamesInLibrary()
         loadGameListIds()
+        // Load initial data
+        loadAllData()
     }
     
     fun loadAllData() {
+        // Reload one-shot data (no duplicate flows)
         loadPopularGames()
         loadUpcomingGames()
         loadRecommendedGames()
         loadNewReleases()
-        loadGamesInLibrary()
-        loadGameListIds()
     }
     
     private fun loadGamesInLibrary() {
@@ -94,14 +97,50 @@ class HomeViewModel(
     private fun loadRecommendedGames() {
         viewModelScope.launch {
             // Using popular tags for recommendations: singleplayer, multiplayer, action
-            // Fetch more games (50) to ensure we have enough after filtering
-            gameRepository.getRecommendedGames(tags = "singleplayer,multiplayer", page = 1, pageSize = 50).collectLatest { state ->
+            // Clamp to 40 (RAWG API typical limit)
+            gameRepository.getRecommendedGames(tags = "singleplayer,multiplayer", page = 1, pageSize = 40).collectLatest { state ->
                 if (state is RequestState.Success) {
                     lastRecommended = state.data
+                    recommendationPage = 1
                     applyRecommendationFilter()
+                    // Auto-fetch more if filtered results are too few
+                    ensureMinimumRecommendations()
                 } else {
                     screenState = screenState.copy(recommendedGames = state)
                 }
+            }
+        }
+    }
+    
+    private fun ensureMinimumRecommendations(minCount: Int = 15) {
+        viewModelScope.launch {
+            val current = screenState.recommendedGames
+            if (current is RequestState.Success && current.data.size < minCount && !isLoadingMoreRecommendations) {
+                loadMoreRecommendations()
+            }
+        }
+    }
+    
+    fun loadMoreRecommendations() {
+        if (isLoadingMoreRecommendations) return
+        
+        viewModelScope.launch {
+            isLoadingMoreRecommendations = true
+            try {
+                recommendationPage++
+                gameRepository.getRecommendedGames(
+                    tags = "singleplayer,multiplayer", 
+                    page = recommendationPage, 
+                    pageSize = 40
+                ).collect { state ->
+                    if (state is RequestState.Success) {
+                        lastRecommended = lastRecommended + state.data
+                        applyRecommendationFilter()
+                    }
+                    isLoadingMoreRecommendations = false
+                }
+            } catch (e: Exception) {
+                isLoadingMoreRecommendations = false
             }
         }
     }
@@ -112,6 +151,9 @@ class HomeViewModel(
         val excludeIds = screenState.gamesInLibrary + screenState.gameListIds
         val filtered = lastRecommended.filter { it.id !in excludeIds }
         screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
+        
+        // Auto-backfill if filtered results are too few
+        ensureMinimumRecommendations()
     }
     
     private fun loadNewReleases() {

@@ -18,7 +18,7 @@ val networkModule = module {
             val originalHttpUrl = original.url
             
             val url = originalHttpUrl.newBuilder()
-                .addQueryParameter("key", "8fab60496d4b475987e3950a0b40f420")
+                .addQueryParameter("key", com.example.arcadia.BuildConfig.RAWG_API_KEY)
                 .build()
             
             val requestBuilder = original.newBuilder()
@@ -29,10 +29,14 @@ val networkModule = module {
         }
     }
     
-    // Logging Interceptor
+    // Logging Interceptor (disable in release)
     single {
         HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (com.example.arcadia.BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         }
     }
     

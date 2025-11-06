@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -18,6 +20,18 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Load properties from local.properties and expose RAWG API Key via BuildConfig
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            val localProperties = Properties().apply {
+                load(localPropertiesFile.inputStream())
+            }
+            val rawgApiKey = localProperties.getProperty("RAWG_API_KEY", "")
+            buildConfigField("String", "RAWG_API_KEY", "\"$rawgApiKey\"")
+        } else {
+            buildConfigField("String", "RAWG_API_KEY", "\"\"")
+        }
     }
 
     buildTypes {

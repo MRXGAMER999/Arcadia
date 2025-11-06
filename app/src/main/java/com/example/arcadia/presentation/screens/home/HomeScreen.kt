@@ -37,7 +37,8 @@ data class NotificationData(
 fun NewHomeScreen(
     onNavigateToProfile: () -> Unit = {},
     onNavigateToMyGames: () -> Unit = {},
-    onGameClick: (Int) -> Unit = {}
+    onGameClick: (Int) -> Unit = {},
+    viewModel: HomeViewModel = org.koin.androidx.compose.koinViewModel()
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -50,7 +51,7 @@ fun NewHomeScreen(
     // Process notification queue
     LaunchedEffect(Unit) {
         snapshotFlow { notificationQueue.size }
-            .collectLatest {
+            .collect {
                 if (!isProcessingQueue && notificationQueue.isNotEmpty()) {
                     isProcessingQueue = true
                     while (notificationQueue.isNotEmpty()) {
@@ -101,7 +102,8 @@ fun NewHomeScreen(
                     snackbarHostState = snackbarHostState,
                     onShowNotification = { message, success ->
                         notificationQueue.add(NotificationData(message, success))
-                    }
+                    },
+                    viewModel = viewModel
                 )
             }
         }
