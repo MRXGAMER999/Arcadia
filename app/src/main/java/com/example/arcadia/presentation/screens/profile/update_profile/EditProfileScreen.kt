@@ -1,6 +1,5 @@
 package com.example.arcadia.presentation.screens.profile.update_profile
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,8 +7,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.arcadia.presentation.screens.profile.components.ProfileDropdown
+import com.example.arcadia.presentation.screens.profile.components.ProfileTextField
 import com.example.arcadia.util.Countries
 import com.example.arcadia.util.DisplayResult
 import kotlinx.coroutines.delay
@@ -274,113 +273,6 @@ fun EditProfileScreen(
                 }
             }
         )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ProfileTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    placeholder: String = "",
-    isError: Boolean = false,
-    singleLine: Boolean = true,
-    trailingIcon: @Composable (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-    readOnly: Boolean = false,
-    enabled: Boolean = true
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label, color = FieldTxt.copy(alpha = 0.7f)) },
-        placeholder = { Text(placeholder, color = FieldTxt.copy(alpha = 0.4f)) },
-        singleLine = singleLine,
-        trailingIcon = trailingIcon,
-        isError = isError,
-        readOnly = readOnly,
-        enabled = enabled,
-        textStyle = LocalTextStyle.current.copy(color = FieldTxt),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = if (isError) ErrorRed else BorderCyanOnSelect,
-            unfocusedBorderColor = if (isError) ErrorRed else Border.copy(alpha = 0.5f),
-            focusedTextColor = FieldTxt,
-            unfocusedTextColor = FieldTxt,
-            cursorColor = BorderCyanOnSelect,
-            focusedContainerColor = FieldBg,
-            unfocusedContainerColor = FieldBg,
-            disabledContainerColor = FieldBg.copy(alpha = 0.3f),
-            disabledTextColor = FieldTxt.copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(12.dp),
-        modifier = modifier.fillMaxWidth()
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ProfileDropdown(
-    label: String,
-    options: List<String>,
-    selected: String,
-    onSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    isError: Boolean = false
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
-        modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = selected,
-            onValueChange = {},
-            label = { Text(label, color = FieldTxt.copy(alpha = 0.7f)) },
-            readOnly = true,
-            isError = isError,
-            trailingIcon = {
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = FieldTxt
-                )
-            },
-            textStyle = LocalTextStyle.current.copy(color = FieldTxt),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = if (isError) ErrorRed else BorderCyanOnSelect,
-                unfocusedBorderColor = if (isError) ErrorRed else Border.copy(alpha = 0.5f),
-                focusedTextColor = FieldTxt,
-                unfocusedTextColor = FieldTxt,
-                cursorColor = BorderCyanOnSelect,
-                focusedContainerColor = FieldBg,
-                unfocusedContainerColor = FieldBg
-            ),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(FieldBg)
-        ) {
-            options.forEachIndexed { index, option ->
-                DropdownMenuItem(
-                    text = { Text(option, color = FieldTxt) },
-                    onClick = {
-                        onSelected(option)
-                        expanded = false
-                    }
-                )
-                if (index < options.lastIndex)
-                    Divider(color = BorderCyanOnSelect.copy(alpha = 0.3f), thickness = 1.dp)
-            }
         }
     }
 }

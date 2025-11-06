@@ -23,9 +23,17 @@ class GameRepositoryImpl(
         try {
             emit(RequestState.Loading)
             
+            // Get date range for current year
+            val now = LocalDate.now()
+            val startOfYear = now.withDayOfYear(1)
+            val endOfYear = now.withMonth(12).withDayOfMonth(31)
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            val dates = "${startOfYear.format(formatter)},${endOfYear.format(formatter)}"
+            
             val response = apiService.getGames(
                 page = page,
                 pageSize = pageSize,
+                dates = dates,
                 ordering = "-rating,-added" // Order by rating and number of people who added it
             )
             
@@ -114,10 +122,17 @@ class GameRepositoryImpl(
         try {
             emit(RequestState.Loading)
             
+            // Get date range for last 5 years
+            val today = LocalDate.now()
+            val fiveYearsAgo = today.minusYears(5)
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            val dates = "${fiveYearsAgo.format(formatter)},${today.format(formatter)}"
+            
             val response = apiService.getGames(
                 page = page,
                 pageSize = pageSize,
                 tags = tags,
+                dates = dates,
                 ordering = "-rating,-added"
             )
             
