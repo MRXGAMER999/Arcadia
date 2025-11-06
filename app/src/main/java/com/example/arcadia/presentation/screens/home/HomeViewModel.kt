@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.domain.repository.GameRepository
+import com.example.arcadia.domain.repository.UserGamesRepository
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -19,7 +20,8 @@ data class HomeScreenState(
 )
 
 class HomeViewModel(
-    private val gameRepository: GameRepository
+    private val gameRepository: GameRepository,
+    private val userGamesRepository: UserGamesRepository
 ) : ViewModel() {
     
     var screenState by mutableStateOf(HomeScreenState())
@@ -72,5 +74,20 @@ class HomeViewModel(
     fun retry() {
         loadAllData()
     }
+    
+    fun addGameToLibrary(
+        game: Game,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            when (val result = userGamesRepository.addGame(game)) {
+                is RequestState.Success -> onSuccess()
+                is RequestState.Error -> onError(result.message)
+                else -> {}
+            }
+        }
+    }
 }
+
 

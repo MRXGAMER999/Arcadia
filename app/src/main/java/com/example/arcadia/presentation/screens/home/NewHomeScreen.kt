@@ -32,6 +32,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -40,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.example.arcadia.presentation.screens.home.components.GameListItem
 import com.example.arcadia.presentation.screens.home.components.LargeGameCard
 import com.example.arcadia.presentation.screens.home.components.SectionHeader
@@ -61,14 +66,18 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun NewHomeScreen(
     onNavigateToProfile: () -> Unit = {},
+    onNavigateToMyGames: () -> Unit = {},
     onGameClick: (Int) -> Unit = {}
 ) {
     val viewModel: HomeViewModel = koinViewModel()
     val screenState = viewModel.screenState
     var selectedTab by remember { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
     
     Scaffold(
         containerColor = Surface,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -152,7 +161,10 @@ fun NewHomeScreen(
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    onClick = { 
+                        selectedTab = 2
+                        onNavigateToMyGames()
+                    },
                     icon = {
                         Icon(
                             imageVector = Icons.Default.VideogameAsset,
@@ -288,7 +300,28 @@ fun NewHomeScreen(
                     items(state.data.take(3)) { game ->
                         GameListItem(
                             game = game,
-                            onClick = { onGameClick(game.id) }
+                            onClick = { onGameClick(game.id) },
+                            onAddToLibrary = {
+                                viewModel.addGameToLibrary(
+                                    game = game,
+                                    onSuccess = {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = "✓ ${game.name} added to library",
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
+                                    },
+                                    onError = { error ->
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = "✗ Failed to add game: $error",
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
+                                    }
+                                )
+                            }
                         )
                     }
                 }

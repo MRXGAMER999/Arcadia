@@ -32,3 +32,4 @@ interface GameRepository {
     fun getRecommendedGames(tags: String, page: Int = 1, pageSize: Int = 10): Flow<RequestState<List<Game>>>
 }
 
+
