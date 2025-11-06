@@ -102,7 +102,8 @@ fun EditProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(20.dp),
+                        .padding(20.dp)
+                        .imePadding(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(

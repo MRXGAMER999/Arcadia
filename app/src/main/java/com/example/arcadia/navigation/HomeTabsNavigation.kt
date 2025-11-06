@@ -68,7 +68,8 @@ fun HomeTabsNavContent(
     selectedIndex: Int,
     onGameClick: (Int) -> Unit = {},
     snackbarHostState: SnackbarHostState,
-    onShowNotification: (String, Boolean) -> Unit = { _, _ -> }
+    onShowNotification: (String, Boolean) -> Unit = { _, _ -> },
+    viewModel: HomeViewModel
 ) {
     val homeBackStack = rememberNavBackStack(HomeTab)
     val discoverBackStack = rememberNavBackStack(DiscoverTab)
@@ -107,7 +108,8 @@ fun HomeTabsNavContent(
                                 HomeTabRoot(
                                     onGameClick = onGameClick,
                                     snackbarHostState = snackbarHostState,
-                                    onShowNotification = onShowNotification
+                                    onShowNotification = onShowNotification,
+                                    viewModel = viewModel
                                 )
                             }
                             else -> error("Unknown key for HomeTab backstack: $key")
@@ -125,7 +127,8 @@ fun HomeTabsNavContent(
                                 DiscoverTabRoot(
                                     onGameClick = onGameClick,
                                     snackbarHostState = snackbarHostState,
-                                    onShowNotification = onShowNotification
+                                    onShowNotification = onShowNotification,
+                                    viewModel = viewModel
                                 )
                             }
                             else -> error("Unknown key for DiscoverTab backstack: $key")
@@ -155,9 +158,9 @@ fun HomeTabsNavContent(
 private fun HomeTabRoot(
     onGameClick: (Int) -> Unit,
     snackbarHostState: SnackbarHostState,
-    onShowNotification: (String, Boolean) -> Unit
+    onShowNotification: (String, Boolean) -> Unit,
+    viewModel: HomeViewModel
 ) {
-    val viewModel: HomeViewModel = koinViewModel()
     val screenState = viewModel.screenState
     val coroutineScope = rememberCoroutineScope()
 
@@ -192,7 +195,7 @@ private fun HomeTabRoot(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp)
                         ) {
-                            items(state.data) { game ->
+                            items(state.data, key = { it.id }) { game ->
                                 LargeGameCard(
                                     game = game,
                                     onClick = { onGameClick(game.id) }
@@ -234,7 +237,7 @@ private fun HomeTabRoot(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp)
                         ) {
-                            items(state.data) { game ->
+                            items(state.data, key = { it.id }) { game ->
                                 SmallGameCard(
                                     game = game,
                                     onClick = { onGameClick(game.id) }
@@ -275,7 +278,7 @@ private fun HomeTabRoot(
                     }
                 }
                 is RequestState.Success -> {
-                    items(state.data.take(3)) { game ->
+                    items(state.data.take(3), key = { it.id }) { game ->
                         GameListItem(
                             game = game,
                             isInLibrary = viewModel.isGameInLibrary(game.id),
@@ -315,9 +318,9 @@ private fun HomeTabRoot(
 private fun DiscoverTabRoot(
     onGameClick: (Int) -> Unit,
     snackbarHostState: SnackbarHostState,
-    onShowNotification: (String, Boolean) -> Unit
+    onShowNotification: (String, Boolean) -> Unit,
+    viewModel: HomeViewModel
 ) {
-    val viewModel: HomeViewModel = koinViewModel()
     val screenState = viewModel.screenState
     val coroutineScope = rememberCoroutineScope()
 
@@ -352,7 +355,7 @@ private fun DiscoverTabRoot(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp)
                         ) {
-                            items(state.data) { game ->
+                            items(state.data, key = { it.id }) { game ->
                                 SmallGameCard(
                                     game = game,
                                     onClick = { onGameClick(game.id) }
@@ -393,7 +396,7 @@ private fun DiscoverTabRoot(
                     }
                 }
                 is RequestState.Success -> {
-                    items(state.data) { game ->
+                    items(state.data, key = { it.id }) { game ->
                         GameListItem(
                             game = game,
                             isInLibrary = viewModel.isGameInLibrary(game.id),
