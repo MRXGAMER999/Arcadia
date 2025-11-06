@@ -300,6 +300,7 @@ fun NewHomeScreen(
                     items(state.data.take(3)) { game ->
                         GameListItem(
                             game = game,
+                            isInLibrary = viewModel.isGameInLibrary(game.id),
                             onClick = { onGameClick(game.id) },
                             onAddToLibrary = {
                                 viewModel.addGameToLibrary(
@@ -316,6 +317,14 @@ fun NewHomeScreen(
                                         coroutineScope.launch {
                                             snackbarHostState.showSnackbar(
                                                 message = "✗ Failed to add game: $error",
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
+                                    },
+                                    onAlreadyInLibrary = {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = "${game.name} is already in your library",
                                                 duration = SnackbarDuration.Short
                                             )
                                         }
