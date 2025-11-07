@@ -1,7 +1,6 @@
 package com.example.arcadia.presentation.screens.detailsScreen
 
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,12 +36,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
-import com.example.arcadia.R
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.presentation.componenets.PrimaryButton
 import com.example.arcadia.presentation.componenets.VideoPlayerWithLoading
@@ -250,10 +248,15 @@ fun MediaCarouselSection(game: Game) {
                                         .clip(MaterialTheme.shapes.medium),
                                     contentScale = ContentScale.Crop,
                                     loading = {
-                                        CircularProgressIndicator(
-                                            color = ButtonPrimary,
-                                            modifier = Modifier.size(32.dp)
-                                        )
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                color = ButtonPrimary,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
                                     },
                                     error = {
                                         Text("🎮", fontSize = 32.sp)
@@ -297,27 +300,61 @@ fun GameHeaderSection(game: Game) {
                             .background(Color(0xFF1E2A47)),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = ButtonPrimary)
+                        CircularProgressIndicator(
+                            color = ButtonPrimary,
+                            modifier = Modifier.size(40.dp)
+                        )
                     }
                 },
                 error = {
-                    Image(
-                        painter = painterResource(R.drawable.hollow_knight_background),
-                        contentDescription = "Game background placeholder",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF1E2A47),
+                                        Color(0xFF2D3E5F)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = game.name,
+                            color = Color.White.copy(alpha = 0.3f),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
                 }
             )
         } else {
-            Image(
-                painter = painterResource(R.drawable.hollow_knight_background),
-                contentDescription = "Game background placeholder",
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp),
-                contentScale = ContentScale.Crop
-            )
+                    .height(300.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF1E2A47),
+                                Color(0xFF2D3E5F)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = game.name,
+                    color = Color.White.copy(alpha = 0.3f),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
         }
 
         // Gradient overlay
@@ -394,8 +431,8 @@ fun GameStatsSection(game: Game) {
 // Helper function to format large numbers
 private fun formatCount(count: Int): String {
     return when {
-        count >= 1_000_000 -> String.format("%.1fM", count / 1_000_000.0)
-        count >= 1_000 -> String.format("%.1fK", count / 1_000.0)
+        count >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", count / 1_000_000.0)
+        count >= 1_000 -> String.format(java.util.Locale.US, "%.1fK", count / 1_000.0)
         else -> count.toString()
     }
 }
@@ -477,7 +514,7 @@ fun UserRatingSection() {
             text = "Rate games, track your progress, and share your reviews",
             color = Color.White.copy(alpha = 0.7f),
             fontSize = 14.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -494,6 +531,19 @@ fun GameDescriptionSection(game: Game) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(bottom = 8.dp)
         )
+
+        // Description
+        game.description?.let { description ->
+            if (description.isNotBlank()) {
+                Text(
+                    text = description,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+        }
 
         // Genres
         if (game.genres.isNotEmpty()) {
