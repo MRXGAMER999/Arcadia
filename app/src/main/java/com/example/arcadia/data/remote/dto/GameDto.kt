@@ -43,7 +43,11 @@ data class GameDto(
     @SerializedName("tags")
     val tags: List<TagDto>?,
     @SerializedName("short_screenshots")
-    val shortScreenshots: List<ScreenshotDto>?
+    val shortScreenshots: List<ScreenshotDto>?,
+    @SerializedName("description")
+    val description: String?,
+    @SerializedName("description_raw")
+    val descriptionRaw: String?
 )
 
 data class PlatformWrapper(
