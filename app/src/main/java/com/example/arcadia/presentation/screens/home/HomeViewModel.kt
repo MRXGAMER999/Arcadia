@@ -10,6 +10,7 @@ import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.UserGamesRepository
 import com.example.arcadia.util.RequestState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -19,7 +20,8 @@ data class HomeScreenState(
     val recommendedGames: RequestState<List<Game>> = RequestState.Idle,
     val newReleases: RequestState<List<Game>> = RequestState.Idle,
     val gamesInLibrary: Set<Int> = emptySet(), // Track rawgIds of games in library
-    val gameListIds: Set<Int> = emptySet() // Track rawgIds of games in game list (WANT, PLAYING, etc.)
+    val gameListIds: Set<Int> = emptySet(), // Track rawgIds of games in game list (WANT, PLAYING, etc.)
+    val animatingGameIds: Set<Int> = emptySet() // Games currently animating out
 )
 
 class HomeViewModel(
@@ -148,7 +150,8 @@ class HomeViewModel(
     private fun applyRecommendationFilter() {
         if (lastRecommended.isEmpty()) return
         
-        val excludeIds = screenState.gamesInLibrary + screenState.gameListIds
+        // Exclude games in library but keep games that are currently animating out
+        val excludeIds = (screenState.gamesInLibrary + screenState.gameListIds) - screenState.animatingGameIds
         val filtered = lastRecommended.filter { it.id !in excludeIds }
         screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
         
@@ -185,9 +188,30 @@ class HomeViewModel(
                 return@launch
             }
             
+            // Mark game as animating to keep it visible during animation
+            screenState = screenState.copy(
+                animatingGameIds = screenState.animatingGameIds + game.id
+            )
+
             when (val result = userGamesRepository.addGame(game)) {
-                is RequestState.Success -> onSuccess()
-                is RequestState.Error -> onError(result.message)
+                is RequestState.Success -> {
+                    onSuccess()
+                    // Wait for animation to complete (600ms total: 300ms delay + 300ms animation)
+                    delay(600)
+                    // Remove from animating set to allow filtering
+                    screenState = screenState.copy(
+                        animatingGameIds = screenState.animatingGameIds - game.id
+                    )
+                    // Reapply filter to remove the game from the list
+                    applyRecommendationFilter()
+                }
+                is RequestState.Error -> {
+                    onError(result.message)
+                    // Remove from animating set on error
+                    screenState = screenState.copy(
+                        animatingGameIds = screenState.animatingGameIds - game.id
+                    )
+                }
                 else -> {}
             }
         }

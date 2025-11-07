@@ -16,6 +16,7 @@ import com.example.arcadia.presentation.screens.home.NewHomeScreen
 import com.example.arcadia.presentation.screens.myGames.MyGamesScreen
 import com.example.arcadia.presentation.screens.onBoarding.OnBoardingScreen
 import com.example.arcadia.presentation.screens.profile.update_profile.EditProfileScreen
+import com.example.arcadia.presentation.screens.searchScreen.SearchScreen
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.util.PreferencesManager
 import com.google.firebase.auth.FirebaseAuth
@@ -35,6 +36,9 @@ object OnboardingScreenKey : NavKey
 
 @Serializable
 object MyGamesScreenKey : NavKey
+
+@Serializable
+object SearchScreenKey : NavKey
 
 @Composable
 fun NavigationRoot(
@@ -89,6 +93,9 @@ fun NavigationRoot(
                             onNavigateToMyGames = {
                                 backStack.add(MyGamesScreenKey)
                             },
+                            onNavigateToSearch = {
+                                backStack.add(SearchScreenKey)
+                            },
                             onGameClick = { gameId ->
                                 // TODO: Navigate to game details screen
                             }
@@ -137,6 +144,17 @@ fun NavigationRoot(
                                 // TODO: Navigate to game details screen
                             },
                             showBackButton = true
+                        )
+                    }
+                }
+                is SearchScreenKey -> {
+                    NavEntry(
+                        key = key,
+                    ) {
+                        SearchScreen(
+                            onBackClick = {
+                                backStack.remove(key)
+                            }
                         )
                     }
                 }

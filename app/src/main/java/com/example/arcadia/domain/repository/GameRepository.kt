@@ -30,6 +30,11 @@ interface GameRepository {
      * Get recommended games based on tags
      */
     fun getRecommendedGames(tags: String, page: Int = 1, pageSize: Int = 10): Flow<RequestState<List<Game>>>
+    
+    /**
+     * Search games by query string
+     */
+    fun searchGames(query: String, page: Int = 1, pageSize: Int = 40): Flow<RequestState<List<Game>>>
 }
 
 

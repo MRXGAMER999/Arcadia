@@ -144,6 +144,26 @@ class GameRepositoryImpl(
             emit(RequestState.Error("Failed to fetch recommended games: ${e.message}"))
         }
     }.flowOn(Dispatchers.IO)
+    
+    override fun searchGames(query: String, page: Int, pageSize: Int): Flow<RequestState<List<Game>>> = flow {
+        try {
+            emit(RequestState.Loading)
+            
+            val response = apiService.getGames(
+                page = page,
+                pageSize = pageSize,
+                search = query,
+                ordering = "-rating,-added"
+            )
+            
+            val games = response.results.map { it.toGame() }
+            emit(RequestState.Success(games))
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error searching games: ${e.message}", e)
+            emit(RequestState.Error("Failed to search games: ${e.message}"))
+        }
+    }.flowOn(Dispatchers.IO)
 }
 
 
