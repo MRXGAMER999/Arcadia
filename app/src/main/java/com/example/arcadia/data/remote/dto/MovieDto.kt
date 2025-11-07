@@ -1,29 +1,33 @@
 package com.example.arcadia.data.remote.dto
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class MovieResponse(
-    @SerializedName("count")
+    @SerialName("count")
     val count: Int,
-    @SerializedName("results")
+    @SerialName("results")
     val results: List<MovieDto>
 )
 
+@Serializable
 data class MovieDto(
-    @SerializedName("id")
+    @SerialName("id")
     val id: Int,
-    @SerializedName("name")
+    @SerialName("name")
     val name: String,
-    @SerializedName("preview")
-    val preview: String?,
-    @SerializedName("data")
-    val data: MovieDataDto?
+    @SerialName("preview")
+    val preview: String? = null,
+    @SerialName("data")
+    val data: MovieDataDto? = null
 )
 
+@Serializable
 data class MovieDataDto(
-    @SerializedName("480")
-    val quality480: String?,
-    @SerializedName("max")
-    val qualityMax: String?
+    @SerialName("480")
+    val quality480: String? = null,
+    @SerialName("max")
+    val qualityMax: String? = null
 )
 

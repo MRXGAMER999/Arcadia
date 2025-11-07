@@ -1,16 +1,27 @@
 package com.example.arcadia.di
 
 import com.example.arcadia.data.remote.RawgApiService
+import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.dsl.module
 import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 
 val networkModule = module {
-    
+
+    // JSON instance for Kotlin Serialization
+    single {
+        Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            coerceInputValues = true
+        }
+    }
+
     // API Key Interceptor
     single<Interceptor> {
         Interceptor { chain ->
@@ -53,10 +64,12 @@ val networkModule = module {
     
     // Retrofit
     single {
+        val json = get<Json>()
+        val contentType = "application/json".toMediaType()
         Retrofit.Builder()
             .baseUrl(RawgApiService.BASE_URL)
             .client(get())
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(json.asConverterFactory(contentType))
             .build()
     }
     

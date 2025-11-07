@@ -39,7 +39,7 @@ val FieldTxt = Color(0xFFDCDCDC)
 val FieldBg = Color(0xFF00123B)
 val ButtonBlue = Color(0xFF62B4DA)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchScreen(
     onBackClick: (() -> Unit)? = null,
@@ -121,9 +121,8 @@ fun SearchScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
-                            color = ButtonBlue,
-                            modifier = Modifier.width(48.dp)
+                        LoadingIndicator(
+                            color = ButtonBlue
                         )
                     }
                 },
@@ -211,6 +210,7 @@ fun SearchScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 fun SearchResultCard(
     game: Game,
     isAdded: Boolean,
@@ -242,9 +242,8 @@ fun SearchResultCard(
                             .background(Color(0xFF1E2A47)),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
-                            color = ButtonBlue,
-                            modifier = Modifier.width(24.dp)
+                        LoadingIndicator(
+                            color = ButtonBlue
                         )
                     }
                 },

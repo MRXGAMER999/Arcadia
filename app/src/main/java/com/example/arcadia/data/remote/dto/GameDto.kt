@@ -1,95 +1,103 @@
 package com.example.arcadia.data.remote.dto
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class GamesResponse(
-    @SerializedName("count")
+    @SerialName("count")
     val count: Int,
-    @SerializedName("next")
-    val next: String?,
-    @SerializedName("previous")
-    val previous: String?,
-    @SerializedName("results")
+    @SerialName("next")
+    val next: String? = null,
+    @SerialName("previous")
+    val previous: String? = null,
+    @SerialName("results")
     val results: List<GameDto>
 )
 
+@Serializable
 data class GameDto(
-    @SerializedName("id")
+    @SerialName("id")
     val id: Int,
-    @SerializedName("slug")
+    @SerialName("slug")
     val slug: String,
-    @SerializedName("name")
+    @SerialName("name")
     val name: String,
-    @SerializedName("released")
-    val released: String?,
-    @SerializedName("tba")
+    @SerialName("released")
+    val released: String? = null,
+    @SerialName("tba")
     val tba: Boolean,
-    @SerializedName("background_image")
-    val backgroundImage: String?,
-    @SerializedName("rating")
+    @SerialName("background_image")
+    val backgroundImage: String? = null,
+    @SerialName("rating")
     val rating: Double,
-    @SerializedName("rating_top")
+    @SerialName("rating_top")
     val ratingTop: Int,
-    @SerializedName("ratings_count")
+    @SerialName("ratings_count")
     val ratingsCount: Int,
-    @SerializedName("metacritic")
-    val metacritic: Int?,
-    @SerializedName("playtime")
+    @SerialName("metacritic")
+    val metacritic: Int? = null,
+    @SerialName("playtime")
     val playtime: Int,
-    @SerializedName("platforms")
-    val platforms: List<PlatformWrapper>?,
-    @SerializedName("genres")
-    val genres: List<GenreDto>?,
-    @SerializedName("tags")
-    val tags: List<TagDto>?,
-    @SerializedName("short_screenshots")
-    val shortScreenshots: List<ScreenshotDto>?,
-    @SerializedName("description")
-    val description: String?,
-    @SerializedName("description_raw")
-    val descriptionRaw: String?
+    @SerialName("platforms")
+    val platforms: List<PlatformWrapper>? = null,
+    @SerialName("genres")
+    val genres: List<GenreDto>? = null,
+    @SerialName("tags")
+    val tags: List<TagDto>? = null,
+    @SerialName("short_screenshots")
+    val shortScreenshots: List<ScreenshotDto>? = null,
+    @SerialName("description")
+    val description: String? = null,
+    @SerialName("description_raw")
+    val descriptionRaw: String? = null
 )
 
+@Serializable
 data class PlatformWrapper(
-    @SerializedName("platform")
+    @SerialName("platform")
     val platform: PlatformDto
 )
 
+@Serializable
 data class PlatformDto(
-    @SerializedName("id")
+    @SerialName("id")
     val id: Int,
-    @SerializedName("name")
+    @SerialName("name")
     val name: String,
-    @SerializedName("slug")
+    @SerialName("slug")
     val slug: String
 )
 
+@Serializable
 data class GenreDto(
-    @SerializedName("id")
+    @SerialName("id")
     val id: Int,
-    @SerializedName("name")
+    @SerialName("name")
     val name: String,
-    @SerializedName("slug")
+    @SerialName("slug")
     val slug: String
 )
 
+@Serializable
 data class TagDto(
-    @SerializedName("id")
+    @SerialName("id")
     val id: Int,
-    @SerializedName("name")
+    @SerialName("name")
     val name: String,
-    @SerializedName("slug")
+    @SerialName("slug")
     val slug: String,
-    @SerializedName("language")
+    @SerialName("language")
     val language: String,
-    @SerializedName("games_count")
+    @SerialName("games_count")
     val gamesCount: Int
 )
 
+@Serializable
 data class ScreenshotDto(
-    @SerializedName("id")
+    @SerialName("id")
     val id: Int,
-    @SerializedName("image")
+    @SerialName("image")
     val image: String
 )
 

@@ -114,9 +114,12 @@ dependencies {
 
     // Retrofit
     implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.converter)
     implementation(libs.okhttp.logging.interceptor)
+
+    // Kotlin Serialization
+    implementation(libs.kotlinx.serialization.json)
 
     // Tests
     testImplementation(libs.junit)

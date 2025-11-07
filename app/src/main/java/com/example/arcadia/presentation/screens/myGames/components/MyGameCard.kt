@@ -12,7 +12,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ import com.example.arcadia.domain.model.UserGame
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
 @Composable
 fun MyGameCard(
@@ -58,9 +60,8 @@ fun MyGameCard(
                             .background(Color(0xFF1E2A47)),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF62B4DA),
-                            modifier = Modifier.width(24.dp)
+                        LoadingIndicator(
+                            color = Color(0xFF62B4DA)
                         )
                     }
                 },

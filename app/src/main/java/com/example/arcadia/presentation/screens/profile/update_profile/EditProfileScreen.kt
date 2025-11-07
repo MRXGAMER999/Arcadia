@@ -32,7 +32,7 @@ val ErrorRed = Color(0xFFFF3535)
 val ButtonBlue = Color(0xFF62B4DA)
 val ButtonTxt = Color(0xFF00123B)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun EditProfileScreen(
     onNavigationIconClicked: (() -> Unit)? = null,
@@ -90,7 +90,7 @@ fun EditProfileScreen(
             modifier = Modifier.padding(paddingValues),
             onLoading = {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ButtonBlue)
+                    LoadingIndicator(color = ButtonBlue)
                 }
             },
             onError = { errorMessage ->
@@ -238,10 +238,8 @@ fun EditProfileScreen(
                                 .height(56.dp)
                         ) {
                             if (isUpdating) {
-                                CircularProgressIndicator(
-                                    color = ButtonTxt,
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
+                                LoadingIndicator(
+                                    color = ButtonTxt
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text("Updating...", color = ButtonTxt, fontSize = 18.sp)
