@@ -278,7 +278,10 @@ private fun HomeTabRoot(
                     }
                 }
                 is RequestState.Success -> {
-                    items(state.data.take(3), key = { it.id }) { game ->
+                    items(
+                        items = state.data.take(3),
+                        key = { it.id }
+                    ) { game ->
                         GameListItem(
                             game = game,
                             isInLibrary = viewModel.isGameInLibrary(game.id),
@@ -296,7 +299,8 @@ private fun HomeTabRoot(
                                         onShowNotification("${game.name} is already in your library", false)
                                     }
                                 )
-                            }
+                            },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -396,7 +400,10 @@ private fun DiscoverTabRoot(
                     }
                 }
                 is RequestState.Success -> {
-                    items(state.data, key = { it.id }) { game ->
+                    items(
+                        items = state.data,
+                        key = { it.id }
+                    ) { game ->
                         GameListItem(
                             game = game,
                             isInLibrary = viewModel.isGameInLibrary(game.id),
@@ -414,7 +421,8 @@ private fun DiscoverTabRoot(
                                         onShowNotification("${game.name} is already in your library", false)
                                     }
                                 )
-                            }
+                            },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
