@@ -27,9 +27,10 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import com.example.arcadia.domain.model.Game
 import kotlinx.coroutines.delay
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
 @Composable
 fun GameListItem(
@@ -101,9 +103,8 @@ fun GameListItem(
                                 .background(Color(0xFF1E2A47)),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(
-                                color = Color(0xFF62B4DA),
-                                modifier = Modifier.width(32.dp)
+                            LoadingIndicator(
+                                color = Color(0xFF62B4DA)
                             )
                         }
                     },

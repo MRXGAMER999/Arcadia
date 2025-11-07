@@ -20,9 +20,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -104,14 +105,14 @@ fun DetailsScreen(
         }
     }
 }
-
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LoadingState(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator(color = ButtonPrimary)
+        LoadingIndicator(color = ButtonPrimary)
     }
 }
 
@@ -184,6 +185,7 @@ fun GameDetailsContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MediaCarouselSection(game: Game) {
     val mediaItems = buildList {
@@ -252,7 +254,7 @@ fun MediaCarouselSection(game: Game) {
                                             modifier = Modifier.fillMaxSize(),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            CircularProgressIndicator(
+                                            LoadingIndicator(
                                                 color = ButtonPrimary,
                                                 modifier = Modifier.size(24.dp)
                                             )
@@ -277,6 +279,7 @@ sealed class MediaItem {
     data class Screenshot(val url: String) : MediaItem()
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun GameHeaderSection(game: Game) {
     Box(
@@ -300,7 +303,7 @@ fun GameHeaderSection(game: Game) {
                             .background(Color(0xFF1E2A47)),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
+                        LoadingIndicator(
                             color = ButtonPrimary,
                             modifier = Modifier.size(40.dp)
                         )

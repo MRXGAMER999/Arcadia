@@ -20,7 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -153,6 +154,7 @@ fun HomeTabsNavContent(
         }
     }
 }
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
 @Composable
 private fun HomeTabRoot(
@@ -187,7 +189,7 @@ private fun HomeTabRoot(
                                 .height(200.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = ButtonPrimary)
+                            LoadingIndicator(color = ButtonPrimary)
                         }
                     }
                     is RequestState.Success -> {
@@ -229,7 +231,7 @@ private fun HomeTabRoot(
                                 .height(140.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = ButtonPrimary)
+                            LoadingIndicator(color = ButtonPrimary)
                         }
                     }
                     is RequestState.Success -> {
@@ -263,7 +265,7 @@ private fun HomeTabRoot(
                     onSeeAllClick = { /* TODO */ }
                 )
             }
-
+            // Recommended Games Section
             when (val state = screenState.recommendedGames) {
                 is RequestState.Loading -> {
                     item {
@@ -273,7 +275,7 @@ private fun HomeTabRoot(
                                 .height(200.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = ButtonPrimary)
+                            LoadingIndicator(color = ButtonPrimary)
                         }
                     }
                 }
@@ -318,6 +320,7 @@ private fun HomeTabRoot(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DiscoverTabRoot(
     onGameClick: (Int) -> Unit,
@@ -351,7 +354,7 @@ private fun DiscoverTabRoot(
                                 .height(140.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = ButtonPrimary)
+                            LoadingIndicator(color = ButtonPrimary)
                         }
                     }
                     is RequestState.Success -> {
@@ -395,7 +398,7 @@ private fun DiscoverTabRoot(
                                 .height(200.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = ButtonPrimary)
+                            LoadingIndicator(color = ButtonPrimary)
                         }
                     }
                 }

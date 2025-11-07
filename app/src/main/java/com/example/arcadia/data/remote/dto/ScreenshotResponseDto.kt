@@ -1,22 +1,25 @@
 package com.example.arcadia.data.remote.dto
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class ScreenshotResponse(
-    @SerializedName("count")
+    @SerialName("count")
     val count: Int,
-    @SerializedName("results")
+    @SerialName("results")
     val results: List<ScreenshotDetailDto>
 )
 
+@Serializable
 data class ScreenshotDetailDto(
-    @SerializedName("id")
+    @SerialName("id")
     val id: Int,
-    @SerializedName("image")
+    @SerialName("image")
     val image: String,
-    @SerializedName("width")
-    val width: Int?,
-    @SerializedName("height")
-    val height: Int?
+    @SerialName("width")
+    val width: Int? = null,
+    @SerialName("height")
+    val height: Int? = null
 )
 
