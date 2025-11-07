@@ -1,19 +1,13 @@
 package com.example.arcadia.presentation.screens.detailsScreen
 
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,17 +15,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.window.Dialog // ← ADD THIS LINE
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,19 +41,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.SubcomposeAsyncImage
 import com.example.arcadia.R
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.presentation.componenets.PrimaryButton
+import com.example.arcadia.presentation.componenets.VideoPlayerWithLoading
 import com.example.arcadia.ui.theme.ButtonPrimary
+import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.util.RequestState
 import org.koin.androidx.compose.koinViewModel
-
-// List of Hollow Knight screenshots
-private val hollowKnightScreenshots = listOf(
-    R.drawable.hollow_knight_screen1,
-    R.drawable.hollow_knight_screen2,
-    R.drawable.hollow_knight_screen3,
-    R.drawable.hollow_knight_screen4
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,7 +63,7 @@ fun DetailsScreen(
         viewModel.loadGameDetails(gameId)
     }
 
-    val gameState = viewModel.gameState
+    val uiState = viewModel.uiState
 
     Scaffold(
         topBar = {
@@ -99,16 +85,22 @@ fun DetailsScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent
                 )
             )
         },
-        containerColor = Color(0xFF00123B)
+        containerColor = Surface
     ) { paddingValues ->
-        when (val state = gameState) {
+        when (val state = uiState.gameState) {
             is RequestState.Loading -> LoadingState(modifier = Modifier.padding(paddingValues))
-            is RequestState.Success -> GameDetailsContent(game = state.data, modifier = Modifier.padding(paddingValues))
+            is RequestState.Success -> GameDetailsContent(
+                game = state.data,
+                isInLibrary = uiState.isInLibrary,
+                addToLibraryInProgress = uiState.addToLibraryInProgress,
+                onAddToLibrary = { viewModel.addToLibrary() },
+                modifier = Modifier.padding(paddingValues)
+            )
             is RequestState.Error -> ErrorState(message = state.message, onRetry = { viewModel.retry() }, modifier = Modifier.padding(paddingValues))
             else -> {}
         }
@@ -159,32 +151,127 @@ private fun ErrorState(
 }
 
 @Composable
-fun GameDetailsContent(game: Game, modifier: Modifier = Modifier) {
-    var selectedScreenshot by remember { mutableStateOf<Int?>(null) }
-
+fun GameDetailsContent(
+    game: Game,
+    isInLibrary: Boolean,
+    addToLibraryInProgress: Boolean,
+    onAddToLibrary: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        // Original background header with game image
         GameHeaderSection(game = game)
+
         GameStatsSection(game = game)
+
+        // Media carousel with trailer and screenshots
+        Spacer(modifier = Modifier.height(16.dp))
+        MediaCarouselSection(game = game)
+
+        // Primary action - Add to Library only
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Spacer(modifier = Modifier.height(16.dp))
+            PrimaryButton(
+                text = if (isInLibrary) "Game is already in your library" else "Add to Library",
+                enabled = !isInLibrary && !addToLibraryInProgress,
+                onClick = onAddToLibrary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        GameDescriptionSection(game = game)
         Spacer(modifier = Modifier.height(24.dp))
         UserRatingSection()
-        Spacer(modifier = Modifier.height(24.dp))
-        GameDescriptionSection()
-        Spacer(modifier = Modifier.height(24.dp))
-        ScreenshotsSection(
-            onScreenshotClick = { screenshotResId ->
-                selectedScreenshot = screenshotResId
-            }
-        )
         Spacer(modifier = Modifier.height(32.dp))
     }
+}
 
-    // Show popup if a screenshot is selected
-    if (selectedScreenshot != null) {
-        ScreenshotPopup(
-            screenshotResId = selectedScreenshot!!,
-            onDismiss = { selectedScreenshot = null }
-        )
+@Composable
+fun MediaCarouselSection(game: Game) {
+    val mediaItems = buildList {
+        // Add trailer as first item if available
+        game.trailerUrl?.let { add(MediaItem.Video(it)) }
+        // Add screenshots
+        game.screenshots.forEach { add(MediaItem.Screenshot(it)) }
     }
+
+    if (mediaItems.isNotEmpty()) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Text(
+                text = if (game.trailerUrl != null) "Trailer & Screenshots" else "Screenshots",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
+
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(mediaItems.size) { index ->
+                val item = mediaItems[index]
+                Box(
+                    modifier = Modifier
+                        .width(if (index == 0 && item is MediaItem.Video) 350.dp else 300.dp)
+                        .height(200.dp)
+                        .padding(start = if (index == 0) 16.dp else 0.dp, end = if (index == mediaItems.size - 1) 16.dp else 0.dp)
+                ) {
+                    when (item) {
+                        is MediaItem.Video -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(MaterialTheme.shapes.medium)
+                                    .background(Color(0xFF1E2A47))
+                            ) {
+                                VideoPlayerWithLoading(
+                                    videoUrl = item.url,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                        is MediaItem.Screenshot -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(MaterialTheme.shapes.medium)
+                                    .background(Color(0xFF1E2A47)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                SubcomposeAsyncImage(
+                                    model = item.url,
+                                    contentDescription = "Game screenshot",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(MaterialTheme.shapes.medium),
+                                    contentScale = ContentScale.Crop,
+                                    loading = {
+                                        CircularProgressIndicator(
+                                            color = ButtonPrimary,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    },
+                                    error = {
+                                        Text("🎮", fontSize = 32.sp)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Sealed class to represent media items
+sealed class MediaItem {
+    data class Video(val url: String) : MediaItem()
+    data class Screenshot(val url: String) : MediaItem()
 }
 
 @Composable
@@ -194,15 +281,44 @@ fun GameHeaderSection(game: Game) {
             .fillMaxWidth()
             .height(300.dp)
     ) {
-        // Load from local resources
-        Image(
-            painter = painterResource(R.drawable.hollow_knight_background),
-            contentDescription = "Game background",
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp),
-            contentScale = ContentScale.Crop
-        )
+        // Load game background image from API or use placeholder
+        if (game.backgroundImage != null) {
+            SubcomposeAsyncImage(
+                model = game.backgroundImage,
+                contentDescription = "Game background",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+                contentScale = ContentScale.Crop,
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF1E2A47)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = ButtonPrimary)
+                    }
+                },
+                error = {
+                    Image(
+                        painter = painterResource(R.drawable.hollow_knight_background),
+                        contentDescription = "Game background placeholder",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            )
+        } else {
+            Image(
+                painter = painterResource(R.drawable.hollow_knight_background),
+                contentDescription = "Game background placeholder",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+                contentScale = ContentScale.Crop
+            )
+        }
 
         // Gradient overlay
         Box(
@@ -212,7 +328,7 @@ fun GameHeaderSection(game: Game) {
                     brush = Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color(0xFF00123B)
+                            Surface
                         ),
                         startY = 400f,
                         endY = 600f
@@ -249,17 +365,17 @@ fun GameStatsSection(game: Game) {
             color = Color(0xFFFFD700)
         )
 
-        // Popularity (mocked)
+        // Rating Top
         StatItem(
-            value = "1.9K",
-            label = "Popularity",
+            value = game.ratingTop.toString(),
+            label = "Max Rating",
             icon = null,
             color = Color(0xFF62B4DA)
         )
 
-        // Reviews (mocked)
+        // Reviews
         StatItem(
-            value = "276",
+            value = formatCount(game.ratingsCount),
             label = "Reviews",
             icon = null,
             color = Color(0xFF62B4DA)
@@ -272,6 +388,15 @@ fun GameStatsSection(game: Game) {
             icon = null,
             color = Color(0xFF62B4DA)
         )
+    }
+}
+
+// Helper function to format large numbers
+private fun formatCount(count: Int): String {
+    return when {
+        count >= 1_000_000 -> String.format("%.1fM", count / 1_000_000.0)
+        count >= 1_000 -> String.format("%.1fK", count / 1_000.0)
+        else -> count.toString()
     }
 }
 
@@ -316,81 +441,49 @@ fun StatItem(
 @Composable
 fun UserRatingSection() {
     Column(
-        modifier = Modifier.padding(horizontal = 16.dp)
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .background(Color(0xFF1E2A47), MaterialTheme.shapes.medium)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Your rating",
+            text = "🎮",
+            fontSize = 48.sp
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Your Rating & Status",
             color = Color.White,
-            fontSize = 18.sp,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Feature Coming Soon",
+            color = ButtonPrimary,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Rating number
-            Text(
-                text = "10",
-                color = Color(0xFF62B4DA),
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Status
-            Box(
-                modifier = Modifier
-                    .background(Color(0xFF62B4DA), MaterialTheme.shapes.small)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = "Finished",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Stats row (Finished, Playing, Want, Dropped)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            UserStatItem(count = "1.3K", label = "Finished")
-            UserStatItem(count = "100", label = "Playing")
-            UserStatItem(count = "171", label = "Want")
-            UserStatItem(count = "139", label = "Dropped")
-        }
-    }
-}
-
-@Composable
-fun UserStatItem(count: String, label: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
         Text(
-            text = count,
-            color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label,
+            text = "Rate games, track your progress, and share your reviews",
             color = Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp
+            fontSize = 14.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }
 
 @Composable
-fun GameDescriptionSection() {
+fun GameDescriptionSection(game: Game) {
     Column(
         modifier = Modifier.padding(horizontal = 16.dp)
     ) {
@@ -402,14 +495,38 @@ fun GameDescriptionSection() {
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        Text(
-            text = "Embark on the craziest journey of your life in Hollow Knight, a genre-bending platform adventure. Explore twisting caverns, battle tainted creatures, and befriend strange bugs, all in a classic, hand-drawn 2D style.",
-            color = Color.White.copy(alpha = 0.9f),
-            fontSize = 14.sp,
-            lineHeight = 20.sp
-        )
+        // Genres
+        if (game.genres.isNotEmpty()) {
+            Text(
+                text = "Genres: ${game.genres.joinToString(", ")}",
+                color = ButtonPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // Platforms
+        if (game.platforms.isNotEmpty()) {
+            Text(
+                text = "Platforms: ${game.platforms.joinToString(", ")}",
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
+        // Tags
+        if (game.tags.isNotEmpty()) {
+            Text(
+                text = "Tags: ${game.tags.joinToString(", ")}",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Additional info
         Row(
@@ -418,70 +535,35 @@ fun GameDescriptionSection() {
         ) {
             Column {
                 Text(
-                    text = "Developers:",
-                    color = Color(0xFF62B4DA),
+                    text = "Release Date:",
+                    color = ButtonPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = "Team Cherry",
+                    text = game.released ?: "TBA",
                     color = Color.White.copy(alpha = 0.8f),
                     fontSize = 14.sp
                 )
             }
 
-            Column {
-                Text(
-                    text = "Publishers:",
-                    color = Color(0xFF62B4DA),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "Team Cherry",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 14.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ScreenshotsSection(
-    onScreenshotClick: (Int) -> Unit
-) {
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp)
-    ) {
-        Text(
-            text = "Screenshots",
-            color = Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(hollowKnightScreenshots) { screenshotResId ->
-                Box(
-                    modifier = Modifier
-                        .size(200.dp, 120.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .clickable { onScreenshotClick(screenshotResId) }
-                        .background(Color(0xFF1E2A47)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(screenshotResId),
-                        contentDescription = "Game screenshot",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(MaterialTheme.shapes.medium),
-                        contentScale = ContentScale.Crop
+            game.metacritic?.let { score ->
+                Column {
+                    Text(
+                        text = "Metacritic:",
+                        color = ButtonPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = score.toString(),
+                        color = when {
+                            score >= 75 -> Color(0xFF6DC849)
+                            score >= 50 -> Color(0xFFFFD700)
+                            else -> Color(0xFFFF6B6B)
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -489,68 +571,4 @@ fun ScreenshotsSection(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ScreenshotPopup(
-    screenshotResId: Int,
-    onDismiss: () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 13f)
-                .clip(MaterialTheme.shapes.large)
-                .background(Color(0xFF1E2A47)),
-            contentAlignment = Alignment.Center
-        ) {
-            // Close button
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(10.dp)
-            ) {
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = Color.White
-                    )
-                }
-            }
 
-            // Screenshot image
-            Image(
-                painter = painterResource(screenshotResId),
-                contentDescription = "Game screenshot",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(10.dp),
-                contentScale = ContentScale.Fit
-            )
-        }
-    }
-}
-
-private fun createMockGame(id: Int): Game {
-    return Game(
-        id = id,
-        slug = "hollow-knight",
-        name = "Hollow Knight",
-        released = "2017-02-24",
-        backgroundImage = null,
-        rating = 8.9,
-        metacritic = 87,
-        playtime = 25,
-        platforms = listOf("PC", "Nintendo Switch", "PlayStation 4", "Xbox One", "macOS", "Linux"),
-        genres = listOf("Action-Adventure", "Metroidvania", "Platformer"),
-        tags = listOf("2D", "Dark Fantasy", "Singleplayer", "Atmospheric", "Difficult", "Great Soundtrack")
-    )
-}

@@ -164,6 +164,61 @@ class GameRepositoryImpl(
             emit(RequestState.Error("Failed to search games: ${e.message}"))
         }
     }.flowOn(Dispatchers.IO)
+
+    override fun getGameDetails(gameId: Int): Flow<RequestState<Game>> = flow {
+        try {
+            emit(RequestState.Loading)
+            val dto = apiService.getGameDetails(gameId)
+            emit(RequestState.Success(dto.toGame()))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching game details: ${e.message}", e)
+            emit(RequestState.Error("Failed to fetch game details: ${e.message}"))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    override fun getGameDetailsWithMedia(gameId: Int): Flow<RequestState<Game>> = flow {
+        try {
+            emit(RequestState.Loading)
+            
+            // Fetch game details
+            val gameDto = apiService.getGameDetails(gameId)
+            var game = gameDto.toGame()
+            
+            // Fetch trailer
+            try {
+                val movieResponse = apiService.getGameVideos(gameId)
+                Log.d(TAG, "Movies response for game $gameId: $movieResponse")
+                
+                val trailerUrl = movieResponse.results.firstOrNull()?.data?.qualityMax
+                    ?: movieResponse.results.firstOrNull()?.data?.quality480
+                
+                if (trailerUrl != null) {
+                    Log.d(TAG, "Found trailer URL for game $gameId: $trailerUrl")
+                } else {
+                    Log.d(TAG, "No trailer URL found for game $gameId")
+                }
+                
+                game = game.copy(trailerUrl = trailerUrl)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching game trailer: ${e.message}", e)
+                // Continue without trailer
+            }
+            
+            // Fetch screenshots
+            try {
+                val screenshotResponse = apiService.getGameScreenshots(gameId)
+                Log.d(TAG, "Screenshots response for game $gameId: count=${screenshotResponse.count}, results size=${screenshotResponse.results.size}")
+                val screenshots = screenshotResponse.results.map { it.image }
+                game = game.copy(screenshots = screenshots)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching game screenshots: ${e.message}", e)
+                // Continue with default screenshots from game details
+            }
+            
+            emit(RequestState.Success(game))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching game details with media: ${e.message}", e)
+            emit(RequestState.Error("Failed to fetch game details: ${e.message}"))
+        }
+    }.flowOn(Dispatchers.IO)
 }
-
-

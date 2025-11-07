@@ -5,13 +5,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.arcadia.presentation.screens.authScreen.AuthScreen
+import com.example.arcadia.presentation.screens.detailsScreen.DetailsScreen
 import com.example.arcadia.presentation.screens.home.NewHomeScreen
 import com.example.arcadia.presentation.screens.myGames.MyGamesScreen
 import com.example.arcadia.presentation.screens.onBoarding.OnBoardingScreen
@@ -39,6 +39,9 @@ object MyGamesScreenKey : NavKey
 
 @Serializable
 object SearchScreenKey : NavKey
+
+@Serializable
+data class DetailsScreenKey(val gameId: Int) : NavKey
 
 @Composable
 fun NavigationRoot(
@@ -97,7 +100,7 @@ fun NavigationRoot(
                                 backStack.add(SearchScreenKey)
                             },
                             onGameClick = { gameId ->
-                                // TODO: Navigate to game details screen
+                                backStack.add(DetailsScreenKey(gameId))
                             }
                         )
                     }
@@ -141,7 +144,7 @@ fun NavigationRoot(
                                 backStack.remove(key)
                             },
                             onGameClick = { gameId ->
-                                // TODO: Navigate to game details screen
+                                backStack.add(DetailsScreenKey(gameId))
                             },
                             showBackButton = true
                         )
@@ -155,6 +158,16 @@ fun NavigationRoot(
                             onBackClick = {
                                 backStack.remove(key)
                             }
+                        )
+                    }
+                }
+                is DetailsScreenKey -> {
+                    NavEntry(
+                        key = key,
+                    ) {
+                        DetailsScreen(
+                            gameId = key.gameId,
+                            onNavigateBack = { backStack.remove(key) }
                         )
                     }
                 }

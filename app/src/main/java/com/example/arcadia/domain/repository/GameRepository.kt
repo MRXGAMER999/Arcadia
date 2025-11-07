@@ -35,6 +35,15 @@ interface GameRepository {
      * Search games by query string
      */
     fun searchGames(query: String, page: Int = 1, pageSize: Int = 40): Flow<RequestState<List<Game>>>
-}
 
+    /**
+     * Get single game details by ID
+     */
+    fun getGameDetails(gameId: Int): Flow<RequestState<Game>>
+
+    /**
+     * Get game details with trailer and screenshots
+     */
+    fun getGameDetailsWithMedia(gameId: Int): Flow<RequestState<Game>>
+}
 
