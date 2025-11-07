@@ -13,7 +13,8 @@ interface RawgApiService {
         @Query("ordering") ordering: String? = null,
         @Query("dates") dates: String? = null,
         @Query("genres") genres: String? = null,
-        @Query("tags") tags: String? = null
+        @Query("tags") tags: String? = null,
+        @Query("search") search: String? = null
     ): GamesResponse
     
     companion object {

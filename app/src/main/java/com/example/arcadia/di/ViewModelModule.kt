@@ -5,6 +5,7 @@ import com.example.arcadia.presentation.screens.authScreen.AuthViewModel
 import com.example.arcadia.presentation.screens.home.HomeViewModel
 import com.example.arcadia.presentation.screens.myGames.MyGamesViewModel
 import com.example.arcadia.presentation.screens.profile.update_profile.EditProfileViewModel
+import com.example.arcadia.presentation.screens.searchScreen.SearchViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -14,4 +15,5 @@ val viewModelModule = module {
     viewModel { EditProfileViewModel(get()) }
     viewModel { HomeViewModel(get(), get(), get()) }
     viewModel { MyGamesViewModel(get()) }
+    viewModel { SearchViewModel(get(), get()) } // GameRepository, UserGamesRepository
 }

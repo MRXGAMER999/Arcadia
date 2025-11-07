@@ -37,6 +37,7 @@ data class NotificationData(
 fun NewHomeScreen(
     onNavigateToProfile: () -> Unit = {},
     onNavigateToMyGames: () -> Unit = {},
+    onNavigateToSearch: () -> Unit = {},
     onGameClick: (Int) -> Unit = {},
     viewModel: HomeViewModel = org.koin.androidx.compose.koinViewModel()
 ) {
@@ -81,7 +82,7 @@ fun NewHomeScreen(
             topBar = {
                 HomeTopBar(
                     selectedIndex = selectedTab,
-                    onSearchClick = { /* TODO: Search */ },
+                    onSearchClick = { onNavigateToSearch() },
                     onNotificationsClick = { /* TODO: Notifications */ },
                     onSettingsClick = { onNavigateToProfile() }
                 )
