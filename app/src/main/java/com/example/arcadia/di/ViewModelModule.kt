@@ -2,6 +2,7 @@ package com.example.arcadia.di
 
 import com.example.arcadia.presentation.componenets.sign_in.SignInViewModel
 import com.example.arcadia.presentation.screens.authScreen.AuthViewModel
+import com.example.arcadia.presentation.screens.detailsScreen.DetailsScreenViewModel
 import com.example.arcadia.presentation.screens.home.HomeViewModel
 import com.example.arcadia.presentation.screens.myGames.MyGamesViewModel
 import com.example.arcadia.presentation.screens.profile.update_profile.EditProfileViewModel
@@ -14,4 +15,5 @@ val viewModelModule = module {
     viewModel { EditProfileViewModel(get()) }
     viewModel { HomeViewModel(get(), get(), get()) }
     viewModel { MyGamesViewModel(get()) }
+    viewModel { DetailsScreenViewModel() }
 }
