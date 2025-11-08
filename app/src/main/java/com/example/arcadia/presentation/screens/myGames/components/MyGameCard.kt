@@ -24,7 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.example.arcadia.domain.model.UserGame
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,6 +40,7 @@ fun MyGameCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
+    val context = LocalPlatformContext.current
     Column(
         modifier = modifier.clickable(onClick = onClick)
     ) {
@@ -49,7 +53,12 @@ fun MyGameCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             SubcomposeAsyncImage(
-                model = game.backgroundImage ?: "",
+                model = ImageRequest.Builder(context)
+                    .data(game.backgroundImage ?: "")
+                    .memoryCacheKey(game.backgroundImage)
+                    .diskCacheKey(game.backgroundImage)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = game.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,

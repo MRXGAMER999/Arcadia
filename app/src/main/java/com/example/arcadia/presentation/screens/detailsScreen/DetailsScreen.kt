@@ -41,7 +41,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.presentation.components.PrimaryButton
 import com.example.arcadia.presentation.components.VideoPlayerWithLoading
@@ -188,6 +191,7 @@ fun GameDetailsContent(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MediaCarouselSection(game: Game) {
+    val context = LocalPlatformContext.current
     val mediaItems = buildList {
         // Add trailer as first item if available
         game.trailerUrl?.let { add(MediaItem.Video(it)) }
@@ -243,7 +247,12 @@ fun MediaCarouselSection(game: Game) {
                                 contentAlignment = Alignment.Center
                             ) {
                                 SubcomposeAsyncImage(
-                                    model = item.url,
+                                    model = ImageRequest.Builder(context)
+                                        .data(item.url)
+                                        .memoryCacheKey(item.url)
+                                        .diskCacheKey(item.url)
+                                        .crossfade(true)
+                                        .build(),
                                     contentDescription = "Game screenshot",
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -282,6 +291,7 @@ sealed class MediaItem {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun GameHeaderSection(game: Game) {
+    val context = LocalPlatformContext.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -290,7 +300,12 @@ fun GameHeaderSection(game: Game) {
         // Load game background image from API or use placeholder
         if (game.backgroundImage != null) {
             SubcomposeAsyncImage(
-                model = game.backgroundImage,
+                model = ImageRequest.Builder(context)
+                    .data(game.backgroundImage)
+                    .memoryCacheKey(game.backgroundImage)
+                    .diskCacheKey(game.backgroundImage)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = "Game background",
                 modifier = Modifier
                     .fillMaxWidth()

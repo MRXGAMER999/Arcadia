@@ -4,4 +4,5 @@ val appModule = listOf(
     viewModelModule,
     repositoryModule,
     networkModule,
+    imageLoaderModule,
 )
