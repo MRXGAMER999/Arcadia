@@ -1,4 +1,4 @@
-package com.example.arcadia.presentation.componenets
+package com.example.arcadia.presentation.components
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer

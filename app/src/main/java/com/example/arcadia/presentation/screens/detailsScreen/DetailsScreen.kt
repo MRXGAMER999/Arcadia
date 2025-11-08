@@ -43,8 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import com.example.arcadia.domain.model.Game
-import com.example.arcadia.presentation.componenets.PrimaryButton
-import com.example.arcadia.presentation.componenets.VideoPlayerWithLoading
+import com.example.arcadia.presentation.components.PrimaryButton
+import com.example.arcadia.presentation.components.VideoPlayerWithLoading
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.util.RequestState

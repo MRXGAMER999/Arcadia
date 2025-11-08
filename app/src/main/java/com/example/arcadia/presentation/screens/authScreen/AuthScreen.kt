@@ -35,14 +35,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.arcadia.R
-import com.example.arcadia.presentation.componenets.GoogleButton
-import com.example.arcadia.presentation.componenets.sign_in.GoogleAuthUiClient
-import com.example.arcadia.presentation.componenets.sign_in.SignInViewModel
-import com.example.arcadia.ui.theme.BebasNeueFont
+import com.example.arcadia.presentation.components.GoogleButton
+import com.example.arcadia.presentation.components.sign_in.GoogleAuthUiClient
+import com.example.arcadia.presentation.components.sign_in.SignInViewModel
 import com.example.arcadia.ui.theme.FontSize
 import com.example.arcadia.ui.theme.RobotoCondensedFont
 import com.example.arcadia.ui.theme.Surface
-import com.example.arcadia.ui.theme.TextPrimary
 import com.example.arcadia.ui.theme.TextSecondary
 import com.google.android.gms.auth.api.identity.Identity
 import kotlinx.coroutines.launch

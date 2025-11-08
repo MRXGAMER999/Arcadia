@@ -1,4 +1,4 @@
-package com.example.arcadia.presentation.componenets.sign_in
+package com.example.arcadia.presentation.components.sign_in
 
 import android.content.Context
 import android.content.Intent

@@ -24,7 +24,6 @@ import com.example.arcadia.presentation.screens.home.components.HomeBottomBar
 import com.example.arcadia.presentation.screens.home.components.HomeTopBar
 import com.example.arcadia.ui.theme.Surface
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 

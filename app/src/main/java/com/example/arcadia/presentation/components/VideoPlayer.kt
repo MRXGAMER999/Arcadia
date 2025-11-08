@@ -1,4 +1,4 @@
-package com.example.arcadia.presentation.componenets
+package com.example.arcadia.presentation.components
 
 import android.view.ViewGroup
 import android.widget.FrameLayout

@@ -34,11 +34,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.domain.model.OnBoardingPage
-import com.example.arcadia.presentation.componenets.PrimaryButton
+import com.example.arcadia.presentation.components.PrimaryButton
 import com.example.arcadia.ui.theme.EXTRA_LARGE_PADDING
 import com.example.arcadia.ui.theme.RobotoCondensedFont
 import com.example.arcadia.ui.theme.Surface
-import com.example.arcadia.ui.theme.TextPrimary
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
 import com.example.arcadia.util.Constants.LAST_ON_BOARDING_PAGE

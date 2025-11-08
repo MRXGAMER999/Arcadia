@@ -1,4 +1,4 @@
-package com.example.arcadia.presentation.componenets.sign_in
+package com.example.arcadia.presentation.components.sign_in
 
 data class SignInState(
     val isSignInSuccessful: Boolean = false,
