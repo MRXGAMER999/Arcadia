@@ -1,4 +1,4 @@
-package com.example.arcadia.presentation.componenets.sign_in
+package com.example.arcadia.presentation.components.sign_in
 
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
