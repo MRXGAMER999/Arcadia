@@ -86,6 +86,7 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.coil.gif)
 
     // Navigation
     implementation(libs.androidx.navigation3.runtime)

@@ -23,11 +23,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Scale
 import com.example.arcadia.domain.model.UserGame
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -41,6 +43,8 @@ fun MyGameCard(
     onClick: () -> Unit = {}
 ) {
     val context = LocalPlatformContext.current
+    val density = LocalDensity.current
+    
     Column(
         modifier = modifier.clickable(onClick = onClick)
     ) {
@@ -52,9 +56,16 @@ fun MyGameCard(
             shape = RoundedCornerShape(8.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
+            val imageSizePx = with(density) { 
+                // Assuming a typical grid item width, adjust as needed
+                150.dp.roundToPx() 
+            }
+            
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(game.backgroundImage ?: "")
+                    .size(imageSizePx, imageSizePx)
+                    .scale(Scale.FILL)
                     .memoryCacheKey(game.backgroundImage)
                     .diskCacheKey(game.backgroundImage)
                     .crossfade(true)

@@ -2,10 +2,12 @@ package com.example.arcadia.di
 
 import com.example.arcadia.data.remote.RawgApiService
 import kotlinx.serialization.json.Json
+import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -53,7 +55,9 @@ val networkModule = module {
     
     // OkHttpClient
     single {
+        val cacheDir = androidContext().cacheDir.resolve("http_cache")
         OkHttpClient.Builder()
+            .cache(Cache(cacheDir, 100L * 1024 * 1024)) // 100 MB cache
             .addInterceptor(get<Interceptor>())
             .addInterceptor(get<HttpLoggingInterceptor>())
             .connectTimeout(30, TimeUnit.SECONDS)

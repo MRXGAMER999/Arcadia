@@ -37,8 +37,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
+import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.size.Scale
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.TextSecondary
@@ -50,6 +55,9 @@ fun SearchResultCard(
     isAdded: Boolean,
     onToggle: () -> Unit
 ) {
+    val density = LocalDensity.current
+    val imageSizePx = with(density) { 60.dp.roundToPx() }
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -64,7 +72,12 @@ fun SearchResultCard(
             shape = RoundedCornerShape(10.dp)
         ) {
             SubcomposeAsyncImage(
-                model = game.backgroundImage ?: "",
+                model = ImageRequest.Builder(LocalPlatformContext.current)
+                    .data(game.backgroundImage ?: "")
+                    .size(imageSizePx, imageSizePx)
+                    .scale(Scale.FILL)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = game.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
