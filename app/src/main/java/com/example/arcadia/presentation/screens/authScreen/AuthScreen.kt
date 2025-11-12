@@ -38,10 +38,8 @@ import com.example.arcadia.R
 import com.example.arcadia.presentation.components.GoogleButton
 import com.example.arcadia.presentation.components.sign_in.GoogleAuthUiClient
 import com.example.arcadia.presentation.components.sign_in.SignInViewModel
-import com.example.arcadia.ui.theme.FontSize
-import com.example.arcadia.ui.theme.RobotoCondensedFont
+import com.example.arcadia.presentation.screens.authScreen.components.AuthContent
 import com.example.arcadia.ui.theme.Surface
-import com.example.arcadia.ui.theme.TextSecondary
 import com.google.android.gms.auth.api.identity.Identity
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -154,29 +152,7 @@ fun AuthScreen(
                     }
                 }
 
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        modifier = Modifier,
-                        painter = painterResource(R.drawable.logo),
-                        contentDescription = "App Logo",
-                        tint = Color.Unspecified
-                    )
-                    Spacer(modifier = Modifier.height(32.dp))
-                    Text(
-                        modifier = Modifier.fillMaxWidth(),
-                        text = "Sgin in to Continue",
-                        textAlign = TextAlign.Center,
-                        fontFamily = RobotoCondensedFont,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = FontSize.EXTRA_LARGE,
-                        color = TextSecondary
-                    )
-
-                }
+                AuthContent(modifier = Modifier.weight(1f))
 
                 GoogleButton(
                     loading = loading,
@@ -226,28 +202,7 @@ fun AuthScreenPreview() {
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        modifier = Modifier,
-                        painter = painterResource(R.drawable.logo),
-                        contentDescription = "App Logo",
-                        tint = Color.Unspecified
-                    )
-                    Spacer(modifier = Modifier.height(32.dp))
-                    Text(
-                        modifier = Modifier.fillMaxWidth(),
-                        text = "Sgin in to Continue",
-                        textAlign = TextAlign.Center,
-                        fontFamily = RobotoCondensedFont,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = FontSize.EXTRA_LARGE,
-                        color = TextSecondary
-                    )
-                }
+                AuthContent(modifier = Modifier.weight(1f))
 
                 GoogleButton(
                     loading = false,
