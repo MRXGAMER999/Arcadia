@@ -46,11 +46,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Scale
 import com.example.arcadia.domain.model.Game
 import kotlinx.coroutines.delay
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -64,6 +66,8 @@ fun GameListItem(
     onAddToLibrary: () -> Unit = {}
 ) {
     val context = LocalPlatformContext.current
+    val density = LocalDensity.current
+    val imageSizePx = with(density) { 120.dp.roundToPx() }
     var visible by remember { mutableStateOf(true) }
 
     // Trigger hide animation when game is added to library
@@ -98,6 +102,8 @@ fun GameListItem(
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(game.backgroundImage ?: "")
+                        .size(imageSizePx, imageSizePx)
+                        .scale(Scale.FILL)
                         .memoryCacheKey(game.backgroundImage)
                         .diskCacheKey(game.backgroundImage)
                         .crossfade(true)

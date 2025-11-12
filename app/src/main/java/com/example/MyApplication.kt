@@ -13,7 +13,7 @@ import org.koin.core.context.GlobalContext.startKoin
 class MyApplication : Application() {
 
     companion object {
-        private const val EMULATOR_HOST = "192.168.1.7"
+        private const val EMULATOR_HOST = "192.168.1.2"
     }
 
     override fun onCreate() {

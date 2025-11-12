@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -24,6 +26,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Scale
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
@@ -32,6 +35,11 @@ import com.example.arcadia.ui.theme.Surface
 @Composable
 fun GameHeaderSection(game: Game) {
     val context = LocalPlatformContext.current
+    val config = LocalConfiguration.current
+    val density = LocalDensity.current
+    val widthPx = with(density) { config.screenWidthDp.dp.roundToPx() }
+    val heightPx = with(density) { 300.dp.roundToPx() }
+    
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -41,6 +49,8 @@ fun GameHeaderSection(game: Game) {
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(game.backgroundImage)
+                    .size(widthPx, heightPx)
+                    .scale(Scale.FILL)
                     .memoryCacheKey(game.backgroundImage)
                     .diskCacheKey(game.backgroundImage)
                     .crossfade(true)

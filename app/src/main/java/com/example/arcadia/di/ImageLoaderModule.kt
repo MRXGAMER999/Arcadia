@@ -2,6 +2,7 @@ package com.example.arcadia.di
 
 import coil3.ImageLoader
 import coil3.disk.DiskCache
+import coil3.gif.AnimatedImageDecoder
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import okhttp3.OkHttpClient
@@ -27,6 +28,7 @@ val imageLoaderModule = module {
             }
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = get<OkHttpClient>()))
+                add(AnimatedImageDecoder.Factory())
             }
             .build()
     }

@@ -23,11 +23,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Scale
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.presentation.components.VideoPlayerWithLoading
 import com.example.arcadia.ui.theme.ButtonPrimary
@@ -101,6 +103,10 @@ fun MediaCarouselSection(game: Game) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ScreenshotItem(url: String, context: coil3.PlatformContext) {
+    val density = LocalDensity.current
+    val widthPx = with(density) { 300.dp.roundToPx() }
+    val heightPx = with(density) { 200.dp.roundToPx() }
+    
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -111,6 +117,8 @@ private fun ScreenshotItem(url: String, context: coil3.PlatformContext) {
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(context)
                 .data(url)
+                .size(widthPx, heightPx)
+                .scale(Scale.FILL)
                 .memoryCacheKey(url)
                 .diskCacheKey(url)
                 .crossfade(true)

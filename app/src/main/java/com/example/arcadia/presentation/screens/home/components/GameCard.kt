@@ -24,12 +24,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Scale
 import com.example.arcadia.domain.model.Game
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -40,6 +43,9 @@ fun SmallGameCard(
     onClick: () -> Unit = {}
 ) {
     val context = LocalPlatformContext.current
+    val density = LocalDensity.current
+    val sidePx = with(density) { width.roundToPx() }
+    
     Column(
         modifier = modifier
             .width(width)
@@ -55,6 +61,8 @@ fun SmallGameCard(
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(game.backgroundImage ?: "")
+                    .size(sidePx, sidePx)
+                    .scale(Scale.FILL)
                     .memoryCacheKey(game.backgroundImage)
                     .diskCacheKey(game.backgroundImage)
                     .crossfade(true)
@@ -108,6 +116,10 @@ fun LargeGameCard(
     onClick: () -> Unit = {}
 ) {
     val context = LocalPlatformContext.current
+    val density = LocalDensity.current
+    val widthPx = with(density) { 280.dp.roundToPx() }
+    val heightPx = (widthPx / 1.5f).roundToInt()
+    
     Card(
         modifier = modifier
             .width(280.dp)
@@ -120,6 +132,8 @@ fun LargeGameCard(
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(game.backgroundImage ?: "")
+                    .size(widthPx, heightPx)
+                    .scale(Scale.FILL)
                     .memoryCacheKey(game.backgroundImage)
                     .diskCacheKey(game.backgroundImage)
                     .crossfade(true)
