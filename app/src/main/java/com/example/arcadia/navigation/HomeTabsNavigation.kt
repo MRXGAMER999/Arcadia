@@ -1,6 +1,8 @@
 package com.example.arcadia.navigation
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -80,80 +82,63 @@ fun HomeTabsNavContent(
     AnimatedContent(
         targetState = selectedIndex,
         modifier = modifier,
-        transitionSpec = {
-            val slideDirection = if (targetState > initialState) 1 else -1
-            val animationDuration = 200
-
-            slideInHorizontally(
-                initialOffsetX = { fullWidth -> slideDirection * fullWidth / 3 },
-                animationSpec = tween(durationMillis = animationDuration)
-            ) + fadeIn(
-                animationSpec = tween(durationMillis = animationDuration)
-            ) togetherWith slideOutHorizontally(
-                targetOffsetX = { fullWidth -> -slideDirection * fullWidth / 3 },
-                animationSpec = tween(durationMillis = animationDuration)
-            ) + fadeOut(
-                animationSpec = tween(durationMillis = animationDuration)
-            )
-        },
+			transitionSpec = tabTransitionSpec(),
         label = "tab_transition"
     ) { targetIndex ->
-        when (targetIndex) {
-            0 -> {
-                NavDisplay(
-                    modifier = Modifier.fillMaxSize(),
-                    backStack = homeBackStack,
-                    entryProvider = { key ->
-                        when (key) {
-                            is HomeTab -> NavEntry(key) {
-                                HomeTabRoot(
-                                    onGameClick = onGameClick,
-                                    snackbarHostState = snackbarHostState,
-                                    onShowNotification = onShowNotification,
-                                    viewModel = viewModel
-                                )
-                            }
-                            else -> error("Unknown key for HomeTab backstack: $key")
-                        }
-                    }
-                )
-            }
-            1 -> {
-                NavDisplay(
-                    modifier = Modifier.fillMaxSize(),
-                    backStack = discoverBackStack,
-                    entryProvider = { key ->
-                        when (key) {
-                            is DiscoverTab -> NavEntry(key) {
-                                DiscoverTabRoot(
-                                    onGameClick = onGameClick,
-                                    snackbarHostState = snackbarHostState,
-                                    onShowNotification = onShowNotification,
-                                    viewModel = viewModel
-                                )
-                            }
-                            else -> error("Unknown key for DiscoverTab backstack: $key")
-                        }
-                    }
-                )
-            }
-            2 -> {
-                NavDisplay(
-                    modifier = Modifier.fillMaxSize(),
-                    backStack = libraryBackStack,
-                    entryProvider = { key ->
-                        when (key) {
-                            is LibraryTab -> NavEntry(key) {
-                                LibraryTabRoot(onGameClick = onGameClick)
-                            }
-                            else -> error("Unknown key for LibraryTab backstack: $key")
-                        }
-                    }
-                )
-            }
-        }
+			val backStack = when (targetIndex) {
+				0 -> homeBackStack
+				1 -> discoverBackStack
+				2 -> libraryBackStack
+				else -> homeBackStack
+			}
+
+			NavDisplay(
+				modifier = Modifier.fillMaxSize(),
+				backStack = backStack,
+				entryProvider = { key ->
+					when (key) {
+						is HomeTab -> NavEntry(key) {
+							HomeTabRoot(
+								onGameClick = onGameClick,
+								snackbarHostState = snackbarHostState,
+								onShowNotification = onShowNotification,
+								viewModel = viewModel
+							)
+						}
+						is DiscoverTab -> NavEntry(key) {
+							DiscoverTabRoot(
+								onGameClick = onGameClick,
+								snackbarHostState = snackbarHostState,
+								onShowNotification = onShowNotification,
+								viewModel = viewModel
+							)
+						}
+						is LibraryTab -> NavEntry(key) {
+							LibraryTabRoot(onGameClick = onGameClick)
+						}
+						else -> error("Unknown key for Home tabs backstack: $key")
+					}
+				}
+			)
     }
 }
+
+	private fun tabTransitionSpec(): AnimatedContentTransitionScope<Int>.() -> ContentTransform = {
+		val slideDirection = if (targetState > initialState) 1 else -1
+		val animationDuration = 200
+
+		slideInHorizontally(
+			initialOffsetX = { fullWidth -> slideDirection * fullWidth / 3 },
+			animationSpec = tween(durationMillis = animationDuration)
+		) + fadeIn(
+			animationSpec = tween(durationMillis = animationDuration)
+		) togetherWith slideOutHorizontally(
+			targetOffsetX = { fullWidth -> -slideDirection * fullWidth / 3 },
+			animationSpec = tween(durationMillis = animationDuration)
+		) + fadeOut(
+			animationSpec = tween(durationMillis = animationDuration)
+		)
+	}
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
 @Composable
