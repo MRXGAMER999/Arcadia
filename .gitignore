@@ -17,3 +17,9 @@ local.properties
 # Firebase
 google-services.json
 
+# IDE folders
+.idea/
+.vscode/
+
+# Kiro folder
+.kiro/
