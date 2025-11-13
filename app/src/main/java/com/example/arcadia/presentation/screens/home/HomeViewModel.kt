@@ -14,6 +14,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+sealed class AddToLibraryState {
+    data object Idle : AddToLibraryState()
+    data class Loading(val gameId: Int) : AddToLibraryState()
+    data class Success(val message: String, val gameId: Int) : AddToLibraryState()
+    data class Error(val message: String, val gameId: Int) : AddToLibraryState()
+}
+
 data class HomeScreenState(
     val popularGames: RequestState<List<Game>> = RequestState.Idle,
     val upcomingGames: RequestState<List<Game>> = RequestState.Idle,
@@ -21,7 +28,8 @@ data class HomeScreenState(
     val newReleases: RequestState<List<Game>> = RequestState.Idle,
     val gamesInLibrary: Set<Int> = emptySet(), // Track rawgIds of games in library
     val gameListIds: Set<Int> = emptySet(), // Track rawgIds of games in game list (WANT, PLAYING, etc.)
-    val animatingGameIds: Set<Int> = emptySet() // Games currently animating out
+    val animatingGameIds: Set<Int> = emptySet(), // Games currently animating out
+    val addToLibraryState: AddToLibraryState = AddToLibraryState.Idle
 )
 
 class HomeViewModel(
@@ -175,46 +183,111 @@ class HomeViewModel(
         return screenState.gamesInLibrary.contains(gameId) || screenState.gameListIds.contains(gameId)
     }
     
-    fun addGameToLibrary(
-        game: Game,
-        onSuccess: () -> Unit = {},
-        onError: (String) -> Unit = {},
-        onAlreadyInLibrary: () -> Unit = {}
-    ) {
+    fun addGameToLibrary(game: Game) {
         viewModelScope.launch {
+            // Prevent duplicate requests - check if already loading this game
+            if (screenState.addToLibraryState is AddToLibraryState.Loading) {
+                val currentLoading = screenState.addToLibraryState as AddToLibraryState.Loading
+                if (currentLoading.gameId == game.id) {
+                    return@launch // Already loading this game
+                }
+            }
+
             // Check if game is already in library
             if (isGameInLibrary(game.id)) {
-                onAlreadyInLibrary()
+                screenState = screenState.copy(
+                    addToLibraryState = AddToLibraryState.Error(
+                        message = "${game.name} is already in your library",
+                        gameId = game.id
+                    )
+                )
+                // Auto-reset after 2 seconds
+                delay(2000)
+                screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
                 return@launch
             }
             
-            // Mark game as animating to keep it visible during animation
+            // Set loading state
             screenState = screenState.copy(
+                addToLibraryState = AddToLibraryState.Loading(gameId = game.id),
                 animatingGameIds = screenState.animatingGameIds + game.id
             )
 
-            when (val result = userGamesRepository.addGame(game)) {
-                is RequestState.Success -> {
-                    onSuccess()
-                    // Wait for animation to complete (600ms total: 300ms delay + 300ms animation)
-                    delay(600)
-                    // Remove from animating set to allow filtering
+            try {
+                // Double-check if game is in library (race condition protection)
+                val alreadyInLibrary = userGamesRepository.isGameInLibrary(game.id)
+                if (alreadyInLibrary) {
                     screenState = screenState.copy(
+                        addToLibraryState = AddToLibraryState.Idle,
                         animatingGameIds = screenState.animatingGameIds - game.id
                     )
-                    // Reapply filter to remove the game from the list
-                    applyRecommendationFilter()
+                    return@launch
                 }
-                is RequestState.Error -> {
-                    onError(result.message)
-                    // Remove from animating set on error
-                    screenState = screenState.copy(
-                        animatingGameIds = screenState.animatingGameIds - game.id
-                    )
+
+                when (val result = userGamesRepository.addGame(game)) {
+                    is RequestState.Success -> {
+                        screenState = screenState.copy(
+                            addToLibraryState = AddToLibraryState.Success(
+                                message = "${game.name} added to library!",
+                                gameId = game.id
+                            )
+                        )
+
+                        // Wait for animation to complete (600ms total: 300ms delay + 300ms animation)
+                        delay(600)
+
+                        // Remove from animating set to allow filtering
+                        screenState = screenState.copy(
+                            animatingGameIds = screenState.animatingGameIds - game.id
+                        )
+
+                        // Reapply filter to remove the game from the list
+                        applyRecommendationFilter()
+
+                        // Auto-reset success state after showing notification
+                        delay(1500) // Give time for notification to show
+                        screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+                    }
+                    is RequestState.Error -> {
+                        screenState = screenState.copy(
+                            addToLibraryState = AddToLibraryState.Error(
+                                message = result.message,
+                                gameId = game.id
+                            ),
+                            animatingGameIds = screenState.animatingGameIds - game.id
+                        )
+                        // Auto-reset error state after 3 seconds
+                        delay(3000)
+                        screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+                    }
+                    else -> {
+                        screenState = screenState.copy(
+                            addToLibraryState = AddToLibraryState.Error(
+                                message = "Unexpected error occurred",
+                                gameId = game.id
+                            ),
+                            animatingGameIds = screenState.animatingGameIds - game.id
+                        )
+                        delay(3000)
+                        screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+                    }
                 }
-                else -> {}
+            } catch (e: Exception) {
+                screenState = screenState.copy(
+                    addToLibraryState = AddToLibraryState.Error(
+                        message = e.localizedMessage ?: "An error occurred",
+                        gameId = game.id
+                    ),
+                    animatingGameIds = screenState.animatingGameIds - game.id
+                )
+                delay(3000)
+                screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
             }
         }
+    }
+
+    fun resetAddToLibraryState() {
+        screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
     }
 }
 

@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class UserGamesRepositoryImpl : UserGamesRepository {
-    
+
     private val TAG = "UserGamesRepository"
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
@@ -138,6 +138,20 @@ class UserGamesRepositoryImpl : UserGamesRepository {
                 return RequestState.Error("User not authenticated")
             }
             
+            // Check if game already exists to prevent duplicates
+            val existingGame = firestore.collection("users")
+                .document(userId)
+                .collection("myGames")
+                .whereEqualTo("rawgId", game.id)
+                .limit(1)
+                .get()
+                .await()
+
+            if (!existingGame.isEmpty) {
+                Log.d(TAG, "Game already in library: ${game.name}")
+                return RequestState.Success(Unit) // Return success as the game is already there
+            }
+
             val userGame = UserGame(
                 rawgId = game.id,
                 name = game.name,
@@ -157,7 +171,16 @@ class UserGamesRepositoryImpl : UserGamesRepository {
             
         } catch (e: Exception) {
             Log.e(TAG, "Error adding game: ${e.message}", e)
-            RequestState.Error("Failed to add game: ${e.message}")
+            val errorMessage = when {
+                e.message?.contains("network", ignoreCase = true) == true ->
+                    "Network error. Please check your connection."
+                e.message?.contains("permission", ignoreCase = true) == true ->
+                    "Permission denied. Please try again."
+                e.message?.contains("timeout", ignoreCase = true) == true ->
+                    "Request timed out. Please try again."
+                else -> "Failed to add game. ${e.message ?: "Unknown error"}"
+            }
+            RequestState.Error(errorMessage)
         }
     }
     
