@@ -71,7 +71,6 @@ fun HomeTabsNavContent(
     selectedIndex: Int,
     onGameClick: (Int) -> Unit = {},
     snackbarHostState: SnackbarHostState,
-    onShowNotification: (String, Boolean) -> Unit = { _, _ -> },
     viewModel: HomeViewModel
 ) {
     val homeBackStack = rememberNavBackStack(HomeTab)
@@ -101,7 +100,6 @@ fun HomeTabsNavContent(
 							HomeTabRoot(
 								onGameClick = onGameClick,
 								snackbarHostState = snackbarHostState,
-								onShowNotification = onShowNotification,
 								viewModel = viewModel
 							)
 						}
@@ -109,7 +107,6 @@ fun HomeTabsNavContent(
 							DiscoverTabRoot(
 								onGameClick = onGameClick,
 								snackbarHostState = snackbarHostState,
-								onShowNotification = onShowNotification,
 								viewModel = viewModel
 							)
 						}
@@ -145,7 +142,6 @@ fun HomeTabsNavContent(
 private fun HomeTabRoot(
     onGameClick: (Int) -> Unit,
     snackbarHostState: SnackbarHostState,
-    onShowNotification: (String, Boolean) -> Unit,
     viewModel: HomeViewModel
 ) {
     val screenState = viewModel.screenState
@@ -274,18 +270,7 @@ private fun HomeTabRoot(
                             isInLibrary = viewModel.isGameInLibrary(game.id),
                             onClick = { onGameClick(game.id) },
                             onAddToLibrary = {
-                                viewModel.addGameToLibrary(
-                                    game = game,
-                                    onSuccess = {
-                                        onShowNotification("${game.name} added to library", true)
-                                    },
-                                    onError = { error ->
-                                        onShowNotification("Failed to add game: $error", false)
-                                    },
-                                    onAlreadyInLibrary = {
-                                        onShowNotification("${game.name} is already in your library", false)
-                                    }
-                                )
+                                viewModel.addGameToLibrary(game)
                             },
                             modifier = Modifier.animateItem()
                         )
@@ -310,7 +295,6 @@ private fun HomeTabRoot(
 private fun DiscoverTabRoot(
     onGameClick: (Int) -> Unit,
     snackbarHostState: SnackbarHostState,
-    onShowNotification: (String, Boolean) -> Unit,
     viewModel: HomeViewModel
 ) {
     val screenState = viewModel.screenState
@@ -397,18 +381,7 @@ private fun DiscoverTabRoot(
                             isInLibrary = viewModel.isGameInLibrary(game.id),
                             onClick = { onGameClick(game.id) },
                             onAddToLibrary = {
-                                viewModel.addGameToLibrary(
-                                    game = game,
-                                    onSuccess = {
-                                        onShowNotification("${game.name} added to library", true)
-                                    },
-                                    onError = { error ->
-                                        onShowNotification("Failed to add game: $error", false)
-                                    },
-                                    onAlreadyInLibrary = {
-                                        onShowNotification("${game.name} is already in your library", false)
-                                    }
-                                )
+                                viewModel.addGameToLibrary(game)
                             },
                             modifier = Modifier.animateItem()
                         )

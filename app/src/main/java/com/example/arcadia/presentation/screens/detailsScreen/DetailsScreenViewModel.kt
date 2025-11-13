@@ -11,15 +11,22 @@ import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.UserGamesRepository
 import com.example.arcadia.util.RequestState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+sealed class AddToLibraryState {
+    data object Idle : AddToLibraryState()
+    data object Loading : AddToLibraryState()
+    data class Success(val message: String) : AddToLibraryState()
+    data class Error(val message: String) : AddToLibraryState()
+}
 
 data class DetailsUiState(
     val gameState: RequestState<Game> = RequestState.Idle,
     val isInLibrary: Boolean = false,
     val isInGameList: Boolean = false,
-    val addToLibraryInProgress: Boolean = false,
+    val addToLibraryState: AddToLibraryState = AddToLibraryState.Idle,
     val addToListInProgress: Boolean = false,
     val errorMessage: String? = null
 )
@@ -54,25 +61,85 @@ class DetailsScreenViewModel(
         }
     }
 
-    fun addToLibrary(onDone: (Boolean, String?) -> Unit = { _, _ -> }) {
-        val game = (uiState.gameState as? RequestState.Success)?.data ?: return
-        // Skip if already in library
-        if (uiState.isInLibrary) {
-            onDone(false, "Game is already in your library")
+    fun addToLibrary() {
+        // Prevent duplicate requests
+        if (uiState.addToLibraryState is AddToLibraryState.Loading) {
             return
         }
-        uiState = uiState.copy(addToLibraryInProgress = true, errorMessage = null)
+
+        // Skip if already in library
+        if (uiState.isInLibrary) {
+            uiState = uiState.copy(
+                addToLibraryState = AddToLibraryState.Error("Game is already in your library")
+            )
+            // Reset state after delay
+            viewModelScope.launch {
+                delay(2000)
+                uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
+            }
+            return
+        }
+
+        val game = (uiState.gameState as? RequestState.Success)?.data
+        if (game == null) {
+            uiState = uiState.copy(
+                addToLibraryState = AddToLibraryState.Error("Game data not available")
+            )
+            return
+        }
+
+        // Set loading state
+        uiState = uiState.copy(
+            addToLibraryState = AddToLibraryState.Loading,
+            errorMessage = null
+        )
+
         viewModelScope.launch {
-            when (val result = userGamesRepository.addGame(game)) {
-                is RequestState.Success -> {
-                    uiState = uiState.copy(isInLibrary = true, addToLibraryInProgress = false)
-                    onDone(true, null)
+            try {
+                // Double-check if game is in library (race condition protection)
+                val alreadyInLibrary = userGamesRepository.isGameInLibrary(game.id)
+                if (alreadyInLibrary) {
+                    uiState = uiState.copy(
+                        isInLibrary = true,
+                        addToLibraryState = AddToLibraryState.Idle
+                    )
+                    return@launch
                 }
-                is RequestState.Error -> {
-                    uiState = uiState.copy(addToLibraryInProgress = false, errorMessage = result.message)
-                    onDone(false, result.message)
+
+                when (val result = userGamesRepository.addGame(game)) {
+                    is RequestState.Success -> {
+                        uiState = uiState.copy(
+                            isInLibrary = true,
+                            addToLibraryState = AddToLibraryState.Success("Added to library!")
+                        )
+                        // Reset success state after delay
+                        delay(2000)
+                        uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
+                    }
+                    is RequestState.Error -> {
+                        uiState = uiState.copy(
+                            addToLibraryState = AddToLibraryState.Error(result.message)
+                        )
+                        // Reset error state after delay
+                        delay(3000)
+                        uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
+                    }
+                    else -> {
+                        uiState = uiState.copy(
+                            addToLibraryState = AddToLibraryState.Error("Unexpected error occurred")
+                        )
+                        delay(3000)
+                        uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
+                    }
                 }
-                else -> {}
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    addToLibraryState = AddToLibraryState.Error(
+                        e.localizedMessage ?: "An error occurred"
+                    )
+                )
+                delay(3000)
+                uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
             }
         }
     }

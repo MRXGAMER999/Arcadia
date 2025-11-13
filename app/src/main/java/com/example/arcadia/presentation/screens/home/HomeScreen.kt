@@ -10,12 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.arcadia.navigation.HomeTabsNavContent
@@ -23,14 +21,6 @@ import com.example.arcadia.presentation.components.TopNotification
 import com.example.arcadia.presentation.screens.home.components.HomeBottomBar
 import com.example.arcadia.presentation.screens.home.components.HomeTopBar
 import com.example.arcadia.ui.theme.Surface
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
-
-data class NotificationData(
-    val message: String,
-    val isSuccess: Boolean
-)
 
 @Composable
 fun NewHomeScreen(
@@ -45,32 +35,27 @@ fun NewHomeScreen(
     var showNotification by remember { mutableStateOf(false) }
     var notificationMessage by remember { mutableStateOf("") }
     var isSuccess by remember { mutableStateOf(false) }
-    val notificationQueue = remember { mutableStateListOf<NotificationData>() }
-    var isProcessingQueue by remember { mutableStateOf(false) }
 
-    // Process notification queue
-    LaunchedEffect(Unit) {
-        snapshotFlow { notificationQueue.size }
-            .collect {
-                if (!isProcessingQueue && notificationQueue.isNotEmpty()) {
-                    isProcessingQueue = true
-                    while (notificationQueue.isNotEmpty()) {
-                        val notification = notificationQueue.removeAt(0)
-                        notificationMessage = notification.message
-                        isSuccess = notification.isSuccess
-                        showNotification = true
+    val addToLibraryState = viewModel.screenState.addToLibraryState
 
-                        // Wait until notification is dismissed
-                        snapshotFlow { showNotification }
-                            .filter { !it }
-                            .first()
-
-                        // Small gap between notifications
-                        delay(100)
-                    }
-                    isProcessingQueue = false
-                }
+    // Observe addToLibraryState and show notifications
+    LaunchedEffect(addToLibraryState) {
+        when (addToLibraryState) {
+            is AddToLibraryState.Success -> {
+                notificationMessage = addToLibraryState.message
+                isSuccess = true
+                showNotification = true
             }
+            is AddToLibraryState.Error -> {
+                notificationMessage = addToLibraryState.message
+                isSuccess = false
+                showNotification = true
+            }
+            else -> {
+                // Don't hide notification for Loading or Idle states
+                // Let the notification auto-dismiss
+            }
+        }
     }
 
     Box(
@@ -100,9 +85,6 @@ fun NewHomeScreen(
                     selectedIndex = selectedTab,
                     onGameClick = onGameClick,
                     snackbarHostState = snackbarHostState,
-                    onShowNotification = { message, success ->
-                        notificationQueue.add(NotificationData(message, success))
-                    },
                     viewModel = viewModel
                 )
             }

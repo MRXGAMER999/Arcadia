@@ -70,7 +70,7 @@ fun DetailsScreen(
             is RequestState.Success -> GameDetailsContent(
                 game = state.data,
                 isInLibrary = uiState.isInLibrary,
-                addToLibraryInProgress = uiState.addToLibraryInProgress,
+                addToLibraryState = uiState.addToLibraryState,
                 onAddToLibrary = { viewModel.addToLibrary() },
                 modifier = Modifier.padding(paddingValues)
             )
