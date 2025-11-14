@@ -1,5 +1,7 @@
 package com.example.arcadia.presentation.screens.profile.update_profile
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,7 +13,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.presentation.screens.profile.components.ProfileDropdown
@@ -52,9 +56,35 @@ fun EditProfileScreen(
     val initialProfileComplete = remember { screenState.profileComplete }
     val isFirstTimeCompletion by remember { derivedStateOf { !initialProfileComplete } }
 
-    val genders = listOf("Male", "Female", "Other")
+    val genders = listOf("Male", "Female")
 
-    val allValid by remember { derivedStateOf { viewModel.isFormValid } }
+    // Calculate form validity based on screenState
+    val allValid = remember(screenState) {
+        viewModel.validateName().isEmpty() &&
+        viewModel.validateUsername().isEmpty() &&
+        viewModel.validateCountry().isEmpty() &&
+        viewModel.validateCity().isEmpty() &&
+        viewModel.validateGender().isEmpty() &&
+        viewModel.validateDescription().isEmpty()
+    }
+
+    // Animation states
+    var isVisible by remember { mutableStateOf(false) }
+    
+    // Trigger animations when screen loads
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+    
+    // Button scale animation
+    val buttonScale by animateFloatAsState(
+        targetValue = if (allValid && !isUpdating) 1.05f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "buttonScale"
+    )
 
     Surface(color = Background, modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -114,144 +144,186 @@ fun EditProfileScreen(
                     ) {
 
                         // Name
-                        ProfileTextField(
-                            value = screenState.name,
-                            onValueChange = viewModel::updateName,
-                            label = "Name",
-                            placeholder = "Enter your name",
-                            isError = showValidationErrors && viewModel.validateName().isNotEmpty(),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (showValidationErrors && viewModel.validateName().isNotEmpty())
-                            Text(viewModel.validateName(), color = ErrorRed, fontSize = 12.sp)
+                        AnimatedFieldWrapper(index = 0, isVisible = isVisible) {
+                            ProfileTextField(
+                                value = screenState.name,
+                                onValueChange = viewModel::updateName,
+                                label = "Name",
+                                placeholder = "Enter your name",
+                                isError = showValidationErrors && viewModel.validateName().isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (showValidationErrors && viewModel.validateName().isNotEmpty())
+                                Text(viewModel.validateName(), color = ErrorRed, fontSize = 12.sp)
+                        }
 
                         // Email
-                        ProfileTextField(
-                            value = screenState.email,
-                            onValueChange = {},
-                            label = "Email",
-                            readOnly = true,
-                            enabled = false
-                        )
-
-                        // Username
-                        ProfileTextField(
-                            value = screenState.username,
-                            onValueChange = viewModel::updateUsername,
-                            label = "Username",
-                            placeholder = "Enter your username",
-                            isError = showValidationErrors && viewModel.validateUsername().isNotEmpty(),
-                        )
-                        if (showValidationErrors && viewModel.validateUsername().isNotEmpty())
-                            Text(viewModel.validateUsername(), color = ErrorRed, fontSize = 12.sp)
-
-                        // Country + City Row
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                            ProfileDropdown(
-                                label = "Country",
-                                options = Countries.countries,
-                                selected = screenState.country,
-                                onSelected = viewModel::updateCountry,
-                                modifier = Modifier.weight(1f),
-                                isError = showValidationErrors && viewModel.validateCountry().isNotEmpty()
-                            )
-
-                            ProfileDropdown(
-                                label = "City",
-                                options = Countries.getCitiesForCountry(screenState.country),
-                                selected = screenState.city,
-                                onSelected = viewModel::updateCity,
-                                modifier = Modifier.weight(1f),
-                                isError = showValidationErrors && viewModel.validateCity().isNotEmpty()
+                        AnimatedFieldWrapper(index = 1, isVisible = isVisible) {
+                            ProfileTextField(
+                                value = screenState.email,
+                                onValueChange = {},
+                                label = "Email",
+                                readOnly = true,
+                                enabled = false
                             )
                         }
-                        if (showValidationErrors && viewModel.validateCountry().isNotEmpty())
-                            Text(viewModel.validateCountry(), color = ErrorRed, fontSize = 12.sp)
-                        if (showValidationErrors && viewModel.validateCity().isNotEmpty())
-                            Text(viewModel.validateCity(), color = ErrorRed, fontSize = 12.sp)
+
+                        // Username
+                        AnimatedFieldWrapper(index = 2, isVisible = isVisible) {
+                            ProfileTextField(
+                                value = screenState.username,
+                                onValueChange = viewModel::updateUsername,
+                                label = "Username",
+                                placeholder = "Enter your username",
+                                isError = showValidationErrors && viewModel.validateUsername().isNotEmpty(),
+                            )
+                            if (showValidationErrors && viewModel.validateUsername().isNotEmpty())
+                                Text(viewModel.validateUsername(), color = ErrorRed, fontSize = 12.sp)
+                        }
+
+                        // Country + City Row
+                        AnimatedFieldWrapper(index = 3, isVisible = isVisible) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                ProfileDropdown(
+                                    label = "Country",
+                                    options = Countries.countries,
+                                    selected = screenState.country,
+                                    onSelected = viewModel::updateCountry,
+                                    modifier = Modifier.weight(1f),
+                                    isError = showValidationErrors && viewModel.validateCountry().isNotEmpty()
+                                )
+
+                                ProfileDropdown(
+                                    label = "City",
+                                    options = Countries.getCitiesForCountry(screenState.country),
+                                    selected = screenState.city,
+                                    onSelected = viewModel::updateCity,
+                                    modifier = Modifier.weight(1f),
+                                    isError = showValidationErrors && viewModel.validateCity().isNotEmpty()
+                                )
+                            }
+                            if (showValidationErrors && viewModel.validateCountry().isNotEmpty())
+                                Text(viewModel.validateCountry(), color = ErrorRed, fontSize = 12.sp)
+                            if (showValidationErrors && viewModel.validateCity().isNotEmpty())
+                                Text(viewModel.validateCity(), color = ErrorRed, fontSize = 12.sp)
+                        }
 
                         // Gender
-                        ProfileDropdown(
-                            label = "Gender",
-                            options = genders,
-                            selected = screenState.gender,
-                            onSelected = viewModel::updateGender,
-                            isError = showValidationErrors && viewModel.validateGender().isNotEmpty()
-                        )
-                        if (showValidationErrors && viewModel.validateGender().isNotEmpty())
-                            Text(viewModel.validateGender(), color = ErrorRed, fontSize = 12.sp)
+                        AnimatedFieldWrapper(index = 4, isVisible = isVisible) {
+                            ProfileDropdown(
+                                label = "Gender",
+                                options = genders,
+                                selected = screenState.gender,
+                                onSelected = viewModel::updateGender,
+                                isError = showValidationErrors && viewModel.validateGender().isNotEmpty()
+                            )
+                            if (showValidationErrors && viewModel.validateGender().isNotEmpty())
+                                Text(viewModel.validateGender(), color = ErrorRed, fontSize = 12.sp)
+                        }
 
                         // Bio
-                        ProfileTextField(
-                            value = screenState.description,
-                            onValueChange = viewModel::updateDescription,
-                            label = "Bio",
-                            singleLine = false,
-                            placeholder = "More about yourself...",
-                            isError = showValidationErrors && viewModel.validateDescription().isNotEmpty(),
-                            modifier = Modifier.height(120.dp)
-                        )
-                        if (showValidationErrors && viewModel.validateDescription().isNotEmpty())
-                            Text(viewModel.validateDescription(), color = ErrorRed, fontSize = 12.sp)
+                        AnimatedFieldWrapper(index = 5, isVisible = isVisible) {
+                            ProfileTextField(
+                                value = screenState.description,
+                                onValueChange = viewModel::updateDescription,
+                                label = "Bio",
+                                singleLine = false,
+                                placeholder = "More about yourself...",
+                                isError = showValidationErrors && viewModel.validateDescription().isNotEmpty(),
+                                modifier = Modifier.height(120.dp)
+                            )
+                            if (showValidationErrors && viewModel.validateDescription().isNotEmpty())
+                                Text(viewModel.validateDescription(), color = ErrorRed, fontSize = 12.sp)
+                        }
                     }
 
                     // Update Button + Error
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Button(
-                            onClick = {
-                                showValidationErrors = true
-                                if (!viewModel.isFormValid) {
-                                    updateError = "Please fill all the info first"
-                                } else if (!isUpdating) {
-                                    updateError = ""
-                                    isUpdating = true
-                                    viewModel.updateGamer(
-                                        onSuccess = {
-                                            coroutineScope.launch {
-                                                isUpdating = false
-                                                showPopup = true
-                                                delay(2000)
-                                                showPopup = false
-                                                
-                                                // If this is the first time completing the profile, navigate to home
-                                                if (isFirstTimeCompletion && onNavigateToHome != null) {
-                                                    delay(1000) // Give time for notification to show
-                                                    onNavigateToHome()
+                    AnimatedFieldWrapper(index = 6, isVisible = isVisible) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Button(
+                                onClick = {
+                                    showValidationErrors = true
+                                    if (!viewModel.isFormValid) {
+                                        updateError = "Please fill all the info first"
+                                    } else if (!isUpdating) {
+                                        updateError = ""
+                                        isUpdating = true
+                                        viewModel.updateGamer(
+                                            onSuccess = {
+                                                coroutineScope.launch {
+                                                    isUpdating = false
+                                                    showPopup = true
+                                                    delay(2000)
+                                                    showPopup = false
+                                                    
+                                                    // If this is the first time completing the profile, navigate to home
+                                                    if (isFirstTimeCompletion && onNavigateToHome != null) {
+                                                        delay(1000) // Give time for notification to show
+                                                        onNavigateToHome()
+                                                    }
                                                 }
+                                            },
+                                            onError = { error ->
+                                                isUpdating = false
+                                                updateError = error
                                             }
-                                        },
-                                        onError = { error ->
-                                            isUpdating = false
-                                            updateError = error
+                                        )
+                                    }
+                                },
+                                enabled = allValid && !isUpdating,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = ButtonBlue,
+                                    disabledContainerColor = ButtonBlue.copy(alpha = 0.3f)
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp)
+                                    .scale(buttonScale)
+                            ) {
+                                AnimatedContent(
+                                    targetState = isUpdating,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(300)) togetherWith
+                                        fadeOut(animationSpec = tween(300))
+                                    },
+                                    label = "buttonContent"
+                                ) { updating ->
+                                    if (updating) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            LoadingIndicator(color = ButtonTxt)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Updating...", color = ButtonTxt, fontSize = 18.sp)
                                         }
-                                    )
+                                    } else {
+                                        Row(
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Check, contentDescription = "Update", tint = ButtonTxt)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Update", color = ButtonTxt, fontSize = 18.sp)
+                                        }
+                                    }
                                 }
-                            },
-                            enabled = allValid && !isUpdating,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = ButtonBlue,
-                                disabledContainerColor = ButtonBlue.copy(alpha = 0.3f)
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                        ) {
-                            if (isUpdating) {
-                                LoadingIndicator(
-                                    color = ButtonTxt
+                            }
+
+                            AnimatedVisibility(
+                                visible = updateError.isNotEmpty(),
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Text(
+                                    text = updateError,
+                                    color = ErrorRed,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(top = 6.dp)
                                 )
-                                Spacer(Modifier.width(8.dp))
-                                Text("Updating...", color = ButtonTxt, fontSize = 18.sp)
-                            } else {
-                                Icon(Icons.Default.Check, contentDescription = "Update", tint = ButtonTxt)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Update", color = ButtonTxt, fontSize = 18.sp)
                             }
                         }
-
-                        if (updateError.isNotEmpty())
-                            Text(updateError, color = ErrorRed, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                     }
 
                     // Popup
@@ -273,5 +345,41 @@ fun EditProfileScreen(
             }
         )
         }
+    }
+}
+
+@Composable
+fun AnimatedFieldWrapper(
+    index: Int,
+    isVisible: Boolean,
+    content: @Composable () -> Unit
+) {
+    val offsetY by animateDpAsState(
+        targetValue = if (isVisible) 0.dp else 50.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "offsetY$index"
+    )
+    
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 400,
+            delayMillis = index * 50,
+            easing = FastOutSlowInEasing
+        ),
+        label = "alpha$index"
+    )
+    
+    Box(
+        modifier = Modifier
+            .graphicsLayer {
+                translationY = offsetY.toPx()
+                this.alpha = alpha
+            }
+    ) {
+        content()
     }
 }
