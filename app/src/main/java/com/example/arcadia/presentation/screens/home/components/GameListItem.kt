@@ -9,18 +9,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
@@ -99,41 +92,58 @@ fun GameListItem(
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
-                SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(game.backgroundImage ?: "")
-                        .size(imageSizePx, imageSizePx)
-                        .scale(Scale.FILL)
-                        .memoryCacheKey(game.backgroundImage)
-                        .diskCacheKey(game.backgroundImage)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = game.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF1E2A47)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingIndicator(
-                                color = Color(0xFF62B4DA)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(game.backgroundImage ?: "")
+                            .size(imageSizePx, imageSizePx)
+                            .scale(Scale.FILL)
+                            .memoryCacheKey(game.backgroundImage)
+                            .diskCacheKey(game.backgroundImage)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = game.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0xFF1E2A47)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LoadingIndicator(
+                                    color = Color(0xFF62B4DA)
+                                )
+                            }
+                        },
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0xFF1E2A47)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("🎮", fontSize = 48.sp)
+                            }
+                        }
+                    )
+                    
+                    // Gradient overlay
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.4f)
+                                    ),
+                                    startY = 50f
+                                )
                             )
-                        }
-                    },
-                    error = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF1E2A47)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("🎮", fontSize = 48.sp)
-                        }
-                    }
-                )
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(16.dp))

@@ -1,22 +1,17 @@
 package com.example.arcadia.presentation.screens.onBoarding.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.arcadia.ui.theme.YellowAccent
@@ -32,20 +27,45 @@ fun PageIndicators(pagerState: PagerState) {
     ) {
         repeat(pagerState.pageCount) { iteration ->
             val isSelected = pagerState.currentPage == iteration
+            
+            // Color animation
             val animatedColor by animateColorAsState(
-                targetValue = if (isSelected) YellowAccent else Color.White,
+                targetValue = if (isSelected) YellowAccent else Color.White.copy(alpha = 0.5f),
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
                 label = "Page indicator color"
             )
-            val animatedSize by animateDpAsState(
-                targetValue = if (isSelected) 32.dp else 25.dp,
-                label = "Page indicator size"
+            
+            // Width animation for selected indicator
+            val animatedWidth by animateDpAsState(
+                targetValue = if (isSelected) 40.dp else 12.dp,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "Page indicator width"
             )
+            
+            // Scale animation
+            val scale by animateFloatAsState(
+                targetValue = if (isSelected) 1f else 0.8f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "Page indicator scale"
+            )
+            
             Box(
                 modifier = Modifier
-                    .padding(horizontal = 8.dp)
-                    .clip(CircleShape)
+                    .padding(horizontal = 6.dp)
+                    .clip(RoundedCornerShape(50))
                     .background(color = animatedColor)
-                    .size(animatedSize)
+                    .height(12.dp)
+                    .width(animatedWidth)
+                    .scale(scale)
             )
         }
     }

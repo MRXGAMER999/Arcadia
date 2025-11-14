@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.domain.repository.SortOrder
+import com.example.arcadia.presentation.components.LibraryEmptyState
 import com.example.arcadia.presentation.screens.myGames.components.MyGameCard
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
@@ -216,7 +217,7 @@ fun MyGamesScreen(
                 
                 is RequestState.Success -> {
                     if (state.data.isEmpty()) {
-                        EmptyState(
+                        LibraryEmptyState(
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
@@ -248,35 +249,6 @@ fun MyGamesScreen(
                 else -> {}
             }
         }
-    }
-}
-
-@Composable
-private fun EmptyState(
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "🎮",
-            fontSize = 64.sp
-        )
-        Text(
-            text = "No games in your library",
-            color = TextSecondary,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 16.dp)
-        )
-        Text(
-            text = "Start adding games from the home screen",
-            color = TextSecondary.copy(alpha = 0.7f),
-            fontSize = 14.sp,
-            modifier = Modifier.padding(top = 8.dp)
-        )
     }
 }
 

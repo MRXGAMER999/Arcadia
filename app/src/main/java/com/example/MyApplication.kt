@@ -19,7 +19,7 @@ class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        if (BuildConfig.DEBUG) {
+
             try {
                 val host = EMULATOR_HOST
 
@@ -46,7 +46,7 @@ class MyApplication : Application() {
             } catch (e: Exception) {
                 android.util.Log.e("MyApplication", "Failed to configure Firebase Emulator", e)
             }
-        }
+
 
         startKoin {
             androidLogger()
