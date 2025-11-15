@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+// Saved state from database
 data class EditProfileScreenState(
     val id: String = "",
     val name: String = "",
@@ -24,6 +25,16 @@ data class EditProfileScreenState(
     val profileComplete: Boolean = false
 )
 
+// Local editing state (not yet saved)
+data class EditProfileLocalState(
+    val name: String = "",
+    val username: String = "",
+    val country: String = "",
+    val city: String = "",
+    val gender: String = "",
+    val description: String = ""
+)
+
 class EditProfileViewModel(
     private val gamerRepository: GamerRepository
 ): ViewModel() {
@@ -34,28 +45,32 @@ class EditProfileViewModel(
     var screenState: EditProfileScreenState by mutableStateOf(EditProfileScreenState())
         private set
     
-    // Validation functions
+    // Local editing state - not committed until save
+    var localState: EditProfileLocalState by mutableStateOf(EditProfileLocalState())
+        private set
+    
+    // Validation functions for local state
     fun validateName(): String = when {
-        screenState.name.length < 3 -> "Name must be at least 3 characters"
-        screenState.name.any { !it.isLetter() && !it.isWhitespace() } -> "Name cannot contain symbols"
+        localState.name.length < 3 -> "Name must be at least 3 characters"
+        localState.name.any { !it.isLetter() && !it.isWhitespace() } -> "Name cannot contain symbols"
         else -> ""
     }
 
     fun validateUsername(): String = when {
-        screenState.username.length < 3 -> "Username must be at least 3 characters"
-        screenState.username.any { !it.isLetterOrDigit() && it != '_' } -> "Username cannot contain symbols"
+        localState.username.length < 3 -> "Username must be at least 3 characters"
+        localState.username.any { !it.isLetterOrDigit() && it != '_' } -> "Username cannot contain symbols"
         else -> ""
     }
 
-    fun validateCountry(): String = if (screenState.country.isEmpty()) "Please select a country" else ""
+    fun validateCountry(): String = if (localState.country.isEmpty()) "Please select a country" else ""
     
-    fun validateCity(): String = if (screenState.city.isEmpty()) "Please select a city" else ""
+    fun validateCity(): String = if (localState.city.isEmpty()) "Please select a city" else ""
     
-    fun validateGender(): String = if (screenState.gender.isEmpty()) "Please select a gender" else ""
+    fun validateGender(): String = if (localState.gender.isEmpty()) "Please select a gender" else ""
     
     fun validateDescription(): String = when {
-        screenState.description.isEmpty() -> "" // Empty is valid (optional field)
-        screenState.description.any { it in "@#$%^&*()" } -> "Bio cannot contain symbols"
+        localState.description.isEmpty() -> "" // Empty is valid (optional field)
+        localState.description.any { it in "@#$%^&*()" } -> "Bio cannot contain symbols"
         else -> ""
     }
     
@@ -97,6 +112,17 @@ class EditProfileViewModel(
                         description = fetchedGamer.description ?: "",
                         profileComplete = fetchedGamer.profileComplete
                     )
+                    
+                    // Initialize local state with saved values
+                    localState = EditProfileLocalState(
+                        name = fetchedGamer.name,
+                        username = fetchedGamer.username,
+                        country = fetchedGamer.country ?: "",
+                        city = fetchedGamer.city ?: "",
+                        gender = fetchedGamer.gender ?: "",
+                        description = fetchedGamer.description ?: ""
+                    )
+                    
                     screenReady = RequestState.Success(Unit)
                 } else if (data.isError()) {
                     screenReady = RequestState.Error(data.getErrorMessage())
@@ -105,31 +131,33 @@ class EditProfileViewModel(
         }
     }
     
-    fun updateName(value: String) {
-        screenState = screenState.copy(name = value)
+    // Update local editing state (not saved yet)
+    fun updateLocalName(value: String) {
+        localState = localState.copy(name = value)
     }
     
-    fun updateUsername(value: String) {
-        screenState = screenState.copy(username = value)
+    fun updateLocalUsername(value: String) {
+        localState = localState.copy(username = value)
     }
     
-    fun updateCountry(value: String) {
-        screenState = screenState.copy(country = value, city = "") // Reset city when country changes
+    fun updateLocalCountry(value: String) {
+        localState = localState.copy(country = value, city = "") // Reset city when country changes
     }
     
-    fun updateCity(value: String) {
-        screenState = screenState.copy(city = value)
+    fun updateLocalCity(value: String) {
+        localState = localState.copy(city = value)
     }
     
-    fun updateGender(value: String) {
-        screenState = screenState.copy(gender = value)
+    fun updateLocalGender(value: String) {
+        localState = localState.copy(gender = value)
     }
     
-    fun updateDescription(value: String) {
-        screenState = screenState.copy(description = value)
+    fun updateLocalDescription(value: String) {
+        localState = localState.copy(description = value)
     }
     
-    fun updateGamer(
+    // Commit local changes and save to database
+    fun saveProfile(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -137,18 +165,42 @@ class EditProfileViewModel(
             gamerRepository.updateGamer(
                 gamer = Gamer(
                     id = screenState.id,
-                    name = screenState.name,
+                    name = localState.name,
                     email = screenState.email,
-                    username = screenState.username,
-                    country = screenState.country,
-                    city = screenState.city,
-                    gender = screenState.gender,
-                    description = screenState.description,
+                    username = localState.username,
+                    country = localState.country,
+                    city = localState.city,
+                    gender = localState.gender,
+                    description = localState.description,
                     profileComplete = true
                 ),
-                onSuccess = onSuccess,
+                onSuccess = {
+                    // Update saved state with local state after successful save
+                    screenState = screenState.copy(
+                        name = localState.name,
+                        username = localState.username,
+                        country = localState.country,
+                        city = localState.city,
+                        gender = localState.gender,
+                        description = localState.description,
+                        profileComplete = true
+                    )
+                    onSuccess()
+                },
                 onError = onError
             )
         }
+    }
+    
+    // Reset local state to saved state (cancel changes)
+    fun resetLocalState() {
+        localState = EditProfileLocalState(
+            name = screenState.name,
+            username = screenState.username,
+            country = screenState.country,
+            city = screenState.city,
+            gender = screenState.gender,
+            description = screenState.description
+        )
     }
 }

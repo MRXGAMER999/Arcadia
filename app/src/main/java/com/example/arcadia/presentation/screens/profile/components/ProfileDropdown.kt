@@ -3,15 +3,19 @@ package com.example.arcadia.presentation.screens.profile.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Divider
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -23,13 +27,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-
-// 🎨 Colors
-private val FieldBg = Color(0xFF00123B)
-private val FieldTxt = Color(0xFFDCDCDC)
-private val Border = Color(0xFFDCDCDC)
-private val BorderCyanOnSelect = Color(0xFF62B4DA)
-private val ErrorRed = Color(0xFFFF3535)
+import com.example.arcadia.ui.theme.ButtonPrimary
+import com.example.arcadia.ui.theme.Surface
+import com.example.arcadia.ui.theme.TextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,7 +39,9 @@ fun ProfileDropdown(
     selected: String,
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
-    isError: Boolean = false
+    isError: Boolean = false,
+    errorMessage: String? = null,
+    placeholder: String = "Select $label"
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -51,49 +53,99 @@ fun ProfileDropdown(
         OutlinedTextField(
             value = selected,
             onValueChange = {},
-            label = { Text(label, color = FieldTxt.copy(alpha = 0.7f)) },
             readOnly = true,
-            isError = isError,
-            trailingIcon = {
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = FieldTxt
+            label = {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isError) Color(0xFFFF3535) else TextSecondary.copy(alpha = 0.7f)
                 )
             },
-            textStyle = LocalTextStyle.current.copy(color = FieldTxt),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = if (isError) ErrorRed else BorderCyanOnSelect,
-                unfocusedBorderColor = if (isError) ErrorRed else Border.copy(alpha = 0.5f),
-                focusedTextColor = FieldTxt,
-                unfocusedTextColor = FieldTxt,
-                cursorColor = BorderCyanOnSelect,
-                focusedContainerColor = FieldBg,
-                unfocusedContainerColor = FieldBg
-            ),
-            shape = RoundedCornerShape(12.dp),
+            placeholder = {
+                Text(
+                    text = placeholder,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary.copy(alpha = 0.4f)
+                )
+            },
+            trailingIcon = {
+                Row {
+                    if (isError) {
+                        // Show error icon when there's an error
+                        Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = "Error",
+                            tint = Color(0xFFFF3535)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    // Always show dropdown arrow
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Dropdown arrow",
+                        tint = if (isError) Color(0xFFFF3535) else TextSecondary
+                    )
+                }
+            },
+            isError = isError,
             modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = TextSecondary,
+                unfocusedTextColor = TextSecondary,
+                disabledTextColor = TextSecondary.copy(alpha = 0.5f),
+                errorTextColor = TextSecondary,
+                focusedContainerColor = Surface,
+                unfocusedContainerColor = Surface,
+                disabledContainerColor = Surface.copy(alpha = 0.5f),
+                errorContainerColor = Surface,
+                cursorColor = ButtonPrimary,
+                errorCursorColor = Color(0xFFFF3535),
+                focusedBorderColor = if (isError) Color(0xFFFF3535) else ButtonPrimary,
+                unfocusedBorderColor = if (isError) Color(0xFFFF3535) else TextSecondary.copy(alpha = 0.5f),
+                disabledBorderColor = TextSecondary.copy(alpha = 0.3f),
+                errorBorderColor = Color(0xFFFF3535),
+                focusedLabelColor = if (isError) Color(0xFFFF3535) else ButtonPrimary,
+                unfocusedLabelColor = if (isError) Color(0xFFFF3535) else TextSecondary.copy(alpha = 0.7f),
+                disabledLabelColor = TextSecondary.copy(alpha = 0.5f),
+                errorLabelColor = Color(0xFFFF3535),
+            ),
+            shape = RoundedCornerShape(12.dp)
         )
 
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(FieldBg)
+            modifier = Modifier.background(Surface)
         ) {
-            options.forEachIndexed { index, option ->
+            options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(option, color = FieldTxt) },
+                    text = {
+                        Text(
+                            text = option,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary
+                        )
+                    },
                     onClick = {
                         onSelected(option)
                         expanded = false
-                    }
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                 )
-                if (index < options.lastIndex)
-                    Divider(color = BorderCyanOnSelect.copy(alpha = 0.3f), thickness = 1.dp)
             }
         }
+    }
+    
+    // Error message
+    if (isError && errorMessage != null) {
+        Text(
+            text = errorMessage,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFFF3535),
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 

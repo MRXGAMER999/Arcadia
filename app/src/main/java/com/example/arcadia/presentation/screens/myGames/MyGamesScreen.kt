@@ -228,10 +228,14 @@ fun MyGamesScreen(
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(state.data) { game ->
+                            items(
+                                items = state.data,
+                                key = { game -> game.id }
+                            ) { game ->
                                 MyGameCard(
                                     game = game,
-                                    onClick = { onGameClick(game.rawgId) }
+                                    onClick = { onGameClick(game.rawgId) },
+                                    modifier = Modifier.animateItem()
                                 )
                             }
                         }

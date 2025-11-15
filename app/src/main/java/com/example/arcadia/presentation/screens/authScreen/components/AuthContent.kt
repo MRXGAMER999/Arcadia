@@ -36,7 +36,7 @@ fun AuthContent(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(32.dp))
         Text(
             modifier = Modifier.fillMaxWidth(),
-            text = "Sgin in to Continue",
+            text = "Sign in to Continue",
             textAlign = TextAlign.Center,
             fontFamily = RobotoCondensedFont,
             fontWeight = FontWeight.Bold,
