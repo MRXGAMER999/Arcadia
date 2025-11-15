@@ -9,6 +9,7 @@ import com.example.arcadia.domain.model.UserGame
 import com.example.arcadia.domain.repository.SortOrder
 import com.example.arcadia.domain.repository.UserGamesRepository
 import com.example.arcadia.util.RequestState
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -24,6 +25,8 @@ class MyGamesViewModel(
     
     var screenState by mutableStateOf(MyGamesScreenState())
         private set
+    
+    private var gamesJob: Job? = null
     
     // Predefined genres matching the Figma design
     val availableGenres = listOf(
@@ -63,18 +66,19 @@ class MyGamesViewModel(
     }
     
     private fun loadGames() {
-        viewModelScope.launch {
+        gamesJob?.cancel()
+        gamesJob = viewModelScope.launch {
             val selectedGenre = screenState.selectedGenre
             val sortOrder = screenState.sortOrder
             
             if (selectedGenre != null) {
                 userGamesRepository.getUserGamesByGenre(selectedGenre, sortOrder)
-                    .collectLatest { state ->
+                    .collect { state ->
                         screenState = screenState.copy(games = state)
                     }
             } else {
                 userGamesRepository.getUserGames(sortOrder)
-                    .collectLatest { state ->
+                    .collect { state ->
                         screenState = screenState.copy(games = state)
                     }
             }
