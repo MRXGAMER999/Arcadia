@@ -15,12 +15,14 @@ fun GameListEntryDto.toGameListEntry(documentId: String): GameListEntry {
         name = name,
         backgroundImage = backgroundImage,
         genres = genres,
+        platforms = platforms,
         addedAt = addedAt,
         updatedAt = updatedAt,
         status = GameStatus.fromString(status),
         rating = rating,
         review = review,
-        hoursPlayed = hoursPlayed
+        hoursPlayed = hoursPlayed,
+        aspects = aspects
     )
 }
 
@@ -33,12 +35,14 @@ fun GameListEntry.toDto(): GameListEntryDto {
         name = name,
         backgroundImage = backgroundImage,
         genres = genres,
+        platforms = platforms,
         addedAt = addedAt,
         updatedAt = updatedAt,
         status = status.name,
         rating = rating,
         review = review,
-        hoursPlayed = hoursPlayed
+        hoursPlayed = hoursPlayed,
+        aspects = aspects
     )
 }
 
@@ -52,12 +56,13 @@ fun Game.toGameListEntry(status: GameStatus = GameStatus.WANT): GameListEntry {
         name = name,
         backgroundImage = backgroundImage,
         genres = genres,
+        platforms = platforms,
         addedAt = currentTime,
         updatedAt = currentTime,
         status = status,
         rating = null,
         review = "",
-        hoursPlayed = 0
+        hoursPlayed = 0,
+        aspects = emptyList()
     )
 }
-

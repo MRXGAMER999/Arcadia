@@ -1,6 +1,8 @@
 package com.example.arcadia.presentation.screens.detailsScreen.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,13 +10,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,35 +31,56 @@ fun GameStatsSection(game: Game) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        StatItem(
-            value = game.rating.toString(),
-            label = "Rating",
-            icon = Icons.Filled.Star,
-            color = Color(0xFFFFD700)
-        )
+        // Rating with background
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF2D3E5F))
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = Color(0xFFFFD700),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = String.format("%.2f", game.rating),
+                    color = Color(0xFFFFD700),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
+        // Top Rating
         StatItem(
             value = game.ratingTop.toString(),
-            label = "Max Rating",
-            icon = null,
-            color = Color(0xFF62B4DA)
+            label = "Top Rating",
+            color = Color.White
         )
 
+        // Reviews
         StatItem(
             value = formatCount(game.ratingsCount),
             label = "Reviews",
-            icon = null,
-            color = Color(0xFF62B4DA)
+            color = Color.White
         )
 
+        // Playtime
         StatItem(
             value = "${game.playtime}h",
             label = "Playtime",
-            icon = null,
-            color = Color(0xFF62B4DA)
+            color = Color.White
         )
     }
 }
@@ -63,35 +89,22 @@ fun GameStatsSection(game: Game) {
 private fun StatItem(
     value: String,
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector?,
     color: Color
 ) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            icon?.let {
-                Icon(
-                    imageVector = it,
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            Text(
-                text = value,
-                color = color,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        Text(
+            text = value,
+            color = color,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
         Text(
             text = label,
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp,
+            color = Color.White.copy(alpha = 0.6f),
+            fontSize = 11.sp,
             modifier = Modifier.padding(top = 2.dp)
         )
     }

@@ -25,6 +25,7 @@ import com.example.arcadia.util.DisplayResult
 @Composable
 fun SearchScreen(
     onBackClick: (() -> Unit)? = null,
+    onGameClick: (Int) -> Unit = {},
     viewModel: SearchViewModel = org.koin.androidx.compose.koinViewModel()
 ) {
     val state = viewModel.screenState
@@ -72,6 +73,7 @@ fun SearchScreen(
                             SearchResultsList(
                                 games = games,
                                 viewModel = viewModel,
+                                onGameClick = onGameClick,
                                 onNotification = { message, success ->
                                     notificationMessage = message
                                     isSuccess = success
@@ -164,6 +166,7 @@ private fun NoResultsState() {
 private fun SearchResultsList(
     games: List<com.example.arcadia.domain.model.Game>,
     viewModel: SearchViewModel,
+    onGameClick: (Int) -> Unit,
     onNotification: (String, Boolean) -> Unit
 ) {
     LazyColumn(
@@ -173,6 +176,7 @@ private fun SearchResultsList(
             SearchResultCard(
                 game = game,
                 isAdded = viewModel.isGameInLibrary(game.id),
+                onClick = { onGameClick(game.id) },
                 onToggle = {
                     viewModel.toggleGameInLibrary(
                         game = game,

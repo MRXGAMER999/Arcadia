@@ -1,7 +1,6 @@
 package com.example
 
 import android.app.Application
-import com.example.arcadia.BuildConfig
 import com.example.arcadia.di.appModule
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -13,7 +12,7 @@ import org.koin.core.context.GlobalContext.startKoin
 class MyApplication : Application() {
 
     companion object {
-        private const val EMULATOR_HOST = "192.168.1.2"
+        private const val EMULATOR_HOST = "192.168.1.8"
     }
 
     override fun onCreate() {

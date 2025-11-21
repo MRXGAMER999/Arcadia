@@ -35,6 +35,9 @@ interface GameListRepository {
         status: GameStatus = GameStatus.WANT
     ): RequestState<String> // Returns document ID on success
     
+    suspend fun addGameListEntry(
+        entry: GameListEntry
+    ): RequestState<String>
 
     suspend fun updateGameStatus(
         entryId: String,
@@ -71,4 +74,3 @@ interface GameListRepository {
 
     suspend fun getEntryIdByRawgId(rawgId: Int): String?
 }
-

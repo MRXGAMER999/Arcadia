@@ -262,7 +262,8 @@ class GameListRepositoryImpl : GameListRepository {
                 status = status,
                 rating = null,
                 review = "",
-                hoursPlayed = 0
+                hoursPlayed = 0,
+                aspects = emptyList()
             )
             
             val docRef = firestore.collection("users")
@@ -272,6 +273,34 @@ class GameListRepositoryImpl : GameListRepository {
                 .await()
             
             Log.d(TAG, "Game added to list successfully: ${game.name}")
+            RequestState.Success(docRef.id)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding game to list: ${e.message}", e)
+            RequestState.Error("Failed to add game: ${e.message}")
+        }
+    }
+    
+    override suspend fun addGameListEntry(entry: GameListEntry): RequestState<String> {
+        return try {
+            val userId = getCurrentUserId()
+            if (userId == null) {
+                return RequestState.Error("User not authenticated")
+            }
+            
+            // Check if game already exists
+            val existingId = getEntryIdByRawgId(entry.rawgId)
+            if (existingId != null) {
+                return RequestState.Error("Game already in list")
+            }
+            
+            val docRef = firestore.collection("users")
+                .document(userId)
+                .collection("gameList")
+                .add(entry.toDto())
+                .await()
+            
+            Log.d(TAG, "Game added to list successfully: ${entry.name}")
             RequestState.Success(docRef.id)
             
         } catch (e: Exception) {
@@ -316,8 +345,8 @@ class GameListRepositoryImpl : GameListRepository {
             }
             
             // Validate rating
-            if (rating != null && (rating < 0f || rating > 5f)) {
-                return RequestState.Error("Rating must be between 0 and 5")
+            if (rating != null && (rating < 0f || rating > 10f)) {
+                return RequestState.Error("Rating must be between 0 and 10")
             }
             
             val updates = mapOf(
@@ -409,8 +438,8 @@ class GameListRepositoryImpl : GameListRepository {
             }
             
             // Validate rating
-            if (entry.rating != null && (entry.rating < 0f || entry.rating > 5f)) {
-                return RequestState.Error("Rating must be between 0 and 5")
+            if (entry.rating != null && (entry.rating < 0f || entry.rating > 10f)) {
+                return RequestState.Error("Rating must be between 0 and 10")
             }
             
             // Update the updatedAt timestamp
@@ -499,4 +528,3 @@ class GameListRepositoryImpl : GameListRepository {
         }
     }
 }
-
