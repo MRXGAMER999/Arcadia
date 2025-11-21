@@ -15,5 +15,6 @@ data class GameListEntryDto(
     val rating: Float? = null,
     val review: String = "",
     val hoursPlayed: Int = 0,
-    val aspects: List<String> = emptyList()
+    val aspects: List<String> = emptyList(),
+    val releaseDate: String? = null
 )

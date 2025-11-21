@@ -16,7 +16,8 @@ data class GameListEntry(
     val rating: Float? = null, // User's rating (0.0 - 10.0), null if not rated
     val review: String = "", // User's review/notes
     val hoursPlayed: Int = 0, // Hours played
-    val aspects: List<String> = emptyList() // List of best aspects tags
+    val aspects: List<String> = emptyList(), // List of best aspects tags
+    val releaseDate: String? = null // Release date from RAWG API (YYYY-MM-DD format)
 )
 
 /**

@@ -37,15 +37,26 @@ class GameListRepositoryImpl : GameListRepository {
             
             send(RequestState.Loading)
             
+            // For Title and Rating sorting, we need to fetch all and sort client-side
+            // For date-based sorting, we can use Firestore orderBy
+            val usesFirestoreSort = sortOrder in listOf(SortOrder.NEWEST_FIRST, SortOrder.OLDEST_FIRST)
+            
             val direction = when (sortOrder) {
                 SortOrder.NEWEST_FIRST -> Query.Direction.DESCENDING
                 SortOrder.OLDEST_FIRST -> Query.Direction.ASCENDING
+                else -> Query.Direction.DESCENDING // Default for client-side sorting
             }
             
             val listenerRegistration = firestore.collection("users")
                 .document(userId)
                 .collection("gameList")
-                .orderBy("addedAt", direction)
+                .let { query ->
+                    if (usesFirestoreSort) {
+                        query.orderBy("addedAt", direction)
+                    } else {
+                        query // No Firestore sorting, will sort client-side
+                    }
+                }
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.e(TAG, "Error fetching game list: ${error.message}", error)
@@ -62,7 +73,19 @@ class GameListRepositoryImpl : GameListRepository {
                                 null
                             }
                         }
-                        trySend(RequestState.Success(games))
+                        
+                        // Apply client-side sorting for Title, Rating, and Release Date
+                        val sortedGames = when (sortOrder) {
+                            SortOrder.TITLE_A_Z -> games.sortedBy { it.name.lowercase() }
+                            SortOrder.TITLE_Z_A -> games.sortedByDescending { it.name.lowercase() }
+                            SortOrder.RATING_HIGH -> games.sortedByDescending { it.rating ?: -1f }
+                            SortOrder.RATING_LOW -> games.sortedBy { it.rating ?: Float.MAX_VALUE }
+                            SortOrder.RELEASE_NEW -> games.sortedByDescending { it.releaseDate ?: "" }
+                            SortOrder.RELEASE_OLD -> games.sortedBy { it.releaseDate ?: "9999-12-31" }
+                            else -> games // Already sorted by Firestore
+                        }
+                        
+                        trySend(RequestState.Success(sortedGames))
                     } else {
                         trySend(RequestState.Success(emptyList()))
                     }
@@ -91,16 +114,25 @@ class GameListRepositoryImpl : GameListRepository {
             
             send(RequestState.Loading)
             
+            val usesFirestoreSort = sortOrder in listOf(SortOrder.NEWEST_FIRST, SortOrder.OLDEST_FIRST)
+            
             val direction = when (sortOrder) {
                 SortOrder.NEWEST_FIRST -> Query.Direction.DESCENDING
                 SortOrder.OLDEST_FIRST -> Query.Direction.ASCENDING
+                else -> Query.Direction.DESCENDING // Default for client-side sorting
             }
             
             val listenerRegistration = firestore.collection("users")
                 .document(userId)
                 .collection("gameList")
                 .whereEqualTo("status", status.name)
-                .orderBy("addedAt", direction)
+                .let { query ->
+                    if (usesFirestoreSort) {
+                        query.orderBy("addedAt", direction)
+                    } else {
+                        query
+                    }
+                }
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.e(TAG, "Error fetching games by status: ${error.message}", error)
@@ -117,7 +149,19 @@ class GameListRepositoryImpl : GameListRepository {
                                 null
                             }
                         }
-                        trySend(RequestState.Success(games))
+                        
+                        // Apply client-side sorting
+                        val sortedGames = when (sortOrder) {
+                            SortOrder.TITLE_A_Z -> games.sortedBy { it.name.lowercase() }
+                            SortOrder.TITLE_Z_A -> games.sortedByDescending { it.name.lowercase() }
+                            SortOrder.RATING_HIGH -> games.sortedByDescending { it.rating ?: -1f }
+                            SortOrder.RATING_LOW -> games.sortedBy { it.rating ?: Float.MAX_VALUE }
+                            SortOrder.RELEASE_NEW -> games.sortedByDescending { it.releaseDate ?: "" }
+                            SortOrder.RELEASE_OLD -> games.sortedBy { it.releaseDate ?: "9999-12-31" }
+                            else -> games
+                        }
+                        
+                        trySend(RequestState.Success(sortedGames))
                     } else {
                         trySend(RequestState.Success(emptyList()))
                     }
@@ -146,16 +190,25 @@ class GameListRepositoryImpl : GameListRepository {
             
             send(RequestState.Loading)
             
+            val usesFirestoreSort = sortOrder in listOf(SortOrder.NEWEST_FIRST, SortOrder.OLDEST_FIRST)
+            
             val direction = when (sortOrder) {
                 SortOrder.NEWEST_FIRST -> Query.Direction.DESCENDING
                 SortOrder.OLDEST_FIRST -> Query.Direction.ASCENDING
+                else -> Query.Direction.DESCENDING
             }
             
             val listenerRegistration = firestore.collection("users")
                 .document(userId)
                 .collection("gameList")
                 .whereArrayContains("genres", genre)
-                .orderBy("addedAt", direction)
+                .let { query ->
+                    if (usesFirestoreSort) {
+                        query.orderBy("addedAt", direction)
+                    } else {
+                        query
+                    }
+                }
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.e(TAG, "Error fetching games by genre: ${error.message}", error)
@@ -172,7 +225,19 @@ class GameListRepositoryImpl : GameListRepository {
                                 null
                             }
                         }
-                        trySend(RequestState.Success(games))
+                        
+                        // Apply client-side sorting
+                        val sortedGames = when (sortOrder) {
+                            SortOrder.TITLE_A_Z -> games.sortedBy { it.name.lowercase() }
+                            SortOrder.TITLE_Z_A -> games.sortedByDescending { it.name.lowercase() }
+                            SortOrder.RATING_HIGH -> games.sortedByDescending { it.rating ?: -1f }
+                            SortOrder.RATING_LOW -> games.sortedBy { it.rating ?: Float.MAX_VALUE }
+                            SortOrder.RELEASE_NEW -> games.sortedByDescending { it.releaseDate ?: "" }
+                            SortOrder.RELEASE_OLD -> games.sortedBy { it.releaseDate ?: "9999-12-31" }
+                            else -> games
+                        }
+                        
+                        trySend(RequestState.Success(sortedGames))
                     } else {
                         trySend(RequestState.Success(emptyList()))
                     }
@@ -257,13 +322,15 @@ class GameListRepositoryImpl : GameListRepository {
                 name = game.name,
                 backgroundImage = game.backgroundImage,
                 genres = game.genres,
+                platforms = game.platforms,
                 addedAt = currentTime,
                 updatedAt = currentTime,
                 status = status,
                 rating = null,
                 review = "",
                 hoursPlayed = 0,
-                aspects = emptyList()
+                aspects = emptyList(),
+                releaseDate = game.released
             )
             
             val docRef = firestore.collection("users")
