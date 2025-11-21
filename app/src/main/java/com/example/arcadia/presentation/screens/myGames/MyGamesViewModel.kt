@@ -34,7 +34,8 @@ class MyGamesViewModel(
         private set
     
     private var gamesJob: Job? = null
-    
+    private val pendingDeletions = mutableMapOf<String, Job>()
+
     // Predefined genres matching the Figma design
     val availableGenres = listOf(
         "Action",
@@ -92,33 +93,40 @@ class MyGamesViewModel(
         }
     }
     
-    private var undoJob: Job? = null
-    
     fun removeGameWithUndo(game: GameListEntry) {
+        // Execute any existing pending deletion for this game immediately
+        pendingDeletions[game.id]?.cancel()
+
         screenState = screenState.copy(
             deletedGame = game,
             showUndoSnackbar = true
         )
         
         // Start 5-second countdown before actual deletion
-        undoJob?.cancel()
-        undoJob = viewModelScope.launch {
+        val job = viewModelScope.launch {
             delay(5000) // 5 seconds to undo
-            if (screenState.deletedGame == game) {
-                // Actually delete from Firebase
-                gameListRepository.removeGameFromList(game.id)
+            // Actually delete from Firebase
+            gameListRepository.removeGameFromList(game.id)
+            pendingDeletions.remove(game.id)
+
+            // Only clear UI state if this is still the displayed deleted game
+            if (screenState.deletedGame?.id == game.id) {
                 screenState = screenState.copy(
                     deletedGame = null,
                     showUndoSnackbar = false
                 )
             }
         }
+        pendingDeletions[game.id] = job
     }
     
     fun undoDeletion() {
-        undoJob?.cancel()
         val deletedGame = screenState.deletedGame
         if (deletedGame != null) {
+            // Cancel the pending deletion
+            pendingDeletions[deletedGame.id]?.cancel()
+            pendingDeletions.remove(deletedGame.id)
+
             viewModelScope.launch {
                 // Re-add the game using addGameListEntry
                 gameListRepository.addGameListEntry(deletedGame)

@@ -92,7 +92,7 @@ fun FullscreenImageViewer(
                 modifier = Modifier.fillMaxSize(),
                 beyondViewportPageCount = 1, // Preload adjacent pages
                 userScrollEnabled = !isZoomed, // Disable pager swipe when zoomed
-                key = { images[it] }
+                key = { page -> page } // Use page index as key for better performance
             ) { page ->
                 ZoomableImage(
                     imageUrl = images[page],
