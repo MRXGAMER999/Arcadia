@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.SortOrder
+import com.example.arcadia.presentation.components.MediaLayout
+import com.example.arcadia.presentation.components.QuickSettingsState
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,7 +25,9 @@ data class MyGamesScreenState(
     val deletedGame: GameListEntry? = null,
     val showUndoSnackbar: Boolean = false,
     val showQuickRateDialog: Boolean = false,
-    val gameToQuickRate: GameListEntry? = null
+    val gameToQuickRate: GameListEntry? = null,
+    val showQuickSettingsDialog: Boolean = false,
+    val quickSettingsState: QuickSettingsState = QuickSettingsState()
 )
 
 class MyGamesViewModel(
@@ -61,6 +65,12 @@ class MyGamesViewModel(
         val newSortOrder = when (screenState.sortOrder) {
             SortOrder.NEWEST_FIRST -> SortOrder.OLDEST_FIRST
             SortOrder.OLDEST_FIRST -> SortOrder.NEWEST_FIRST
+            SortOrder.TITLE_A_Z -> SortOrder.TITLE_Z_A
+            SortOrder.TITLE_Z_A -> SortOrder.TITLE_A_Z
+            SortOrder.RATING_HIGH -> SortOrder.RATING_LOW
+            SortOrder.RATING_LOW -> SortOrder.RATING_HIGH
+            SortOrder.RELEASE_NEW -> SortOrder.RELEASE_OLD
+            SortOrder.RELEASE_OLD -> SortOrder.RELEASE_NEW
         }
         screenState = screenState.copy(sortOrder = newSortOrder)
         loadGames()
@@ -202,5 +212,59 @@ class MyGamesViewModel(
     
     fun retry() {
         loadGames()
+    }
+    
+    fun showQuickSettingsDialog() {
+        screenState = screenState.copy(showQuickSettingsDialog = true)
+    }
+    
+    fun dismissQuickSettingsDialog() {
+        screenState = screenState.copy(showQuickSettingsDialog = false)
+    }
+    
+    fun updateQuickSettings(settings: QuickSettingsState) {
+        screenState = screenState.copy(quickSettingsState = settings)
+    }
+    
+    fun applyQuickSettings() {
+        // Map QuickSettingsState to repository SortOrder
+        val newSortOrder = when (screenState.quickSettingsState.sortType) {
+            com.example.arcadia.presentation.components.SortType.TITLE -> {
+                if (screenState.quickSettingsState.sortOrder == com.example.arcadia.presentation.components.SortOrder.ASCENDING) {
+                    SortOrder.TITLE_A_Z
+                } else {
+                    SortOrder.TITLE_Z_A
+                }
+            }
+            com.example.arcadia.presentation.components.SortType.RATING -> {
+                if (screenState.quickSettingsState.sortOrder == com.example.arcadia.presentation.components.SortOrder.ASCENDING) {
+                    SortOrder.RATING_LOW
+                } else {
+                    SortOrder.RATING_HIGH
+                }
+            }
+            com.example.arcadia.presentation.components.SortType.ADDED -> {
+                if (screenState.quickSettingsState.sortOrder == com.example.arcadia.presentation.components.SortOrder.ASCENDING) {
+                    SortOrder.OLDEST_FIRST
+                } else {
+                    SortOrder.NEWEST_FIRST
+                }
+            }
+            com.example.arcadia.presentation.components.SortType.DATE -> {
+                // DATE is for release date - for now use added date
+                if (screenState.quickSettingsState.sortOrder == com.example.arcadia.presentation.components.SortOrder.ASCENDING) {
+                    SortOrder.OLDEST_FIRST
+                } else {
+                    SortOrder.NEWEST_FIRST
+                }
+            }
+        }
+        
+        if (screenState.sortOrder != newSortOrder) {
+            screenState = screenState.copy(sortOrder = newSortOrder)
+            loadGames()
+        }
+        
+        dismissQuickSettingsDialog()
     }
 }

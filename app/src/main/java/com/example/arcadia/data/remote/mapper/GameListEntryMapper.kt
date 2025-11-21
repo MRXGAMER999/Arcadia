@@ -22,7 +22,8 @@ fun GameListEntryDto.toGameListEntry(documentId: String): GameListEntry {
         rating = rating,
         review = review,
         hoursPlayed = hoursPlayed,
-        aspects = aspects
+        aspects = aspects,
+        releaseDate = releaseDate
     )
 }
 
@@ -42,7 +43,8 @@ fun GameListEntry.toDto(): GameListEntryDto {
         rating = rating,
         review = review,
         hoursPlayed = hoursPlayed,
-        aspects = aspects
+        aspects = aspects,
+        releaseDate = releaseDate
     )
 }
 
@@ -63,6 +65,7 @@ fun Game.toGameListEntry(status: GameStatus = GameStatus.WANT): GameListEntry {
         rating = null,
         review = "",
         hoursPlayed = 0,
-        aspects = emptyList()
+        aspects = emptyList(),
+        releaseDate = released
     )
 }

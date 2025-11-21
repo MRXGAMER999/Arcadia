@@ -2,7 +2,7 @@ package com.example.arcadia.presentation.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +48,11 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.getRatingGradient
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.draw.alpha
+import com.example.arcadia.ui.theme.getRatingGradient
+import com.example.arcadia.ui.theme.getRatingColor
 import java.util.Locale
 
 /**
@@ -59,7 +64,10 @@ import java.util.Locale
 fun ListGameCard(
     game: GameListEntry,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit = {}
+    showDateAdded: Boolean = true,
+    showReleaseDate: Boolean = false,
+    onClick: () -> Unit = {},
+    onLongClick: () -> Unit = {}
 ) {
     val context = LocalPlatformContext.current
     val density = LocalDensity.current
@@ -68,10 +76,13 @@ fun ListGameCard(
         modifier = modifier
             .fillMaxWidth()
             .height(140.dp)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1E2A47).copy(alpha = 0.4f)
+            containerColor = Color(0xFF0F1B41)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -144,7 +155,7 @@ fun ListGameCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Rating with Gradient
+                    // Rating with Gradient Icon
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -160,13 +171,12 @@ fun ListGameCard(
                                 )
                             )
 
-                            // Rating description
-                            Text(
-                                text = getRatingDescription(game.rating),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary.copy(alpha = 0.5f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
+                            // Rating icon with gradient color
+                            Icon(
+                                painter = painterResource(id = getRatingIcon(game.rating)),
+                                contentDescription = "Rating icon",
+                                modifier = Modifier.size(20.dp),
+                                tint = getRatingColor(game.rating)
                             )
                         } else {
                             Text(
@@ -240,18 +250,46 @@ fun ListGameCard(
                         )
                     }
 
-                    // Release Date | Date Added to Library
-                    Text(
-                        text = formatDates(releaseDate = null, addedAt = game.addedAt),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary.copy(alpha = 0.5f),
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    // Date Display (conditional based on settings)
+                    val dateText = formatDates(
+                        releaseDate = if (showReleaseDate) game.releaseDate else null,
+                        addedAt = if (showDateAdded) game.addedAt else null
                     )
+                    if (dateText.isNotEmpty()) {
+                        Text(
+                            text = dateText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary.copy(alpha = 0.5f),
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * Get the icon resource for a rating
+ */
+private fun getRatingIcon(rating: Float): Int {
+    return when {
+        rating == 0f -> R.drawable.no_rating_ic
+        rating <= 1f -> R.drawable.between0and2_ic
+        rating <= 2f -> R.drawable.between0and2_ic
+        rating <= 3f -> R.drawable.from2to4_ic
+        rating <= 4f -> R.drawable.from2to4_ic
+        rating <= 5f -> R.drawable.from4to6_ic
+        rating <= 6f -> R.drawable.from4to6_ic
+        rating <= 7f -> R.drawable.from6_5to7_5_ic
+        rating <= 7.5f -> R.drawable.from6_5to7_5_ic
+        rating <= 8f -> R.drawable.from7_5to8_5_ic
+        rating <= 8.5f -> R.drawable.from7_5to8_5_ic
+        rating <= 9f -> R.drawable.from8_5to9_5_ic
+        rating <= 9.5f -> R.drawable.from8_5to9_5_ic
+        else -> R.drawable.from9_5to10_ic
     }
 }
 
@@ -297,17 +335,38 @@ private fun getRatingDescription(rating: Float): String {
 
 /**
  * Format release date and date added to library
+ * Returns empty string if neither date should be shown
  */
-private fun formatDates(releaseDate: String?, addedAt: Long): String {
-    val releaseDateStr = releaseDate ?: "Unknown"
-    val addedAtStr = if (addedAt > 0) {
+private fun formatDates(releaseDate: String?, addedAt: Long?): String {
+    val parts = mutableListOf<String>()
+
+    // Format release date if provided
+    if (releaseDate != null) {
+        val releaseDateStr = if (releaseDate.isNotEmpty()) {
+            try {
+                // Parse "YYYY-MM-DD" format and convert to "MMM dd, yyyy"
+                val inputFormat = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val outputFormat = java.text.SimpleDateFormat("MMM dd, yyyy", Locale.US)
+                val date = inputFormat.parse(releaseDate)
+                if (date != null) outputFormat.format(date) else releaseDate
+            } catch (e: Exception) {
+                releaseDate // Return as-is if parsing fails
+            }
+        } else {
+            "TBA"
+        }
+        parts.add(releaseDateStr)
+    }
+    
+    // Format added date if provided
+    if (addedAt != null && addedAt > 0) {
         val date = java.util.Date(addedAt)
         val format = java.text.SimpleDateFormat("MMM dd, yyyy", Locale.US)
-        format.format(date)
-    } else {
-        "Unknown"
+        val addedAtStr = format.format(date)
+        parts.add(addedAtStr)
     }
-    return "$releaseDateStr | $addedAtStr"
+
+    return parts.joinToString(" | ")
 }
 
 // Preview Composables
@@ -533,4 +592,3 @@ private fun ListGameCardAllStatusesPreview() {
         )
     }
 }
-

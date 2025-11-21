@@ -46,16 +46,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.LaunchedEffect
 import com.example.arcadia.domain.repository.SortOrder
 import com.example.arcadia.presentation.components.LibraryEmptyState
+import com.example.arcadia.presentation.components.ListGameCard
+import com.example.arcadia.presentation.components.MediaLayout
 import com.example.arcadia.presentation.components.QuickRateDialog
+import com.example.arcadia.presentation.components.QuickSettingsDialog
 import com.example.arcadia.presentation.components.TopNotification
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.myGames.components.GameStatsCard
@@ -65,6 +74,9 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.util.RequestState
 import org.koin.androidx.compose.koinViewModel
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.items as lazyItems
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -75,7 +87,6 @@ fun MyGamesScreen(
 ) {
     val viewModel: MyGamesViewModel = koinViewModel()
     val screenState = viewModel.screenState
-    var showSortMenu by remember { mutableStateOf(false) }
     var showStats by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -160,7 +171,7 @@ fun MyGamesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(Surface)
+                .background(Color.Transparent)
         ) {
             Column(
                 modifier = Modifier.fillMaxSize()
@@ -202,7 +213,7 @@ fun MyGamesScreen(
                     }
                 }
                 
-                // Sort Controls and Stats Toggle
+                // Quick Settings and Stats Toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -211,16 +222,16 @@ fun MyGamesScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(
-                        onClick = { showSortMenu = true }
+                        onClick = { viewModel.showQuickSettingsDialog() }
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = "Sort",
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Quick Settings",
                             tint = ButtonPrimary,
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = "Sort By",
+                            text = "Quick Settings",
                             color = ButtonPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
@@ -236,36 +247,6 @@ fun MyGamesScreen(
                             color = ButtonPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
-                        )
-                    }
-                    
-                    DropdownMenu(
-                        expanded = showSortMenu,
-                        onDismissRequest = { showSortMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { 
-                                Text(
-                                    "Newest First",
-                                    color = if (screenState.sortOrder == SortOrder.NEWEST_FIRST) ButtonPrimary else TextSecondary
-                                ) 
-                            },
-                            onClick = {
-                                viewModel.setSortOrder(SortOrder.NEWEST_FIRST)
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { 
-                                Text(
-                                    "Oldest First",
-                                    color = if (screenState.sortOrder == SortOrder.OLDEST_FIRST) ButtonPrimary else TextSecondary
-                                ) 
-                            },
-                            onClick = {
-                                viewModel.setSortOrder(SortOrder.OLDEST_FIRST)
-                                showSortMenu = false
-                            }
                         )
                     }
                 }
@@ -289,37 +270,85 @@ fun MyGamesScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(3),
-                                contentPadding = PaddingValues(16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                // Stats Card as first item (with animation)
-                                item(
-                                    span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }
-                                ) {
-                                    AnimatedVisibility(
-                                        visible = showStats,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
+                            // Switch between List and Grid view based on settings with animation
+                            AnimatedContent(
+                                targetState = screenState.quickSettingsState.mediaLayout,
+                                transitionSpec = {
+                                    fadeIn(animationSpec = tween(300)) + 
+                                    scaleIn(initialScale = 0.95f, animationSpec = tween(300)) togetherWith
+                                    fadeOut(animationSpec = tween(200)) +
+                                    scaleOut(targetScale = 0.95f, animationSpec = tween(200))
+                                },
+                                label = "viewModeTransition"
+                            ) { layout ->
+                                if (layout == MediaLayout.LIST) {
+                                    // List View - Reduced padding for more space
+                                    LazyColumn(
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxSize()
                                     ) {
-                                        GameStatsCard(games = state.data)
+                                        // Stats Card as first item (with animation)
+                                        item {
+                                            AnimatedVisibility(
+                                                visible = showStats,
+                                                enter = expandVertically() + fadeIn(),
+                                                exit = shrinkVertically() + fadeOut()
+                                            ) {
+                                                GameStatsCard(games = state.data)
+                                            }
+                                        }
+                                        
+                                        // Games List items
+                                        lazyItems(
+                                            items = state.data,
+                                            key = { game -> game.id }
+                                        ) { game ->
+                                            ListGameCard(
+                                                game = game,
+                                                showDateAdded = screenState.quickSettingsState.showDateAdded,
+                                                showReleaseDate = screenState.quickSettingsState.showReleaseDate,
+                                                onClick = { onGameClick(game.rawgId) },
+                                                onLongClick = { viewModel.selectGameToEdit(game) },
+                                                modifier = Modifier.animateItem()
+                                            )
+                                        }
                                     }
-                                }
-                                
-                                // Games Grid items
-                                items(
-                                    items = state.data,
-                                    key = { game -> game.id }
-                                ) { game ->
-                                    MyGameCard(
-                                        game = game,
-                                        onClick = { onGameClick(game.rawgId) },
-                                        onLongClick = { viewModel.selectGameToEdit(game) },
-                                        modifier = Modifier.animateItem()
-                                    )
+                                } else {
+                                    // Grid View
+                                    LazyVerticalGrid(
+                                        columns = GridCells.Fixed(3),
+                                        contentPadding = PaddingValues(16.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        // Stats Card as first item (with animation)
+                                        item(
+                                            span = { GridItemSpan(3) }
+                                        ) {
+                                            AnimatedVisibility(
+                                                visible = showStats,
+                                                enter = expandVertically() + fadeIn(),
+                                                exit = shrinkVertically() + fadeOut()
+                                            ) {
+                                                GameStatsCard(games = state.data)
+                                            }
+                                        }
+                                        
+                                        // Games Grid items
+                                        items(
+                                            items = state.data,
+                                            key = { game -> game.id }
+                                        ) { game ->
+                                            MyGameCard(
+                                                game = game,
+                                                onClick = { onGameClick(game.rawgId) },
+                                                onLongClick = { viewModel.selectGameToEdit(game) },
+                                                modifier = Modifier.animateItem()
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -368,6 +397,18 @@ fun MyGamesScreen(
                 onRatingSelected = { rating ->
                     viewModel.quickRateGame(rating)
                 }
+            )
+        }
+        
+        // Quick Settings Dialog
+        if (screenState.showQuickSettingsDialog) {
+            QuickSettingsDialog(
+                state = screenState.quickSettingsState,
+                onStateChange = { newSettings ->
+                    viewModel.updateQuickSettings(newSettings)
+                },
+                onDismiss = { viewModel.dismissQuickSettingsDialog() },
+                onDone = { viewModel.applyQuickSettings() }
             )
         }
     }

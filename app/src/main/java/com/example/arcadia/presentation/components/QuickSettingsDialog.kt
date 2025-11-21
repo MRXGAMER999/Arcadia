@@ -2,14 +2,17 @@ package com.example.arcadia.presentation.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
@@ -20,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -30,7 +32,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.arcadia.ui.theme.ButtonPrimary
 
 enum class MediaLayout { LIST, GRID }
-enum class SortType { TITLE, DURATION, DATE, RATING }
+enum class SortType { TITLE, ADDED, DATE, RATING }
 enum class SortOrder { ASCENDING, DESCENDING }
 
 data class QuickSettingsState(
@@ -49,84 +51,177 @@ fun QuickSettingsDialog(
     onDone: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF2A2E35)
+        AnimatedVisibility(
+            visible = true,
+            enter = fadeIn(animationSpec = tween(300)) +
+                    scaleIn(
+                        initialScale = 0.85f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    ) +
+                    slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                    ),
+            exit = fadeOut(animationSpec = tween(200)) +
+                   scaleOut(
+                       targetScale = 0.9f,
+                       animationSpec = tween(200)
+                   ) +
+                   slideOutVertically(
+                       targetOffsetY = { it / 4 },
+                       animationSpec = tween(200)
+                   )
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .wrapContentHeight()
+                    .heightIn(max = 650.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF2A2E35)
             ) {
-                // Title
-                Text(
-                    text = "Quick Settings",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Media Layout
-                SectionTitle("Media Layout")
-                Spacer(modifier = Modifier.height(12.dp))
-                DualSegmentedButton(
-                    leftText = "List",
-                    rightText = "Grid",
-                    isLeftSelected = state.mediaLayout == MediaLayout.LIST,
-                    onSelectionChange = { isLeft ->
-                        onStateChange(state.copy(mediaLayout = if (isLeft) MediaLayout.LIST else MediaLayout.GRID))
+            Column {
+                // Scrollable content
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 24.dp, bottom = 16.dp)
+                ) {
+                    // Title
+                    Text(
+                        text = "Quick Settings",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Media Layout
+                    SectionTitle("Media Layout")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    DualSegmentedButton(
+                        leftText = "List",
+                        rightText = "Grid",
+                        isLeftSelected = state.mediaLayout == MediaLayout.LIST,
+                        onSelectionChange = { isLeft ->
+                            val newLayout = if (isLeft) MediaLayout.LIST else MediaLayout.GRID
+                            // When switching to GRID, ensure only one date option is selected
+                            val newState = if (!isLeft && state.showDateAdded && state.showReleaseDate) {
+                                state.copy(
+                                    mediaLayout = newLayout,
+                                    showReleaseDate = false // Keep only Date Added by default
+                                )
+                            } else {
+                                state.copy(mediaLayout = newLayout)
+                            }
+                            onStateChange(newState)
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Sort
+                    SectionTitle("Sort")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SortOptions(
+                        selectedType = state.sortType,
+                        onTypeChange = { onStateChange(state.copy(sortType = it)) }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    SortOrderButton(
+                        sortType = state.sortType,
+                        sortOrder = state.sortOrder,
+                        onOrderChange = { onStateChange(state.copy(sortOrder = it)) }
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Fields
+                    SectionTitle("Fields")
+                    if (state.mediaLayout == MediaLayout.GRID) {
+                        Text(
+                            text = "Select one date display option",
+                            fontSize = 12.sp,
+                            color = Color(0xFF8B8B8B),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    FieldsSelection(
+                        mediaLayout = state.mediaLayout,
+                        showDateAdded = state.showDateAdded,
+                        showReleaseDate = state.showReleaseDate,
+                        onDateAddedChange = { checked ->
+                            if (state.mediaLayout == MediaLayout.GRID) {
+                                // Grid mode: Radio behavior - selecting one deselects the other
+                                if (checked) {
+                                    onStateChange(state.copy(showDateAdded = true, showReleaseDate = false))
+                                }
+                            } else {
+                                // List mode: Independent toggles
+                                onStateChange(state.copy(showDateAdded = checked))
+                            }
+                        },
+                        onReleaseDateChange = { checked ->
+                            if (state.mediaLayout == MediaLayout.GRID) {
+                                // Grid mode: Radio behavior - selecting one deselects the other
+                                if (checked) {
+                                    onStateChange(state.copy(showDateAdded = false, showReleaseDate = true))
+                                }
+                            } else {
+                                // List mode: Independent toggles
+                                onStateChange(state.copy(showReleaseDate = checked))
+                            }
+                        }
+                    )
+                }
+
+                // Fixed action buttons at bottom
+                HorizontalDivider(
+                    color = Color(0xFF3A3E45),
+                    thickness = 1.dp
                 )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Sort
-                SectionTitle("Sort")
-                Spacer(modifier = Modifier.height(12.dp))
-                SortOptions(
-                    selectedType = state.sortType,
-                    onTypeChange = { onStateChange(state.copy(sortType = it)) }
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                SortOrderButton(
-                    sortType = state.sortType,
-                    sortOrder = state.sortOrder,
-                    onOrderChange = { onStateChange(state.copy(sortOrder = it)) }
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Fields
-                SectionTitle("Fields")
-                Spacer(modifier = Modifier.height(12.dp))
-                FieldsSelection(
-                    showDateAdded = state.showDateAdded,
-                    showReleaseDate = state.showReleaseDate,
-                    onDateAddedChange = { onStateChange(state.copy(showDateAdded = it)) },
-                    onReleaseDateChange = { onStateChange(state.copy(showReleaseDate = it)) }
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Action buttons
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancel", color = Color(0xFF8AB4F8))
+                        Text(
+                            text = "Cancel",
+                            color = Color(0xFF8AB4F8),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    TextButton(onClick = onDone) {
-                        Text("Done", color = Color(0xFF8AB4F8))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Button(
+                        onClick = onDone,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ButtonPrimary,
+                            contentColor = Color(0xFF1A1E25)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Done",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
+        }
         }
     }
 }
@@ -295,20 +390,20 @@ private fun SortOptions(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         SortOption(
-            icon = Icons.Default.Title, // Using Star as placeholder for "T"
+            icon = Icons.Default.Title,
             label = "Title",
             isSelected = selectedType == SortType.TITLE,
             onClick = { onTypeChange(SortType.TITLE) }
         )
         SortOption(
-            icon = Icons.Default.Coffee,
-            label = "Duration",
-            isSelected = selectedType == SortType.DURATION,
-            onClick = { onTypeChange(SortType.DURATION) }
+            icon = Icons.Default.AddCircle,
+            label = "Added",
+            isSelected = selectedType == SortType.ADDED,
+            onClick = { onTypeChange(SortType.ADDED) }
         )
         SortOption(
             icon = Icons.Default.DateRange,
-            label = "Date",
+            label = "Released",
             isSelected = selectedType == SortType.DATE,
             onClick = { onTypeChange(SortType.DATE) }
         )
@@ -394,7 +489,7 @@ private fun SortOrderButton(
 ) {
     val (leftText, rightText) = when (sortType) {
         SortType.TITLE -> "A-Z" to "Z-A"
-        SortType.DURATION -> "Shortest" to "Longest"
+        SortType.ADDED -> "Oldest" to "Newest"
         SortType.DATE -> "Oldest" to "Newest"
         SortType.RATING -> "Lowest" to "Highest"
     }
@@ -468,8 +563,10 @@ private fun SortOrderButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FieldsSelection(
+    mediaLayout: MediaLayout,
     showDateAdded: Boolean,
     showReleaseDate: Boolean,
     onDateAddedChange: (Boolean) -> Unit,
@@ -479,16 +576,111 @@ private fun FieldsSelection(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        FieldChip(
-            text = "Date Added",
-            isSelected = showDateAdded,
+        // Date Added chip
+        FilterChip(
+            selected = showDateAdded,
             onClick = { onDateAddedChange(!showDateAdded) },
+            label = {
+                Text(
+                    text = "Date Added",
+                    fontSize = 14.sp
+                )
+            },
+            leadingIcon = {
+                if (mediaLayout == MediaLayout.GRID) {
+                    // Radio button icon for GRID mode
+                    Icon(
+                        imageVector = if (showDateAdded) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    // Checkbox icon for LIST mode
+                    if (showDateAdded) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Circle,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = Color(0xFF4A5A6A),
+                selectedLabelColor = ButtonPrimary,
+                selectedLeadingIconColor = ButtonPrimary,
+                containerColor = Color(0xFF353940),
+                labelColor = Color(0xFFB8B8B8),
+                iconColor = Color(0xFF6B7178)
+            ),
+            border = FilterChipDefaults.filterChipBorder(
+                enabled = true,
+                selected = showDateAdded,
+                borderColor = if (showDateAdded) ButtonPrimary else Color(0xFF4A5057),
+                selectedBorderColor = ButtonPrimary,
+                borderWidth = 1.5.dp,
+                selectedBorderWidth = 1.5.dp
+            ),
             modifier = Modifier.weight(1f)
         )
-        FieldChip(
-            text = "Release Date",
-            isSelected = showReleaseDate,
+
+        // Release Date chip
+        FilterChip(
+            selected = showReleaseDate,
             onClick = { onReleaseDateChange(!showReleaseDate) },
+            label = {
+                Text(
+                    text = "Release Date",
+                    fontSize = 14.sp
+                )
+            },
+            leadingIcon = {
+                if (mediaLayout == MediaLayout.GRID) {
+                    // Radio button icon for GRID mode
+                    Icon(
+                        imageVector = if (showReleaseDate) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    // Checkbox icon for LIST mode
+                    if (showReleaseDate) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Circle,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = Color(0xFF4A5A6A),
+                selectedLabelColor = ButtonPrimary,
+                selectedLeadingIconColor = ButtonPrimary,
+                containerColor = Color(0xFF353940),
+                labelColor = Color(0xFFB8B8B8),
+                iconColor = Color(0xFF6B7178)
+            ),
+            border = FilterChipDefaults.filterChipBorder(
+                enabled = true,
+                selected = showReleaseDate,
+                borderColor = if (showReleaseDate) ButtonPrimary else Color(0xFF4A5057),
+                selectedBorderColor = ButtonPrimary,
+                borderWidth = 1.5.dp,
+                selectedBorderWidth = 1.5.dp
+            ),
             modifier = Modifier.weight(1f)
         )
     }
@@ -640,6 +832,7 @@ private fun QuickSettingsDialogPreview() {
                 SectionTitle("Fields")
                 Spacer(modifier = Modifier.height(12.dp))
                 FieldsSelection(
+                    mediaLayout = state.mediaLayout,
                     showDateAdded = state.showDateAdded,
                     showReleaseDate = state.showReleaseDate,
                     onDateAddedChange = { state = state.copy(showDateAdded = it) },
