@@ -225,6 +225,16 @@ class GamerRepositoryImpl: GamerRepository {
             // Get the download URL
             val downloadUrl = profileImagesRef.downloadUrl.await()
 
+            // CRITICAL: Immediately update Firestore with the new image URL
+            // This ensures that subsequent uploads will properly delete this image
+            // and prevents orphaned images in Storage (cost savings)
+            database.collection("users")
+                .document(userId)
+                .update("profileImageUrl", downloadUrl.toString())
+                .await()
+
+            android.util.Log.d("GamerRepository", "Profile image URL updated in Firestore")
+
             onSuccess(downloadUrl.toString())
         } catch (e: Exception) {
             android.util.Log.e("GamerRepository", "Error uploading profile image: ${e.message}", e)
