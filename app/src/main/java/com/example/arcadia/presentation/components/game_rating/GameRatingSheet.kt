@@ -102,6 +102,7 @@ fun GameRatingSheet(
                     .padding(bottom = 32.dp)
             ) {
                 SheetTitle(
+                    gameName = game.name,
                     rating = if (sliderValue > 0) String.format("%.1f", sliderValue) else "Not Rated",
                     ratingDescription = getRatingDescription(sliderValue),
                     onClose = onDismiss
@@ -201,6 +202,7 @@ fun GameRatingSheet(
 
 @Composable
 fun SheetTitle(
+    gameName: String,
     rating: String,
     ratingDescription: String,
     onClose: () -> Unit = {}
@@ -212,7 +214,7 @@ fun SheetTitle(
     ) {
         Column {
             Text(
-                text = "Rate the game",
+                text = gameName,
                 style = MaterialTheme.typography.titleLarge,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
