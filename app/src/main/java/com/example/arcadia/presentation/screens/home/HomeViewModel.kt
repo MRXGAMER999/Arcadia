@@ -109,14 +109,26 @@ class HomeViewModel(
             // Using popular tags for recommendations: singleplayer, multiplayer, action
             // Clamp to 40 (RAWG API typical limit)
             gameRepository.getRecommendedGames(tags = "singleplayer,multiplayer", page = 1, pageSize = 40).collect { state ->
-                if (state is RequestState.Success) {
-                    lastRecommended = state.data
-                    recommendationPage = 1
-                    applyRecommendationFilter()
-                    // Auto-fetch more if filtered results are too few
-                    ensureMinimumRecommendations()
-                } else {
-                    screenState = screenState.copy(recommendedGames = state)
+                when (state) {
+                    is RequestState.Success -> {
+                        android.util.Log.d("HomeViewModel", "Recommendations loaded: ${state.data.size} games")
+                        lastRecommended = state.data
+                        recommendationPage = 1
+                        applyRecommendationFilter()
+                        // Auto-fetch more if filtered results are too few
+                        ensureMinimumRecommendations()
+                    }
+                    is RequestState.Loading -> {
+                        android.util.Log.d("HomeViewModel", "Loading recommendations...")
+                        screenState = screenState.copy(recommendedGames = state)
+                    }
+                    is RequestState.Error -> {
+                        android.util.Log.e("HomeViewModel", "Error loading recommendations: ${state.message}")
+                        screenState = screenState.copy(recommendedGames = state)
+                    }
+                    else -> {
+                        screenState = screenState.copy(recommendedGames = state)
+                    }
                 }
             }
         }
@@ -156,17 +168,25 @@ class HomeViewModel(
     }
     
     private fun applyRecommendationFilter() {
-        if (lastRecommended.isEmpty()) return
-        
+        if (lastRecommended.isEmpty()) {
+            android.util.Log.d("HomeViewModel", "Filter skipped: no recommendations to filter")
+            return
+        }
+
         // Exclude games in library but keep games that are currently animating out
         val excludeIds = screenState.gamesInLibrary - screenState.animatingGameIds
 
-        // Only refilter if exclude set changed (performance optimization)
-        if (excludeIds == lastExcludeIds) return
+        // Only refilter if exclude set changed AND we have filtered at least once
+        // This prevents skipping the initial filter when both sets are empty
+        if (excludeIds == lastExcludeIds && lastFilteredRecommendations.isNotEmpty()) {
+            android.util.Log.d("HomeViewModel", "Filter skipped: no changes (excludeIds=${excludeIds.size})")
+            return
+        }
 
         lastExcludeIds = excludeIds
         val filtered = lastRecommended.filter { it.id !in excludeIds }
         lastFilteredRecommendations = filtered
+        android.util.Log.d("HomeViewModel", "Filter applied: ${lastRecommended.size} -> ${filtered.size} games (excluded ${excludeIds.size})")
         screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
         
         // Auto-backfill if filtered results are too few
@@ -181,7 +201,7 @@ class HomeViewModel(
             }
         }
     }
-    
+
     fun retry() {
         loadAllData()
     }
