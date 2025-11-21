@@ -22,7 +22,7 @@ fun VideoPlayer(
 ) {
     val context = LocalContext.current
 
-    val exoPlayer = remember {
+    val exoPlayer = remember(videoUrl) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(videoUrl))
             repeatMode = Player.REPEAT_MODE_ONE
@@ -31,25 +31,27 @@ fun VideoPlayer(
         }
     }
 
-    DisposableEffect(
-        AndroidView(
-            modifier = modifier,
-            factory = {
-                PlayerView(context).apply {
-                    player = exoPlayer
-                    useController = true
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                }
-            }
-        )
-    ) {
+    // Properly dispose the player when the composable leaves composition or videoUrl changes
+    DisposableEffect(videoUrl) {
         onDispose {
             exoPlayer.release()
         }
     }
+
+    // AndroidView should be outside DisposableEffect
+    AndroidView(
+        modifier = modifier,
+        factory = {
+            PlayerView(context).apply {
+                player = exoPlayer
+                useController = true
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            }
+        }
+    )
 }
 
 @Composable

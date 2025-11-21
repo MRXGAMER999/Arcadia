@@ -10,8 +10,8 @@ import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.util.RequestState
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 sealed class AddToLibraryState {
@@ -43,7 +43,19 @@ class HomeViewModel(
     private var lastRecommended: List<Game> = emptyList()
     private var recommendationPage = 1
     private var isLoadingMoreRecommendations = false
-    
+    private var lastFilteredRecommendations: List<Game> = emptyList()
+    private var lastExcludeIds: Set<Int> = emptySet()
+
+    // Job management to prevent duplicate flows
+    private var popularGamesJob: Job? = null
+    private var upcomingGamesJob: Job? = null
+    private var recommendedGamesJob: Job? = null
+    private var newReleasesJob: Job? = null
+    private var gameListJob: Job? = null
+
+    // Track games currently being added to prevent duplicate additions of the same game
+    private val gamesBeingAdded = mutableSetOf<Int>()
+
     init {
         // Start real-time flows only once
         loadGameListIds()
@@ -60,8 +72,9 @@ class HomeViewModel(
     }
     
     private fun loadGameListIds() {
-        viewModelScope.launch {
-            gameListRepository.getGameList().collectLatest { state ->
+        gameListJob?.cancel()
+        gameListJob = viewModelScope.launch {
+            gameListRepository.getGameList().collect { state ->
                 if (state is RequestState.Success) {
                     val gameIds = state.data.map { it.rawgId }.toSet()
                     screenState = screenState.copy(gamesInLibrary = gameIds)
@@ -73,26 +86,29 @@ class HomeViewModel(
     }
     
     private fun loadPopularGames() {
-        viewModelScope.launch {
-            gameRepository.getPopularGames(page = 1, pageSize = 10).collectLatest { state ->
+        popularGamesJob?.cancel()
+        popularGamesJob = viewModelScope.launch {
+            gameRepository.getPopularGames(page = 1, pageSize = 10).collect { state ->
                 screenState = screenState.copy(popularGames = state)
             }
         }
     }
     
     private fun loadUpcomingGames() {
-        viewModelScope.launch {
-            gameRepository.getUpcomingGames(page = 1, pageSize = 10).collectLatest { state ->
+        upcomingGamesJob?.cancel()
+        upcomingGamesJob = viewModelScope.launch {
+            gameRepository.getUpcomingGames(page = 1, pageSize = 10).collect { state ->
                 screenState = screenState.copy(upcomingGames = state)
             }
         }
     }
     
     private fun loadRecommendedGames() {
-        viewModelScope.launch {
+        recommendedGamesJob?.cancel()
+        recommendedGamesJob = viewModelScope.launch {
             // Using popular tags for recommendations: singleplayer, multiplayer, action
             // Clamp to 40 (RAWG API typical limit)
-            gameRepository.getRecommendedGames(tags = "singleplayer,multiplayer", page = 1, pageSize = 40).collectLatest { state ->
+            gameRepository.getRecommendedGames(tags = "singleplayer,multiplayer", page = 1, pageSize = 40).collect { state ->
                 if (state is RequestState.Success) {
                     lastRecommended = state.data
                     recommendationPage = 1
@@ -144,7 +160,13 @@ class HomeViewModel(
         
         // Exclude games in library but keep games that are currently animating out
         val excludeIds = screenState.gamesInLibrary - screenState.animatingGameIds
+
+        // Only refilter if exclude set changed (performance optimization)
+        if (excludeIds == lastExcludeIds) return
+
+        lastExcludeIds = excludeIds
         val filtered = lastRecommended.filter { it.id !in excludeIds }
+        lastFilteredRecommendations = filtered
         screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
         
         // Auto-backfill if filtered results are too few
@@ -152,8 +174,9 @@ class HomeViewModel(
     }
     
     private fun loadNewReleases() {
-        viewModelScope.launch {
-            gameRepository.getNewReleases(page = 1, pageSize = 10).collectLatest { state ->
+        newReleasesJob?.cancel()
+        newReleasesJob = viewModelScope.launch {
+            gameRepository.getNewReleases(page = 1, pageSize = 10).collect { state ->
                 screenState = screenState.copy(newReleases = state)
             }
         }
@@ -169,103 +192,101 @@ class HomeViewModel(
     
     fun addGameToLibrary(game: Game) {
         viewModelScope.launch {
-            // Prevent duplicate requests - check if already loading this game
-            if (screenState.addToLibraryState is AddToLibraryState.Loading) {
-                val currentLoading = screenState.addToLibraryState as AddToLibraryState.Loading
-                if (currentLoading.gameId == game.id) {
-                    return@launch // Already loading this game
+            // Check if this specific game is already being added
+            synchronized(gamesBeingAdded) {
+                if (gamesBeingAdded.contains(game.id)) {
+                    return@launch // Already adding this game
                 }
+                gamesBeingAdded.add(game.id)
             }
-
-            // Check if game is already in library
-            if (isGameInLibrary(game.id)) {
-                screenState = screenState.copy(
-                    addToLibraryState = AddToLibraryState.Error(
-                        message = "${game.name} is already in your library",
-                        gameId = game.id
-                    )
-                )
-                // Auto-reset after 2 seconds
-                delay(2000)
-                screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                return@launch
-            }
-            
-            // Set loading state
-            screenState = screenState.copy(
-                addToLibraryState = AddToLibraryState.Loading(gameId = game.id),
-                animatingGameIds = screenState.animatingGameIds + game.id
-            )
 
             try {
-                // Double-check if game is in library (race condition protection)
-                val alreadyInLibrary = gameListRepository.isGameInList(game.id)
-                if (alreadyInLibrary) {
+                // Check if game is already in library
+                if (isGameInLibrary(game.id)) {
                     screenState = screenState.copy(
-                        addToLibraryState = AddToLibraryState.Idle,
-                        animatingGameIds = screenState.animatingGameIds - game.id
+                        addToLibraryState = AddToLibraryState.Error(
+                            message = "${game.name} is already in your library",
+                            gameId = game.id
+                        )
                     )
+                    // Auto-reset after 2 seconds
+                    delay(2000)
+                    screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
                     return@launch
                 }
 
-                when (val result = gameListRepository.addGameToList(game, GameStatus.WANT)) {
-                    is RequestState.Success -> {
-                        screenState = screenState.copy(
-                            addToLibraryState = AddToLibraryState.Success(
-                                message = "${game.name} added to library!",
-                                gameId = game.id
-                            )
-                        )
-
-                        // Wait for animation to complete (600ms total: 300ms delay + 300ms animation)
-                        delay(600)
-
-                        // Remove from animating set to allow filtering
-                        screenState = screenState.copy(
-                            animatingGameIds = screenState.animatingGameIds - game.id
-                        )
-
-                        // Reapply filter to remove the game from the list
-                        applyRecommendationFilter()
-
-                        // Auto-reset success state after showing notification
-                        delay(1500) // Give time for notification to show
-                        screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                    }
-                    is RequestState.Error -> {
-                        screenState = screenState.copy(
-                            addToLibraryState = AddToLibraryState.Error(
-                                message = result.message,
-                                gameId = game.id
-                            ),
-                            animatingGameIds = screenState.animatingGameIds - game.id
-                        )
-                        // Auto-reset error state after 3 seconds
-                        delay(3000)
-                        screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                    }
-                    else -> {
-                        screenState = screenState.copy(
-                            addToLibraryState = AddToLibraryState.Error(
-                                message = "Unexpected error occurred",
-                                gameId = game.id
-                            ),
-                            animatingGameIds = screenState.animatingGameIds - game.id
-                        )
-                        delay(3000)
-                        screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                    }
-                }
-            } catch (e: Exception) {
+                // Set loading state
                 screenState = screenState.copy(
-                    addToLibraryState = AddToLibraryState.Error(
-                        message = e.localizedMessage ?: "An error occurred",
-                        gameId = game.id
-                    ),
-                    animatingGameIds = screenState.animatingGameIds - game.id
+                    addToLibraryState = AddToLibraryState.Loading(gameId = game.id),
+                    animatingGameIds = screenState.animatingGameIds + game.id
                 )
-                delay(3000)
-                screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+
+                try {
+                    // Add to library - local state is kept in sync via real-time flow
+                    when (val result = gameListRepository.addGameToList(game, GameStatus.WANT)) {
+                        is RequestState.Success -> {
+                            screenState = screenState.copy(
+                                addToLibraryState = AddToLibraryState.Success(
+                                    message = "${game.name} added to library!",
+                                    gameId = game.id
+                                )
+                            )
+
+                            // Wait for animation to complete (600ms total: 300ms delay + 300ms animation)
+                            delay(600)
+
+                            // Remove from animating set to allow filtering
+                            screenState = screenState.copy(
+                                animatingGameIds = screenState.animatingGameIds - game.id
+                            )
+
+                            // Reapply filter to remove the game from the list
+                            applyRecommendationFilter()
+
+                            // Auto-reset success state after showing notification
+                            delay(1500) // Give time for notification to show
+                            screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+                        }
+                        is RequestState.Error -> {
+                            screenState = screenState.copy(
+                                addToLibraryState = AddToLibraryState.Error(
+                                    message = result.message,
+                                    gameId = game.id
+                                ),
+                                animatingGameIds = screenState.animatingGameIds - game.id
+                            )
+                            // Auto-reset error state after 3 seconds
+                            delay(3000)
+                            screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+                        }
+                        else -> {
+                            screenState = screenState.copy(
+                                addToLibraryState = AddToLibraryState.Error(
+                                    message = "Unexpected error occurred",
+                                    gameId = game.id
+                                ),
+                                animatingGameIds = screenState.animatingGameIds - game.id
+                            )
+                            delay(3000)
+                            screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+                        }
+                    }
+                } catch (e: Exception) {
+                    screenState = screenState.copy(
+                        addToLibraryState = AddToLibraryState.Error(
+                            message = e.localizedMessage ?: "An error occurred",
+                            gameId = game.id
+                        ),
+                        animatingGameIds = screenState.animatingGameIds - game.id
+                    )
+                    delay(3000)
+                    screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+                }
+            } finally {
+                // Remove from tracking set when done
+                synchronized(gamesBeingAdded) {
+                    gamesBeingAdded.remove(game.id)
+                }
             }
         }
     }

@@ -13,7 +13,6 @@ import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 sealed class AddToLibraryState {
@@ -42,14 +41,20 @@ class DetailsScreenViewModel(
         private set
 
     private var currentGameId: Int? = null
+    private var detailsJob: kotlinx.coroutines.Job? = null
+    private var entryJob: kotlinx.coroutines.Job? = null
 
     fun loadGameDetails(gameId: Int) {
+        // Cancel any existing jobs to prevent race conditions
+        detailsJob?.cancel()
+        entryJob?.cancel()
+
         currentGameId = gameId
         uiState = uiState.copy(gameState = RequestState.Loading, errorMessage = null)
 
         // Fetch details with media (trailer + screenshots)
-        viewModelScope.launch {
-            gameRepository.getGameDetailsWithMedia(gameId).collectLatest { state ->
+        detailsJob = viewModelScope.launch {
+            gameRepository.getGameDetailsWithMedia(gameId).collect { state ->
                 uiState = uiState.copy(gameState = state)
                 // If success, prepare temp entry
                 if (state is RequestState.Success) {
@@ -61,7 +66,7 @@ class DetailsScreenViewModel(
         }
 
         // Check membership flags concurrently
-        viewModelScope.launch {
+        entryJob = viewModelScope.launch {
             val inList = gameListRepository.isGameInList(gameId)
             uiState = uiState.copy(isInLibrary = inList)
             
@@ -69,7 +74,7 @@ class DetailsScreenViewModel(
                 // If in list, fetch the full entry to display stats or edit
                 val entryId = gameListRepository.getEntryIdByRawgId(gameId)
                 if (entryId != null) {
-                    gameListRepository.getGameEntry(entryId).collectLatest { entryState ->
+                    gameListRepository.getGameEntry(entryId).collect { entryState ->
                         if (entryState is RequestState.Success) {
                             uiState = uiState.copy(tempGameEntry = entryState.data)
                         }

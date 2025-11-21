@@ -7,10 +7,9 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
-import com.google.firebase.firestore.snapshots
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class GamerRepositoryImpl: GamerRepository {
@@ -72,69 +71,64 @@ class GamerRepositoryImpl: GamerRepository {
         }
     }
 
-    override fun readCustomerFlow(): Flow<RequestState<Gamer>> = channelFlow {
-        try {
-            // Get userId fresh each time to handle sign-out/sign-in scenarios
-            val userId = getCurrentUserId()
-            if (userId != null) {
-                val database = Firebase.firestore
-                database.collection("users")
-                    .document(userId)
-                    .snapshots()
-                    .collectLatest { documentSnapshot ->
-                        // Re-check userId to ensure it hasn't changed
-                        val currentUserId = getCurrentUserId()
-                        if (currentUserId != userId) {
-                            // User changed, stop this flow
-                            send(RequestState.Error("User session changed"))
-                            return@collectLatest
-                        }
+    override fun readCustomerFlow(): Flow<RequestState<Gamer>> = callbackFlow {
+        val userId = getCurrentUserId()
+        if (userId == null) {
+            send(RequestState.Error("User is not available"))
+            close()
+            return@callbackFlow
+        }
 
-                        if (documentSnapshot.exists()) {
-                            // Try to parse as Gamer
-                            var gamer = documentSnapshot.toObject(Gamer::class.java)
-                            
-                            // Migration: Handle old data structure with firstName/lastName
-                            if (gamer != null && gamer.name.isBlank()) {
-                                val firstName = documentSnapshot.getString("firstName") ?: ""
-                                val lastName = documentSnapshot.getString("lastName") ?: ""
-                                val fullName = "$firstName $lastName".trim()
-                                
-                                if (fullName.isNotBlank()) {
-                                    // Migrate old structure to new
-                                    gamer = gamer.copy(name = fullName)
-                                    
-                                    // Update Firestore with new structure
-                                    try {
-                                        database.collection("users")
-                                            .document(userId)
-                                            .update(
-                                                mapOf(
-                                                    "name" to fullName,
-                                                    "username" to (gamer.username.ifBlank { "" })
-                                                )
-                                            )
-                                            .await()
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("GamerRepository", "Migration failed: ${e.message}")
-                                    }
+        val database = Firebase.firestore
+        val listenerRegistration = database.collection("users")
+            .document(userId)
+            .addSnapshotListener { documentSnapshot, error ->
+                if (error != null) {
+                    trySend(RequestState.Error("Error: ${error.message}"))
+                    return@addSnapshotListener
+                }
+
+                if (documentSnapshot != null && documentSnapshot.exists()) {
+                    // Try to parse as Gamer
+                    var gamer = documentSnapshot.toObject(Gamer::class.java)
+
+                    // Migration: Handle old data structure with firstName/lastName
+                    if (gamer != null && gamer.name.isBlank()) {
+                        val firstName = documentSnapshot.getString("firstName") ?: ""
+                        val lastName = documentSnapshot.getString("lastName") ?: ""
+                        val fullName = "$firstName $lastName".trim()
+
+                        if (fullName.isNotBlank()) {
+                            // Migrate old structure to new
+                            gamer = gamer.copy(name = fullName)
+
+                            // Update Firestore with new structure (fire and forget)
+                            database.collection("users")
+                                .document(userId)
+                                .update(
+                                    mapOf(
+                                        "name" to fullName,
+                                        "username" to (gamer.username.ifBlank { "" })
+                                    )
+                                )
+                                .addOnFailureListener { e ->
+                                    android.util.Log.e("GamerRepository", "Migration failed: ${e.message}")
                                 }
-                            }
-                            
-                            if (gamer != null) {
-                                send(RequestState.Success(gamer))
-                            } else {
-                                send(RequestState.Error("Error parsing customer data"))
-                            }
-                        } else {
-                            send(RequestState.Error("Customer data does not exist"))
                         }
                     }
-            } else {
-                send(RequestState.Error("User is not available"))
+
+                    if (gamer != null) {
+                        trySend(RequestState.Success(gamer))
+                    } else {
+                        trySend(RequestState.Error("Error parsing customer data"))
+                    }
+                } else {
+                    trySend(RequestState.Error("Customer data does not exist"))
+                }
             }
-        } catch (e: Exception) {
-            send(RequestState.Error("Error fetching customer data: ${e.message}"))
+
+        awaitClose {
+            listenerRegistration.remove()
         }
     }
 
