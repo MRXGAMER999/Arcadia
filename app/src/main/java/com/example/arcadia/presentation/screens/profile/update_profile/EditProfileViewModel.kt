@@ -1,5 +1,6 @@
 package com.example.arcadia.presentation.screens.profile.update_profile
 
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -22,6 +23,7 @@ data class EditProfileScreenState(
     val city: String = "",
     val gender: String = "",
     val description: String = "",
+    val profileImageUrl: String? = null,
     val profileComplete: Boolean = false
 )
 
@@ -32,7 +34,8 @@ data class EditProfileLocalState(
     val country: String = "",
     val city: String = "",
     val gender: String = "",
-    val description: String = ""
+    val description: String = "",
+    val profileImageUrl: String? = null
 )
 
 class EditProfileViewModel(
@@ -47,6 +50,10 @@ class EditProfileViewModel(
     
     // Local editing state - not committed until save
     var localState: EditProfileLocalState by mutableStateOf(EditProfileLocalState())
+        private set
+    
+    // Image upload state
+    var isUploadingImage by mutableStateOf(false)
         private set
     
     // Validation functions for local state
@@ -110,6 +117,7 @@ class EditProfileViewModel(
                         city = fetchedGamer.city ?: "",
                         gender = fetchedGamer.gender ?: "",
                         description = fetchedGamer.description ?: "",
+                        profileImageUrl = fetchedGamer.profileImageUrl,
                         profileComplete = fetchedGamer.profileComplete
                     )
                     
@@ -120,7 +128,8 @@ class EditProfileViewModel(
                         country = fetchedGamer.country ?: "",
                         city = fetchedGamer.city ?: "",
                         gender = fetchedGamer.gender ?: "",
-                        description = fetchedGamer.description ?: ""
+                        description = fetchedGamer.description ?: "",
+                        profileImageUrl = fetchedGamer.profileImageUrl
                     )
                     
                     screenReady = RequestState.Success(Unit)
@@ -156,6 +165,30 @@ class EditProfileViewModel(
         localState = localState.copy(description = value)
     }
     
+    // Handle profile image selection and upload
+    fun uploadProfileImage(
+        imageUri: Uri,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        isUploadingImage = true
+        viewModelScope.launch {
+            gamerRepository.uploadProfileImage(
+                imageUri = imageUri,
+                onSuccess = { downloadUrl ->
+                    // Update local state with new image URL
+                    localState = localState.copy(profileImageUrl = downloadUrl)
+                    isUploadingImage = false
+                    onSuccess()
+                },
+                onError = { error ->
+                    isUploadingImage = false
+                    onError(error)
+                }
+            )
+        }
+    }
+    
     // Commit local changes and save to database
     fun saveProfile(
         onSuccess: () -> Unit,
@@ -172,6 +205,7 @@ class EditProfileViewModel(
                     city = localState.city,
                     gender = localState.gender,
                     description = localState.description,
+                    profileImageUrl = localState.profileImageUrl,
                     profileComplete = true
                 ),
                 onSuccess = {
@@ -183,6 +217,7 @@ class EditProfileViewModel(
                         city = localState.city,
                         gender = localState.gender,
                         description = localState.description,
+                        profileImageUrl = localState.profileImageUrl,
                         profileComplete = true
                     )
                     onSuccess()
@@ -200,7 +235,8 @@ class EditProfileViewModel(
             country = screenState.country,
             city = screenState.city,
             gender = screenState.gender,
-            description = screenState.description
+            description = screenState.description,
+            profileImageUrl = screenState.profileImageUrl
         )
     }
 }

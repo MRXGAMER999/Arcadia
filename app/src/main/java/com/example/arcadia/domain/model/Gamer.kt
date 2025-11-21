@@ -13,6 +13,7 @@ data class Gamer(
     val city: String? = null,
     val gender: String? = null,
     val description: String? = "",
+    val profileImageUrl: String? = null,
     val profileComplete: Boolean = false,
 
 )

@@ -1,0 +1,536 @@
+package com.example.arcadia.presentation.components
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil3.compose.LocalPlatformContext
+import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.size.Scale
+import com.example.arcadia.R
+import com.example.arcadia.domain.model.GameListEntry
+import com.example.arcadia.domain.model.GameStatus
+import com.example.arcadia.ui.theme.Surface
+import com.example.arcadia.ui.theme.TextSecondary
+import com.example.arcadia.ui.theme.getRatingGradient
+import androidx.compose.ui.tooling.preview.Preview
+import java.util.Locale
+
+/**
+ * ListGameCard - A horizontal game card component for list views
+ * Displays game cover, title, metadata, status icon, and rating with gradient
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
+@Composable
+fun ListGameCard(
+    game: GameListEntry,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
+) {
+    val context = LocalPlatformContext.current
+    val density = LocalDensity.current
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(140.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF1E2A47).copy(alpha = 0.4f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Game Cover Image
+            Card(
+                modifier = Modifier
+                    .width(90.dp)
+                    .fillMaxHeight(),
+                shape = RoundedCornerShape(8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                val imageSizePx = with(density) {
+                    90.dp.roundToPx()
+                }
+
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(game.backgroundImage ?: "")
+                        .size(imageSizePx, imageSizePx)
+                        .scale(Scale.FILL)
+                        .memoryCacheKey(game.backgroundImage)
+                        .diskCacheKey(game.backgroundImage)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = game.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF0F1922)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LoadingIndicator(
+                                color = Color(0xFF62B4DA),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF0F1922)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🎮", fontSize = 24.sp)
+                        }
+                    }
+                )
+            }
+
+            // Game Info Column
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Top Section: Rating and Status Badge
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    // Rating with Gradient
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (game.rating != null && game.rating > 0f) {
+                            // Rating with gradient text
+                            BasicText(
+                                text = String.format(Locale.US, "%.1f", game.rating),
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    brush = getRatingGradient(game.rating),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 24.sp
+                                )
+                            )
+
+                            // Rating description
+                            Text(
+                                text = getRatingDescription(game.rating),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary.copy(alpha = 0.5f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        } else {
+                            Text(
+                                text = "Not Rated",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary.copy(alpha = 0.4f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    // Status Badge with Icon and Text
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(getStatusColor(game.status))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // Status Text
+                        Text(
+                            text = game.status.displayName,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            ),
+                            color = Color.Black
+                        )
+
+                        // Status Icon
+                        Icon(
+                            painter = painterResource(id = getStatusIcon(game.status)),
+                            contentDescription = game.status.displayName,
+                            tint = Color.Black,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Middle Section: Game Title
+                Text(
+                    text = game.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    ),
+                    color = TextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Bottom Section: Genres and Dates
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Genres
+                    if (game.genres.isNotEmpty()) {
+                        Text(
+                            text = game.genres.joinToString(", "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Release Date | Date Added to Library
+                    Text(
+                        text = formatDates(releaseDate = null, addedAt = game.addedAt),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary.copy(alpha = 0.5f),
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Get the icon resource for a game status
+ */
+private fun getStatusIcon(status: GameStatus): Int {
+    return when (status) {
+        GameStatus.FINISHED -> R.drawable.finished_ic
+        GameStatus.PLAYING -> R.drawable.playing_ic
+        GameStatus.DROPPED -> R.drawable.dropped_ic
+        GameStatus.ON_HOLD -> R.drawable.on_hold_ic
+        GameStatus.WANT -> R.drawable.want_ic
+    }
+}
+
+/**
+ * Get the color for a game status
+ */
+private fun getStatusColor(status: GameStatus): Color {
+    return when (status) {
+        GameStatus.FINISHED -> Color(0xFFFBB02E)
+        GameStatus.PLAYING -> Color(0xFFD34ECE)
+        GameStatus.DROPPED -> Color(0xFFBA5C3E)
+        GameStatus.ON_HOLD -> Color(0xFF62B4DA)
+        GameStatus.WANT -> Color(0xFF3F77CC)
+    }
+}
+
+/**
+ * Get rating description text
+ */
+private fun getRatingDescription(rating: Float): String {
+    return when {
+        rating == 0f -> ""
+        rating <= 3f -> "Poor"
+        rating <= 6f -> "Good"
+        rating <= 8f -> "Great"
+        rating <= 10f -> "Masterpiece"
+        else -> ""
+    }
+}
+
+/**
+ * Format release date and date added to library
+ */
+private fun formatDates(releaseDate: String?, addedAt: Long): String {
+    val releaseDateStr = releaseDate ?: "Unknown"
+    val addedAtStr = if (addedAt > 0) {
+        val date = java.util.Date(addedAt)
+        val format = java.text.SimpleDateFormat("MMM dd, yyyy", Locale.US)
+        format.format(date)
+    } else {
+        "Unknown"
+    }
+    return "$releaseDateStr | $addedAtStr"
+}
+
+// Preview Composables
+@Preview(showBackground = true, backgroundColor = 0xFF0A1929)
+@Composable
+private fun ListGameCardPreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(16.dp)
+    ) {
+        ListGameCard(
+            game = GameListEntry(
+                id = "1",
+                rawgId = 3328,
+                name = "The Witcher 3: Wild Hunt",
+                backgroundImage = "https://media.rawg.io/media/games/618/618c2031a07bbff6b4f611f10b6bcdbc.jpg",
+                genres = listOf("Action", "RPG"),
+                platforms = listOf("PC", "PlayStation", "Xbox"),
+                status = GameStatus.FINISHED,
+                rating = 9.5f,
+                hoursPlayed = 50,
+                aspects = listOf("Great Story", "Amazing Gameplay")
+            ),
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A1929)
+@Composable
+private fun ListGameCardPlayingPreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(16.dp)
+    ) {
+        ListGameCard(
+            game = GameListEntry(
+                id = "2",
+                rawgId = 3498,
+                name = "Grand Theft Auto V",
+                genres = listOf("Action", "Adventure"),
+                platforms = listOf("PC", "PlayStation"),
+                status = GameStatus.PLAYING,
+                rating = 7.5f,
+                hoursPlayed = 20
+            ),
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A1929)
+@Composable
+private fun ListGameCardNoRatingPreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(16.dp)
+    ) {
+        ListGameCard(
+            game = GameListEntry(
+                id = "3",
+                rawgId = 1234,
+                name = "Cyberpunk 2077",
+                genres = listOf("RPG", "Action"),
+                platforms = listOf("PC"),
+                status = GameStatus.WANT,
+                rating = null
+            ),
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A1929, name = "Dropped Game - Low Rating")
+@Composable
+private fun ListGameCardDroppedPreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(16.dp)
+    ) {
+        ListGameCard(
+            game = GameListEntry(
+                id = "4",
+                rawgId = 5679,
+                name = "Fallout 76",
+                genres = listOf("Action", "Multiplayer", "RPG"),
+                platforms = listOf("PC", "PlayStation", "Xbox"),
+                status = GameStatus.DROPPED,
+                rating = 3.5f,
+                hoursPlayed = 5
+            ),
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A1929, name = "On Hold - Good Rating")
+@Composable
+private fun ListGameCardOnHoldPreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(16.dp)
+    ) {
+        ListGameCard(
+            game = GameListEntry(
+                id = "5",
+                rawgId = 4200,
+                name = "Portal 2",
+                genres = listOf("Puzzle", "Platformer"),
+                platforms = listOf("PC", "Mac", "Linux"),
+                status = GameStatus.ON_HOLD,
+                rating = 8.5f,
+                hoursPlayed = 15
+            ),
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A1929, name = "Long Title Test")
+@Composable
+private fun ListGameCardLongTitlePreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(16.dp)
+    ) {
+        ListGameCard(
+            game = GameListEntry(
+                id = "6",
+                rawgId = 2454,
+                name = "The Legend of Heroes: Trails of Cold Steel IV - The End of Saga",
+                genres = listOf("JRPG", "Turn-Based Combat", "Story-Rich"),
+                platforms = listOf("PlayStation", "Nintendo Switch", "PC"),
+                status = GameStatus.PLAYING,
+                rating = 9.0f,
+                hoursPlayed = 80
+            ),
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A1929, name = "All Status List", heightDp = 900)
+@Composable
+private fun ListGameCardAllStatusesPreview() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Finished - Masterpiece
+        ListGameCard(
+            game = GameListEntry(
+                id = "1",
+                name = "Elden Ring",
+                genres = listOf("Action RPG", "Souls-like"),
+                platforms = listOf("PC", "PlayStation", "Xbox"),
+                status = GameStatus.FINISHED,
+                rating = 9.8f
+            )
+        )
+
+        // Playing - Great
+        ListGameCard(
+            game = GameListEntry(
+                id = "2",
+                name = "Baldur's Gate 3",
+                genres = listOf("RPG", "Turn-Based"),
+                platforms = listOf("PC", "PlayStation"),
+                status = GameStatus.PLAYING,
+                rating = 8.2f
+            )
+        )
+
+        // Dropped - Poor
+        ListGameCard(
+            game = GameListEntry(
+                id = "3",
+                name = "Anthem",
+                genres = listOf("Action", "Multiplayer"),
+                platforms = listOf("PC", "Xbox"),
+                status = GameStatus.DROPPED,
+                rating = 2.5f
+            )
+        )
+
+        // On Hold - Good
+        ListGameCard(
+            game = GameListEntry(
+                id = "4",
+                name = "Death Stranding",
+                genres = listOf("Action", "Adventure"),
+                platforms = listOf("PC"),
+                status = GameStatus.ON_HOLD,
+                rating = 6.5f
+            )
+        )
+
+        // Want - Not Rated
+        ListGameCard(
+            game = GameListEntry(
+                id = "5",
+                name = "Hades II",
+                genres = listOf("Roguelike", "Action"),
+                platforms = listOf("PC"),
+                status = GameStatus.WANT,
+                rating = null
+            )
+        )
+    }
+}
+

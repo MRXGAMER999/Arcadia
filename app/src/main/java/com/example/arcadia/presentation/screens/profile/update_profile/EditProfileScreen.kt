@@ -58,6 +58,7 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.util.Countries
 import com.example.arcadia.util.DisplayResult
+import com.example.arcadia.util.PhotoPicker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -78,11 +79,29 @@ fun EditProfileScreen(
     var showSuccessDialog by remember { mutableStateOf(false) }
     var updateError by remember { mutableStateOf("") }
     var isUpdating by remember { mutableStateOf(false) }
+    var imageUploadError by remember { mutableStateOf("") }
 
     // Track if this is the first time completing the profile
     val initialProfileComplete = remember { screenState.profileComplete }
 
     val genders = listOf("Male", "Female")
+    
+    // Initialize PhotoPicker
+    val photoPicker = remember { PhotoPicker() }
+    photoPicker.InitializePhotoPicker { uri ->
+        if (uri != null) {
+            imageUploadError = ""
+            viewModel.uploadProfileImage(
+                imageUri = uri,
+                onSuccess = {
+                    // Image uploaded successfully
+                },
+                onError = { error ->
+                    imageUploadError = error
+                }
+            )
+        }
+    }
 
     Scaffold(
         containerColor = Surface,
@@ -165,12 +184,38 @@ fun EditProfileScreen(
                     ) {
                         // Profile Image Picker
                         Spacer(modifier = Modifier.height(8.dp))
-                        ProfileImagePicker(
-                            imageUrl = null,
-                            onImageClick = {
-                                // TODO: Implement image picker
+                        
+                        Box(contentAlignment = Alignment.Center) {
+                            ProfileImagePicker(
+                                imageUrl = localState.profileImageUrl,
+                                onImageClick = {
+                                    photoPicker.open()
+                                }
+                            )
+                            
+                            // Show loading indicator when uploading image
+                            if (viewModel.isUploadingImage) {
+                                CircularProgressIndicator(
+                                    color = ButtonPrimary,
+                                    strokeWidth = 3.dp,
+                                    modifier = Modifier.padding(8.dp)
+                                )
                             }
-                        )
+                        }
+                        
+                        // Show image upload error if any
+                        AnimatedVisibility(
+                            visible = imageUploadError.isNotEmpty(),
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            Text(
+                                text = imageUploadError,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFFF3535),
+                                textAlign = TextAlign.Center
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
