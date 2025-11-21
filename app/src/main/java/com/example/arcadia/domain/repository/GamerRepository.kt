@@ -1,5 +1,6 @@
 package com.example.arcadia.domain.repository
 
+import android.net.Uri
 import com.example.arcadia.domain.model.Gamer
 import com.example.arcadia.util.RequestState
 import com.google.firebase.auth.FirebaseUser
@@ -17,6 +18,17 @@ interface GamerRepository {
     
     suspend fun updateGamer(
         gamer: Gamer,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    )
+    
+    suspend fun uploadProfileImage(
+        imageUri: Uri,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    )
+    
+    suspend fun deleteProfileImage(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     )

@@ -1,5 +1,6 @@
 package com.example.arcadia.data
 
+import android.net.Uri
 import com.example.arcadia.domain.model.Gamer
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.util.RequestState
@@ -7,10 +8,12 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
+import com.google.firebase.storage.storage
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
 
 class GamerRepositoryImpl: GamerRepository {
     override fun getCurrentUserId(): String? {
@@ -52,6 +55,7 @@ class GamerRepositoryImpl: GamerRepository {
                         "city" to null,
                         "gender" to null,
                         "description" to "",
+                        "profileImageUrl" to (user.photoUrl?.toString()),
                         "profileComplete" to false
                     )
 
@@ -147,17 +151,24 @@ class GamerRepositoryImpl: GamerRepository {
                     .get()
                     .await()
                 if (existingUser.exists()) {
+                    val updates = mutableMapOf<String, Any?>(
+                        "name" to gamer.name,
+                        "username" to gamer.username,
+                        "country" to gamer.country,
+                        "city" to gamer.city,
+                        "gender" to gamer.gender,
+                        "description" to gamer.description,
+                        "profileComplete" to gamer.profileComplete
+                    )
+                    
+                    // Only update profileImageUrl if it's not null
+                    if (gamer.profileImageUrl != null) {
+                        updates["profileImageUrl"] = gamer.profileImageUrl
+                    }
+                    
                     userCollection
                         .document(gamer.id)
-                        .update(
-                            "name", gamer.name,
-                            "username", gamer.username,
-                            "country", gamer.country,
-                            "city", gamer.city,
-                            "gender", gamer.gender,
-                            "description", gamer.description,
-                            "profileComplete", gamer.profileComplete
-                        )
+                        .update(updates)
                         .await()
                     onSuccess()
                 } else {
@@ -168,6 +179,101 @@ class GamerRepositoryImpl: GamerRepository {
             }
         } catch (e: Exception) {
             onError(e.message ?: "Error updating user")
+        }
+    }
+
+    override suspend fun uploadProfileImage(
+        imageUri: Uri,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        try {
+            val userId = getCurrentUserId()
+            if (userId == null) {
+                onError("User is not available")
+                return
+            }
+
+            // Get the current profile image URL to delete the old image
+            val database = Firebase.firestore
+            val userDoc = database.collection("users").document(userId).get().await()
+            val oldImageUrl = userDoc.getString("profileImageUrl")
+            
+            // Delete the old image if it exists and is from Firebase Storage
+            // Don't delete external URLs (e.g., Google profile pictures)
+            if (!oldImageUrl.isNullOrEmpty() && oldImageUrl.contains("firebasestorage.googleapis.com")) {
+                try {
+                    val oldImageRef = Firebase.storage.getReferenceFromUrl(oldImageUrl)
+                    oldImageRef.delete().await()
+                    android.util.Log.d("GamerRepository", "Old profile image deleted successfully")
+                } catch (e: Exception) {
+                    // Log but don't fail the upload if deletion fails
+                    android.util.Log.w("GamerRepository", "Failed to delete old profile image: ${e.message}")
+                }
+            } else if (!oldImageUrl.isNullOrEmpty()) {
+                android.util.Log.d("GamerRepository", "Skipping deletion of external profile image (e.g., Google): $oldImageUrl")
+            }
+
+            // Create a unique filename for the new image
+            val imageFileName = "profile_${userId}_${UUID.randomUUID()}.jpg"
+            val storageRef = Firebase.storage.reference
+            val profileImagesRef = storageRef.child("profile_images/$imageFileName")
+
+            // Upload the new file
+            profileImagesRef.putFile(imageUri).await()
+
+            // Get the download URL
+            val downloadUrl = profileImagesRef.downloadUrl.await()
+
+            onSuccess(downloadUrl.toString())
+        } catch (e: Exception) {
+            android.util.Log.e("GamerRepository", "Error uploading profile image: ${e.message}", e)
+            onError(e.message ?: "Error uploading profile image")
+        }
+    }
+
+    override suspend fun deleteProfileImage(
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        try {
+            val userId = getCurrentUserId()
+            if (userId == null) {
+                onError("User is not available")
+                return
+            }
+
+            // Get the current profile image URL
+            val database = Firebase.firestore
+            val userDoc = database.collection("users").document(userId).get().await()
+            val imageUrl = userDoc.getString("profileImageUrl")
+            
+            if (imageUrl.isNullOrEmpty()) {
+                onError("No profile image to delete")
+                return
+            }
+
+            // Only delete from Storage if it's a Firebase Storage URL
+            // Don't delete external URLs (e.g., Google profile pictures)
+            if (imageUrl.contains("firebasestorage.googleapis.com")) {
+                val imageRef = Firebase.storage.getReferenceFromUrl(imageUrl)
+                imageRef.delete().await()
+                android.util.Log.d("GamerRepository", "Profile image deleted from Storage")
+            } else {
+                android.util.Log.d("GamerRepository", "Skipping Storage deletion for external URL")
+            }
+            
+            // Remove the URL from Firestore (regardless of source)
+            database.collection("users")
+                .document(userId)
+                .update("profileImageUrl", null)
+                .await()
+            
+            android.util.Log.d("GamerRepository", "Profile image URL removed from Firestore")
+            onSuccess()
+        } catch (e: Exception) {
+            android.util.Log.e("GamerRepository", "Error deleting profile image: ${e.message}", e)
+            onError(e.message ?: "Error deleting profile image")
         }
     }
 
