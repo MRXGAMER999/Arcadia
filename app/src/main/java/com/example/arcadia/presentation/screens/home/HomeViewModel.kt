@@ -6,9 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
-import com.example.arcadia.domain.repository.UserGamesRepository
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -26,15 +26,13 @@ data class HomeScreenState(
     val upcomingGames: RequestState<List<Game>> = RequestState.Idle,
     val recommendedGames: RequestState<List<Game>> = RequestState.Idle,
     val newReleases: RequestState<List<Game>> = RequestState.Idle,
-    val gamesInLibrary: Set<Int> = emptySet(), // Track rawgIds of games in library
-    val gameListIds: Set<Int> = emptySet(), // Track rawgIds of games in game list (WANT, PLAYING, etc.)
+    val gamesInLibrary: Set<Int> = emptySet(), // Track rawgIds of games in library (now merged into gameListIds logic)
     val animatingGameIds: Set<Int> = emptySet(), // Games currently animating out
     val addToLibraryState: AddToLibraryState = AddToLibraryState.Idle
 )
 
 class HomeViewModel(
     private val gameRepository: GameRepository,
-    private val userGamesRepository: UserGamesRepository,
     private val gameListRepository: GameListRepository
 ) : ViewModel() {
     
@@ -48,7 +46,6 @@ class HomeViewModel(
     
     init {
         // Start real-time flows only once
-        loadGamesInLibrary()
         loadGameListIds()
         // Load initial data
         loadAllData()
@@ -62,25 +59,12 @@ class HomeViewModel(
         loadNewReleases()
     }
     
-    private fun loadGamesInLibrary() {
-        viewModelScope.launch {
-            userGamesRepository.getUserGames().collectLatest { state ->
-                if (state is RequestState.Success) {
-                    val gameIds = state.data.map { it.rawgId }.toSet()
-                    screenState = screenState.copy(gamesInLibrary = gameIds)
-                    // Reapply recommendation filter when library changes
-                    applyRecommendationFilter()
-                }
-            }
-        }
-    }
-    
     private fun loadGameListIds() {
         viewModelScope.launch {
             gameListRepository.getGameList().collectLatest { state ->
                 if (state is RequestState.Success) {
                     val gameIds = state.data.map { it.rawgId }.toSet()
-                    screenState = screenState.copy(gameListIds = gameIds)
+                    screenState = screenState.copy(gamesInLibrary = gameIds)
                     // Reapply recommendation filter when game list changes
                     applyRecommendationFilter()
                 }
@@ -159,7 +143,7 @@ class HomeViewModel(
         if (lastRecommended.isEmpty()) return
         
         // Exclude games in library but keep games that are currently animating out
-        val excludeIds = (screenState.gamesInLibrary + screenState.gameListIds) - screenState.animatingGameIds
+        val excludeIds = screenState.gamesInLibrary - screenState.animatingGameIds
         val filtered = lastRecommended.filter { it.id !in excludeIds }
         screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
         
@@ -180,7 +164,7 @@ class HomeViewModel(
     }
     
     fun isGameInLibrary(gameId: Int): Boolean {
-        return screenState.gamesInLibrary.contains(gameId) || screenState.gameListIds.contains(gameId)
+        return screenState.gamesInLibrary.contains(gameId)
     }
     
     fun addGameToLibrary(game: Game) {
@@ -215,7 +199,7 @@ class HomeViewModel(
 
             try {
                 // Double-check if game is in library (race condition protection)
-                val alreadyInLibrary = userGamesRepository.isGameInLibrary(game.id)
+                val alreadyInLibrary = gameListRepository.isGameInList(game.id)
                 if (alreadyInLibrary) {
                     screenState = screenState.copy(
                         addToLibraryState = AddToLibraryState.Idle,
@@ -224,7 +208,7 @@ class HomeViewModel(
                     return@launch
                 }
 
-                when (val result = userGamesRepository.addGame(game)) {
+                when (val result = gameListRepository.addGameToList(game, GameStatus.WANT)) {
                     is RequestState.Success -> {
                         screenState = screenState.copy(
                             addToLibraryState = AddToLibraryState.Success(
@@ -290,5 +274,3 @@ class HomeViewModel(
         screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
     }
 }
-
-

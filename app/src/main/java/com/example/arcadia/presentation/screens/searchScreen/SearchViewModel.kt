@@ -6,8 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.domain.model.GameStatus
+import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
-import com.example.arcadia.domain.repository.UserGamesRepository
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,7 +23,7 @@ data class SearchScreenState(
 
 class SearchViewModel(
     private val gameRepository: GameRepository,
-    private val userGamesRepository: UserGamesRepository
+    private val gameListRepository: GameListRepository
 ) : ViewModel() {
     
     var screenState by mutableStateOf(SearchScreenState())
@@ -37,7 +38,7 @@ class SearchViewModel(
     
     private fun loadGamesInLibrary() {
         viewModelScope.launch {
-            userGamesRepository.getUserGames().collectLatest { state ->
+            gameListRepository.getGameList().collectLatest { state ->
                 if (state is RequestState.Success) {
                     val gameIds = state.data.map { it.rawgId }.toSet()
                     screenState = screenState.copy(gamesInLibrary = gameIds)
@@ -85,8 +86,8 @@ class SearchViewModel(
                 // Game is already in library, do nothing or show message
                 onError("Game is already in your library")
             } else {
-                // Add game to library
-                when (val result = userGamesRepository.addGame(game)) {
+                // Add game to library (Game List with default status WANT)
+                when (val result = gameListRepository.addGameToList(game, GameStatus.WANT)) {
                     is RequestState.Success -> onSuccess()
                     is RequestState.Error -> onError(result.message)
                     else -> {}
@@ -99,4 +100,3 @@ class SearchViewModel(
         return gameId in screenState.gamesInLibrary
     }
 }
-

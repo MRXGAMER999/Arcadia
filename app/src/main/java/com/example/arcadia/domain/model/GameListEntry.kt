@@ -9,12 +9,14 @@ data class GameListEntry(
     val name: String = "",
     val backgroundImage: String? = null,
     val genres: List<String> = emptyList(),
+    val platforms: List<String> = emptyList(), // List of platform names
     val addedAt: Long = 0L, // Timestamp when game was added
     val updatedAt: Long = 0L, // Timestamp when entry was last updated
     val status: GameStatus = GameStatus.WANT,
-    val rating: Float? = null, // User's rating (0.0 - 5.0), null if not rated
+    val rating: Float? = null, // User's rating (0.0 - 10.0), null if not rated
     val review: String = "", // User's review/notes
-    val hoursPlayed: Int = 0 // Hours played
+    val hoursPlayed: Int = 0, // Hours played
+    val aspects: List<String> = emptyList() // List of best aspects tags
 )
 
 /**
@@ -33,4 +35,3 @@ enum class GameStatus(val displayName: String) {
         }
     }
 }
-

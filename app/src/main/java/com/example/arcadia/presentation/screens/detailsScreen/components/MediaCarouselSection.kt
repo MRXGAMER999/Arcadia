@@ -1,6 +1,7 @@
 package com.example.arcadia.presentation.screens.detailsScreen.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,10 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,7 +28,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
@@ -31,6 +35,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Scale
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.presentation.components.FullscreenImageViewer
 import com.example.arcadia.presentation.components.VideoPlayerWithLoading
 import com.example.arcadia.ui.theme.ButtonPrimary
 
@@ -47,6 +52,9 @@ fun MediaCarouselSection(game: Game) {
         game.trailerUrl?.let { add(MediaItem.Video(it)) }
         game.screenshots.forEach { add(MediaItem.Screenshot(it)) }
     }
+    
+    var showFullscreenViewer by remember { mutableStateOf(false) }
+    var selectedImageIndex by remember { mutableStateOf(0) }
 
     if (mediaItems.isNotEmpty()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -91,36 +99,55 @@ fun MediaCarouselSection(game: Game) {
                             }
                         }
                         is MediaItem.Screenshot -> {
-                            ScreenshotItem(url = item.url, context = context)
+                            ScreenshotItem(
+                                url = item.url,
+                                context = context,
+                                onClick = {
+                                    // Calculate the screenshot index (excluding video)
+                                    val screenshotIndex = if (game.trailerUrl != null) index - 1 else index
+                                    selectedImageIndex = screenshotIndex
+                                    showFullscreenViewer = true
+                                }
+                            )
                         }
                     }
                 }
             }
+        }
+        
+        // Fullscreen Image Viewer
+        if (showFullscreenViewer && game.screenshots.isNotEmpty()) {
+            FullscreenImageViewer(
+                images = game.screenshots,
+                initialPage = selectedImageIndex,
+                onDismiss = { showFullscreenViewer = false }
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ScreenshotItem(url: String, context: coil3.PlatformContext) {
-    val density = LocalDensity.current
-    val widthPx = with(density) { 300.dp.roundToPx() }
-    val heightPx = with(density) { 200.dp.roundToPx() }
-    
+private fun ScreenshotItem(
+    url: String,
+    context: coil3.PlatformContext,
+    onClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .clip(MaterialTheme.shapes.medium)
-            .background(Color(0xFF1E2A47)),
+            .background(Color(0xFF1E2A47))
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(context)
                 .data(url)
-                .size(widthPx, heightPx)
-                .scale(Scale.FILL)
-                .memoryCacheKey(url)
-                .diskCacheKey(url)
+                .size(600, 400) // Use reasonable thumbnail size for better quality
+                .scale(Scale.FIT)
+                .memoryCacheKey("thumb_$url")
+                .diskCacheKey("thumb_$url")
                 .crossfade(true)
                 .build(),
             contentDescription = "Game screenshot",

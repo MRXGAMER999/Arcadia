@@ -157,6 +157,9 @@ fun NavigationRoot(
                         SearchScreen(
                             onBackClick = {
                                 backStack.remove(key)
+                            },
+                            onGameClick = { gameId ->
+                                backStack.add(DetailsScreenKey(gameId))
                             }
                         )
                     }

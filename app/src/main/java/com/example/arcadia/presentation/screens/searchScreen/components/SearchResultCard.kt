@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,7 +54,8 @@ import com.example.arcadia.ui.theme.TextSecondary
 fun SearchResultCard(
     game: Game,
     isAdded: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    onClick: () -> Unit = {}
 ) {
     val density = LocalDensity.current
     val imageSizePx = with(density) { 60.dp.roundToPx() }
@@ -61,6 +63,7 @@ fun SearchResultCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onClick() }
             .padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -155,7 +158,9 @@ fun SearchResultCard(
         )
 
         IconButton(
-            onClick = { onToggle() },
+            onClick = { 
+                onToggle()
+            },
             modifier = Modifier
                 .size(40.dp)
                 .background(

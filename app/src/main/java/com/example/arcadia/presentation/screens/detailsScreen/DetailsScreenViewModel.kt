@@ -5,11 +5,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.arcadia.data.remote.mapper.toGameListEntry
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
-import com.example.arcadia.domain.repository.UserGamesRepository
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -24,16 +25,16 @@ sealed class AddToLibraryState {
 
 data class DetailsUiState(
     val gameState: RequestState<Game> = RequestState.Idle,
-    val isInLibrary: Boolean = false,
-    val isInGameList: Boolean = false,
+    val isInLibrary: Boolean = false, 
     val addToLibraryState: AddToLibraryState = AddToLibraryState.Idle,
     val addToListInProgress: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val showRatingSheet: Boolean = false,
+    val tempGameEntry: GameListEntry? = null // For the rating sheet
 )
 
 class DetailsScreenViewModel(
     private val gameRepository: GameRepository,
-    private val userGamesRepository: UserGamesRepository,
     private val gameListRepository: GameListRepository
 ) : ViewModel() {
 
@@ -50,121 +51,105 @@ class DetailsScreenViewModel(
         viewModelScope.launch {
             gameRepository.getGameDetailsWithMedia(gameId).collectLatest { state ->
                 uiState = uiState.copy(gameState = state)
+                // If success, prepare temp entry
+                if (state is RequestState.Success) {
+                     // We might want to check if we already have an entry for this game
+                     // to populate the sheet with existing data if it's already in library
+                     // But 'isInLibrary' check is separate.
+                }
             }
         }
 
         // Check membership flags concurrently
         viewModelScope.launch {
-            val inLibrary = userGamesRepository.isGameInLibrary(gameId)
             val inList = gameListRepository.isGameInList(gameId)
-            uiState = uiState.copy(isInLibrary = inLibrary, isInGameList = inList)
+            uiState = uiState.copy(isInLibrary = inList)
+            
+            if (inList) {
+                // If in list, fetch the full entry to display stats or edit
+                val entryId = gameListRepository.getEntryIdByRawgId(gameId)
+                if (entryId != null) {
+                    gameListRepository.getGameEntry(entryId).collectLatest { entryState ->
+                        if (entryState is RequestState.Success) {
+                            uiState = uiState.copy(tempGameEntry = entryState.data)
+                        }
+                    }
+                }
+            }
         }
     }
 
-    fun addToLibrary() {
-        // Prevent duplicate requests
-        if (uiState.addToLibraryState is AddToLibraryState.Loading) {
-            return
-        }
-
-        // Skip if already in library
+    fun onAddToLibraryClick() {
+        val game = (uiState.gameState as? RequestState.Success)?.data ?: return
+        
         if (uiState.isInLibrary) {
-            uiState = uiState.copy(
-                addToLibraryState = AddToLibraryState.Error("Game is already in your library")
-            )
-            // Reset state after delay
-            viewModelScope.launch {
-                delay(2000)
-                uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
-            }
-            return
+            // If already in library, we just open the sheet to edit (tempGameEntry should be populated)
+             uiState = uiState.copy(showRatingSheet = true)
+        } else {
+            // If new, create a fresh entry and open sheet
+            val newEntry = game.toGameListEntry()
+            uiState = uiState.copy(tempGameEntry = newEntry, showRatingSheet = true)
         }
+    }
+    
+    fun dismissRatingSheet() {
+        uiState = uiState.copy(showRatingSheet = false)
+    }
 
-        val game = (uiState.gameState as? RequestState.Success)?.data
-        if (game == null) {
-            uiState = uiState.copy(
-                addToLibraryState = AddToLibraryState.Error("Game data not available")
-            )
-            return
-        }
-
-        // Set loading state
+    fun saveGameEntry(entry: GameListEntry) {
         uiState = uiState.copy(
-            addToLibraryState = AddToLibraryState.Loading,
-            errorMessage = null
+            showRatingSheet = false,
+            addToListInProgress = true,
+            addToLibraryState = AddToLibraryState.Loading
         )
 
         viewModelScope.launch {
-            try {
-                // Double-check if game is in library (race condition protection)
-                val alreadyInLibrary = userGamesRepository.isGameInLibrary(game.id)
-                if (alreadyInLibrary) {
-                    uiState = uiState.copy(
-                        isInLibrary = true,
-                        addToLibraryState = AddToLibraryState.Idle
-                    )
-                    return@launch
-                }
-
-                when (val result = userGamesRepository.addGame(game)) {
+            // Check if we are updating or adding
+            if (uiState.isInLibrary) {
+                // Update
+                when (val result = gameListRepository.updateGameEntry(entry)) {
                     is RequestState.Success -> {
-                        uiState = uiState.copy(
-                            isInLibrary = true,
-                            addToLibraryState = AddToLibraryState.Success("Added to library!")
-                        )
-                        // Reset success state after delay
-                        delay(2000)
-                        uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
+                         uiState = uiState.copy(
+                             addToLibraryState = AddToLibraryState.Success("Game updated!"),
+                             addToListInProgress = false,
+                             tempGameEntry = entry // Update local display
+                         )
                     }
                     is RequestState.Error -> {
                         uiState = uiState.copy(
-                            addToLibraryState = AddToLibraryState.Error(result.message)
+                            addToLibraryState = AddToLibraryState.Error(result.message),
+                            addToListInProgress = false
                         )
-                        // Reset error state after delay
-                        delay(3000)
-                        uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
                     }
-                    else -> {
+                    else -> {}
+                }
+            } else {
+                // Add new
+                when (val result = gameListRepository.addGameListEntry(entry)) {
+                    is RequestState.Success -> {
+                         // We need the ID for the entry, result.data is ID
+                         val savedEntry = entry.copy(id = result.data)
+                         uiState = uiState.copy(
+                             isInLibrary = true,
+                             addToLibraryState = AddToLibraryState.Success("Added to library!"),
+                             addToListInProgress = false,
+                             tempGameEntry = savedEntry
+                         )
+                    }
+                    is RequestState.Error -> {
                         uiState = uiState.copy(
-                            addToLibraryState = AddToLibraryState.Error("Unexpected error occurred")
+                            addToLibraryState = AddToLibraryState.Error(result.message),
+                            addToListInProgress = false
                         )
-                        delay(3000)
-                        uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
                     }
+                    else -> {}
                 }
-            } catch (e: Exception) {
-                uiState = uiState.copy(
-                    addToLibraryState = AddToLibraryState.Error(
-                        e.localizedMessage ?: "An error occurred"
-                    )
-                )
-                delay(3000)
-                uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
             }
-        }
-    }
-
-    fun addToGameList(
-        initialStatus: GameStatus = GameStatus.WANT,
-        onDone: (Boolean, String?) -> Unit = { _, _ -> }
-    ) {
-        val game = (uiState.gameState as? RequestState.Success)?.data ?: return
-        if (uiState.isInGameList) {
-            onDone(false, "Game is already in your list")
-            return
-        }
-        uiState = uiState.copy(addToListInProgress = true, errorMessage = null)
-        viewModelScope.launch {
-            when (val result = gameListRepository.addGameToList(game, initialStatus)) {
-                is RequestState.Success -> {
-                    uiState = uiState.copy(isInGameList = true, addToListInProgress = false)
-                    onDone(true, null)
-                }
-                is RequestState.Error -> {
-                    uiState = uiState.copy(addToListInProgress = false, errorMessage = result.message)
-                    onDone(false, result.message)
-                }
-                else -> {}
+            
+            // Reset notification after delay
+            if (uiState.addToLibraryState is AddToLibraryState.Success || uiState.addToLibraryState is AddToLibraryState.Error) {
+                delay(2000)
+                uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
             }
         }
     }

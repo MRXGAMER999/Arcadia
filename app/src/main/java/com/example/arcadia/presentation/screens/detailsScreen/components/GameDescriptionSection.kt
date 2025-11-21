@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.presentation.components.PlatformIcons
 import com.example.arcadia.ui.theme.ButtonPrimary
 
 @Composable
@@ -53,12 +55,22 @@ fun GameDescriptionSection(game: Game) {
         }
 
         if (game.platforms.isNotEmpty()) {
-            Text(
-                text = "Platforms: ${game.platforms.joinToString(", ")}",
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 14.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Column(
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Text(
+                    text = "Platforms",
+                    color = ButtonPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                PlatformIcons(
+                    platforms = game.platforms,
+                    iconSize = 24.dp,
+                    showBackground = false
+                )
+            }
         }
 
         if (game.tags.isNotEmpty()) {
