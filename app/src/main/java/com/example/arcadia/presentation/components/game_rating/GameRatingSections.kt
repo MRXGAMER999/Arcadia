@@ -1,15 +1,22 @@
 package com.example.arcadia.presentation.components.game_rating
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -52,8 +59,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -88,13 +95,13 @@ fun GameBestAspectsSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF1E2A47).copy(alpha = 0.4f))
-            .padding(16.dp)
+            .padding(14.dp)
             .animateContentSize(
                 animationSpec = spring(
-                    dampingRatio = 0.8f,
-                    stiffness = 300f
+                    dampingRatio = 0.75f,
+                    stiffness = 350f
                 )
             )
     ) {
@@ -107,31 +114,33 @@ fun GameBestAspectsSection(
         AnimatedVisibility(
             visible = isExpanded,
             enter = expandVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                animationSpec = tween(350, easing = FastOutSlowInEasing)
             ) + fadeIn(
-                animationSpec = tween(300)
+                animationSpec = tween(350)
             ),
             exit = shrinkVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                animationSpec = tween(250, easing = FastOutSlowInEasing)
             ) + fadeOut(
                 animationSpec = tween(200)
             )
         ) {
             Column {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 2.dp)
                 ) {
                     aspectsList.forEach { aspect ->
                         val isSelected = selectedAspects.contains(aspect)
                         val interactionSource = remember { MutableInteractionSource() }
 
-                        // Micro-animation for aspect chips
+                        // Subtle animation for aspect chips to prevent overflow
                         val aspectScale by animateFloatAsState(
-                            targetValue = if (isSelected) 1.05f else 1f,
+                            targetValue = if (isSelected) 1.03f else 1f,
                             animationSpec = spring(
                                 dampingRatio = 0.6f,
                                 stiffness = 400f
@@ -146,17 +155,19 @@ fun GameBestAspectsSection(
                                 label = {
                                     Text(
                                         aspect,
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         modifier = Modifier.animateContentSize()
                                     )
                                 },
                                 leadingIcon = if (isSelected) {
                                     {
-                                        // Animated check icon
+                                        // Subtle check icon animation
                                         val checkScale by animateFloatAsState(
-                                            targetValue = 1f,
+                                            targetValue = 1.0f,
                                             animationSpec = spring(
-                                                dampingRatio = 0.5f,
-                                                stiffness = 500f
+                                                dampingRatio = 0.7f,
+                                                stiffness = 400f
                                             ),
                                             label = "CheckScale"
                                         )
@@ -164,7 +175,7 @@ fun GameBestAspectsSection(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
                                             modifier = Modifier
-                                                .size(18.dp)
+                                                .size(17.dp)
                                                 .scale(checkScale)
                                         )
                                     }
@@ -196,12 +207,12 @@ fun GameBestAspectsSection(
                     // Add new aspect chip
                     AssistChip(
                         onClick = { showAddDialog = true },
-                        label = { Text("Add") },
+                        label = { Text("Add", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Add aspect",
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         },
                         colors = AssistChipDefaults.assistChipColors(
@@ -287,13 +298,13 @@ fun ClassificationSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF1E2A47).copy(alpha = 0.4f))
-            .padding(16.dp)
+            .padding(14.dp)
             .animateContentSize(
                 animationSpec = spring(
-                    dampingRatio = 0.8f,
-                    stiffness = 300f
+                    dampingRatio = 0.75f,
+                    stiffness = 350f
                 )
             )
     ) {
@@ -306,30 +317,32 @@ fun ClassificationSection(
         AnimatedVisibility(
             visible = isExpanded,
             enter = expandVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                animationSpec = tween(350, easing = FastOutSlowInEasing)
             ) + fadeIn(
-                animationSpec = tween(300)
+                animationSpec = tween(350)
             ),
             exit = shrinkVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                animationSpec = tween(250, easing = FastOutSlowInEasing)
             ) + fadeOut(
                 animationSpec = tween(200)
             )
         ) {
             Column {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 2.dp)
                 ) {
                     GameStatus.entries.forEach { status ->
                         val isSelected = selectedClassification == status
 
-                        // Micro-animations for each chip
+                        // Subtle animations for each chip to prevent overflow
                         val chipScale by animateFloatAsState(
-                            targetValue = if (isSelected) 1.05f else 1f,
+                            targetValue = if (isSelected) 1.03f else 1f,
                             animationSpec = spring(
                                 dampingRatio = 0.6f,
                                 stiffness = 400f
@@ -339,20 +352,33 @@ fun ClassificationSection(
 
                         FilterChip(
                             selected = isSelected,
-                            onClick = { onClassificationSelect(status) },
+                            onClick = {
+                                // Allow clicking same chip to keep selection (no deselect for classification)
+                                onClassificationSelect(status)
+                            },
                             label = {
                                 Text(
                                     status.displayName,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     modifier = Modifier.animateContentSize()
                                 )
                             },
                             leadingIcon = {
+                                val iconScale by animateFloatAsState(
+                                    targetValue = if (isSelected) 1.05f else 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.7f,
+                                        stiffness = 400f
+                                    ),
+                                    label = "IconScale_${status.name}"
+                                )
                                 Icon(
                                     painter = painterResource(id = getStatusIcon(status)),
                                     contentDescription = null,
                                     modifier = Modifier
-                                        .size(18.dp)
-                                        .scale(if (isSelected) 1.1f else 1f)
+                                        .size(17.dp)
+                                        .scale(iconScale)
                                 )
                             },
                             colors = FilterChipDefaults.filterChipColors(
@@ -383,13 +409,13 @@ fun PlaytimeSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF1E2A47).copy(alpha = 0.4f))
-            .padding(16.dp)
+            .padding(14.dp)
             .animateContentSize(
                 animationSpec = spring(
-                    dampingRatio = 0.8f,
-                    stiffness = 300f
+                    dampingRatio = 0.75f,
+                    stiffness = 350f
                 )
             )
     ) {
@@ -402,32 +428,34 @@ fun PlaytimeSection(
         AnimatedVisibility(
             visible = isExpanded,
             enter = expandVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                animationSpec = tween(350, easing = FastOutSlowInEasing)
             ) + fadeIn(
-                animationSpec = tween(300)
+                animationSpec = tween(350)
             ),
             exit = shrinkVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                animationSpec = tween(250, easing = FastOutSlowInEasing)
             ) + fadeOut(
                 animationSpec = tween(200)
             )
         ) {
             Column {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 2.dp)
                 ) {
                     val playtimeOptions = listOf("10h", "20h", "50h+")
 
                     playtimeOptions.forEach { option ->
                         val isSelected = selectedPlaytime == option
 
-                        // Micro-animation for playtime chips
+                        // Subtle animation for playtime chips to prevent overflow
                         val playtimeScale by animateFloatAsState(
-                            targetValue = if (isSelected) 1.05f else 1f,
+                            targetValue = if (isSelected) 1.03f else 1f,
                             animationSpec = spring(
                                 dampingRatio = 0.6f,
                                 stiffness = 400f
@@ -437,21 +465,30 @@ fun PlaytimeSection(
 
                         FilterChip(
                             selected = isSelected,
-                            onClick = { onPlaytimeSelect(option) },
+                            onClick = {
+                                // Toggle deselection - clicking the same chip deselects it
+                                if (isSelected) {
+                                    onPlaytimeSelect("")  // Deselect by passing empty string
+                                } else {
+                                    onPlaytimeSelect(option)
+                                }
+                            },
                             label = {
                                 Text(
                                     option,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     modifier = Modifier.animateContentSize()
                                 )
                             },
                             leadingIcon = if (isSelected) {
                                 {
-                                    // Animated check icon
+                                    // Subtle check icon animation
                                     val checkScale by animateFloatAsState(
-                                        targetValue = 1f,
+                                        targetValue = 1.0f,
                                         animationSpec = spring(
-                                            dampingRatio = 0.5f,
-                                            stiffness = 500f
+                                            dampingRatio = 0.7f,
+                                            stiffness = 400f
                                         ),
                                         label = "CheckScale"
                                     )
@@ -459,7 +496,7 @@ fun PlaytimeSection(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
                                         modifier = Modifier
-                                            .size(18.dp)
+                                            .size(17.dp)
                                             .scale(checkScale)
                                     )
                                 }
@@ -514,13 +551,13 @@ fun SlideToRateSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF1E2A47).copy(alpha = 0.4f))
-            .padding(16.dp)
+            .padding(14.dp)
             .animateContentSize(
                 animationSpec = spring(
-                    dampingRatio = 0.8f,
-                    stiffness = 300f
+                    dampingRatio = 0.75f,
+                    stiffness = 350f
                 )
             )
     ) {
@@ -533,26 +570,26 @@ fun SlideToRateSection(
         AnimatedVisibility(
             visible = isExpanded,
             enter = expandVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                animationSpec = tween(350, easing = FastOutSlowInEasing)
             ) + fadeIn(
-                animationSpec = tween(300)
+                animationSpec = tween(350)
             ),
             exit = shrinkVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing)
+                animationSpec = tween(250, easing = FastOutSlowInEasing)
             ) + fadeOut(
                 animationSpec = tween(200)
             )
         ) {
             Column {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
                     // Smooth scale animation
                     val scale by animateFloatAsState(
                         targetValue = if (sliderValue > 0) 1.15f else 1f,
                         animationSpec = spring(
-                            dampingRatio = 0.6f,
-                            stiffness = 400f
+                            dampingRatio = 0.7f,
+                            stiffness = 300f
                         ),
                         label = "ScaleAnimation"
                     )
@@ -561,44 +598,82 @@ fun SlideToRateSection(
                     val animatedIconColor by androidx.compose.animation.animateColorAsState(
                         targetValue = getRatingColor(sliderValue),
                         animationSpec = tween(
-                            durationMillis = 400,
+                            durationMillis = 200,
                             easing = FastOutSlowInEasing
                         ),
                         label = "IconColorAnimation"
                     )
 
-                    // Rotation animation for extra flair
+                    // Subtle rotation animation
                     val rotation by animateFloatAsState(
-                        targetValue = if (sliderValue > 0) 0f else -10f,
+                        targetValue = if (sliderValue > 0) 0f else -8f,
                         animationSpec = spring(
-                            dampingRatio = 0.7f,
-                            stiffness = 300f
+                            dampingRatio = 0.8f,
+                            stiffness = 250f
                         ),
                         label = "RotationAnimation"
                     )
-                    
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Animated Icon with crossfade
-                        androidx.compose.animation.Crossfade(
-                            targetState = getRatingIcon(sliderValue),
-                            animationSpec = tween(
-                                durationMillis = 300,
-                                easing = FastOutSlowInEasing
-                            ),
-                            label = "IconCrossfade"
-                        ) { iconRes ->
-                            Icon(
-                                painter = painterResource(id = iconRes),
-                                contentDescription = "Rating icon",
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .scale(scale)
-                                    .rotate(rotation),
-                                tint = animatedIconColor
-                            )
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.graphicsLayer { clip = false }
+                    ) {
+                        // Apply scale and rotation to outer layer to prevent compound scaling during transition
+                        Box(
+                            modifier = Modifier
+                                .size(140.dp)
+                                .graphicsLayer {
+                                    clip = false
+                                    scaleX = scale
+                                    scaleY = scale
+                                    rotationZ = rotation
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Cool transition with scale, slide, and bounce
+                            androidx.compose.animation.AnimatedContent(
+                                targetState = getRatingIcon(sliderValue),
+                                transitionSpec = {
+                                    (fadeIn(
+                                        animationSpec = tween(400, easing = FastOutSlowInEasing)
+                                    ) + scaleIn(
+                                        initialScale = 0.5f,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessMedium
+                                        )
+                                    ) + slideInVertically(
+                                        initialOffsetY = { it / 4 },
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessMedium
+                                        )
+                                    )) togetherWith (fadeOut(
+                                        animationSpec = tween(200)
+                                    ) + scaleOut(
+                                        targetScale = 0.6f,
+                                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                                    ) + slideOutVertically(
+                                        targetOffsetY = { -it / 4 },
+                                        animationSpec = tween(200, easing = FastOutSlowInEasing)
+                                    ))
+                                },
+                                label = "IconTransition",
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.graphicsLayer { clip = false }
+                            ) { iconRes ->
+                                Icon(
+                                    painter = painterResource(id = iconRes),
+                                    contentDescription = "Rating icon",
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .graphicsLayer { clip = false },
+                                    tint = animatedIconColor
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         // Rating Text with gradient and animation
                         BasicText(
@@ -606,7 +681,7 @@ fun SlideToRateSection(
                             style = MaterialTheme.typography.titleLarge.copy(
                                 brush = getRatingGradient(sliderValue),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 28.sp
+                                fontSize = 26.sp
                             ),
                             modifier = Modifier.scale(scale)
                         )
@@ -618,12 +693,12 @@ fun SlideToRateSection(
                             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.height(3.dp))
                                 Text(
                                     text = getRatingDescription(sliderValue),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextSecondary.copy(alpha = 0.6f),
-                                    fontSize = 14.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -631,7 +706,7 @@ fun SlideToRateSection(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Animated slider colors
                 val animatedThumbColor by androidx.compose.animation.animateColorAsState(
@@ -706,23 +781,38 @@ fun SectionHeader(
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
             color = TextSecondary
         )
-        
+
         val rotation by animateFloatAsState(
             targetValue = if (isExpanded) 0f else 180f,
-            animationSpec = tween(300, easing = FastOutSlowInEasing),
+            animationSpec = spring(
+                dampingRatio = 0.7f,
+                stiffness = 350f
+            ),
             label = "IconRotation"
         )
-        
-        IconButton(onClick = onToggleExpanded) {
+
+        val iconScale by animateFloatAsState(
+            targetValue = if (isExpanded) 1f else 0.95f,
+            animationSpec = spring(
+                dampingRatio = 0.7f,
+                stiffness = 400f
+            ),
+            label = "IconScale"
+        )
+
+        IconButton(onClick = onToggleExpanded, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowUp,
                 contentDescription = if (isExpanded) "Collapse" else "Expand",
                 tint = TextSecondary.copy(alpha = 0.7f),
-                modifier = Modifier.rotate(rotation)
+                modifier = Modifier
+                    .size(22.dp)
+                    .rotate(rotation)
+                    .scale(iconScale)
             )
         }
     }

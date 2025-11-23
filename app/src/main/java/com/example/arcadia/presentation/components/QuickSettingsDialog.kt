@@ -53,58 +53,60 @@ fun QuickSettingsDialog(
     Dialog(onDismissRequest = onDismiss) {
         AnimatedVisibility(
             visible = true,
-            enter = fadeIn(animationSpec = tween(300)) +
+            enter = fadeIn(animationSpec = tween(400, easing = FastOutSlowInEasing)) +
                     scaleIn(
-                        initialScale = 0.85f,
+                        initialScale = 0.75f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) +
+                    slideInVertically(
+                        initialOffsetY = { it / 3 },
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioMediumBouncy,
                             stiffness = Spring.StiffnessMedium
                         )
-                    ) +
-                    slideInVertically(
-                        initialOffsetY = { it / 4 },
-                        animationSpec = tween(300, easing = FastOutSlowInEasing)
                     ),
-            exit = fadeOut(animationSpec = tween(200)) +
+            exit = fadeOut(animationSpec = tween(250)) +
                    scaleOut(
-                       targetScale = 0.9f,
-                       animationSpec = tween(200)
+                       targetScale = 0.85f,
+                       animationSpec = tween(250, easing = FastOutSlowInEasing)
                    ) +
                    slideOutVertically(
-                       targetOffsetY = { it / 4 },
-                       animationSpec = tween(200)
+                       targetOffsetY = { it / 3 },
+                       animationSpec = tween(250, easing = FastOutSlowInEasing)
                    )
         ) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .wrapContentHeight()
-                    .heightIn(max = 650.dp),
-                shape = RoundedCornerShape(24.dp),
+                    .fillMaxWidth(0.96f)
+                    .fillMaxHeight(0.88f),
+                shape = RoundedCornerShape(20.dp),
                 color = Color(0xFF2A2E35)
             ) {
             Column {
                 // Scrollable content
                 Column(
                     modifier = Modifier
-                        .weight(1f, fill = false)
+                        .weight(1f)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp)
-                        .padding(top = 24.dp, bottom = 16.dp)
+                        .padding(horizontal = 18.dp)
+                        .padding(top = 18.dp, bottom = 12.dp)
                 ) {
-                    // Title
+                    // Title with animated gradient effect
                     Text(
                         text = "Quick Settings",
-                        fontSize = 26.sp,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Media Layout
                     SectionTitle("Media Layout")
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     DualSegmentedButton(
                         leftText = "List",
                         rightText = "Grid",
@@ -124,17 +126,17 @@ fun QuickSettingsDialog(
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
                     // Sort
                     SectionTitle("Sort")
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     SortOptions(
                         selectedType = state.sortType,
                         onTypeChange = { onStateChange(state.copy(sortType = it)) }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     SortOrderButton(
                         sortType = state.sortType,
@@ -142,19 +144,23 @@ fun QuickSettingsDialog(
                         onOrderChange = { onStateChange(state.copy(sortOrder = it)) }
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
                     // Fields
                     SectionTitle("Fields")
-                    if (state.mediaLayout == MediaLayout.GRID) {
+                    AnimatedVisibility(
+                        visible = state.mediaLayout == MediaLayout.GRID,
+                        enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                    ) {
                         Text(
                             text = "Select one date display option",
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             color = Color(0xFF8B8B8B),
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     FieldsSelection(
                         mediaLayout = state.mediaLayout,
                         showDateAdded = state.showDateAdded,
@@ -192,7 +198,7 @@ fun QuickSettingsDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -200,22 +206,23 @@ fun QuickSettingsDialog(
                         Text(
                             text = "Cancel",
                             color = Color(0xFF8AB4F8),
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Button(
                         onClick = onDone,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = ButtonPrimary,
                             contentColor = Color(0xFF1A1E25)
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.height(42.dp)
                     ) {
                         Text(
                             text = "Done",
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -230,7 +237,8 @@ fun QuickSettingsDialog(
 private fun SectionTitle(text: String) {
     Text(
         text = text,
-        fontSize = 16.sp,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
         color = Color(0xFFB8B8B8)
     )
 }
@@ -297,37 +305,61 @@ private fun DualSegmentedButton(
 ) {
     val leftBackgroundColor by animateColorAsState(
         targetValue = if (isLeftSelected) Color(0xFF4A5A6A) else Color.Transparent,
-        animationSpec = tween(300),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "leftBackground"
     )
     val rightBackgroundColor by animateColorAsState(
         targetValue = if (!isLeftSelected) Color(0xFF4A5A6A) else Color.Transparent,
-        animationSpec = tween(300),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "rightBackground"
     )
     
     val leftTextColor by animateColorAsState(
         targetValue = if (isLeftSelected) ButtonPrimary else Color.White,
-        animationSpec = tween(300),
+        animationSpec = tween(350),
         label = "leftTextColor"
     )
     
     val rightTextColor by animateColorAsState(
         targetValue = if (!isLeftSelected) ButtonPrimary else Color.White,
-        animationSpec = tween(300),
+        animationSpec = tween(350),
         label = "rightTextColor"
     )
     
+    val leftScale by animateFloatAsState(
+        targetValue = if (isLeftSelected) 1.05f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "leftScale"
+    )
+
+    val rightScale by animateFloatAsState(
+        targetValue = if (!isLeftSelected) 1.05f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "rightScale"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(44.dp)
             .border(
-                1.dp,
+                1.5.dp,
                 ButtonPrimary,
-                RoundedCornerShape(24.dp)
+                RoundedCornerShape(22.dp)
             )
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(22.dp))
     ) {
         Box(
             modifier = Modifier
@@ -337,19 +369,22 @@ private fun DualSegmentedButton(
                 .clickable { onSelectionChange(true) },
             contentAlignment = Alignment.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.scale(leftScale)
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.List,
                     contentDescription = null,
                     tint = leftTextColor,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(19.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(7.dp))
                 Text(
                     text = leftText,
                     color = leftTextColor,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 15.sp
                 )
             }
         }
@@ -361,19 +396,22 @@ private fun DualSegmentedButton(
                 .clickable { onSelectionChange(false) },
             contentAlignment = Alignment.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.scale(rightScale)
+            ) {
                 Icon(
                     imageVector = Icons.Default.GridOn,
                     contentDescription = null,
                     tint = rightTextColor,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(19.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(7.dp))
                 Text(
                     text = rightText,
                     color = rightTextColor,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 15.sp
                 )
             }
         }
@@ -427,30 +465,45 @@ private fun SortOption(
     val isPressed by interactionSource.collectIsPressedAsState()
     
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
+        targetValue = if (isPressed) 0.88f else if (isSelected) 1.08f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            stiffness = Spring.StiffnessMedium
         ),
         label = "scale"
     )
     
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) Color(0xFF8AB4F8) else Color(0xFF3A3E45),
-        animationSpec = tween(300),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "backgroundColor"
     )
     
     val iconTint by animateColorAsState(
         targetValue = if (isSelected) Color(0xFF1A1E25) else Color(0xFF8AB4F8),
-        animationSpec = tween(300),
+        animationSpec = tween(350),
         label = "iconTint"
     )
     
+    // Pulsing animation for selected item
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (isSelected) 1.03f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .scale(scale)
+            .scale(scale * pulseScale)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -459,7 +512,7 @@ private fun SortOption(
     ) {
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(52.dp)
                 .clip(CircleShape)
                 .background(backgroundColor),
             contentAlignment = Alignment.Center
@@ -468,15 +521,15 @@ private fun SortOption(
                 imageVector = icon,
                 contentDescription = label,
                 tint = iconTint,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(23.dp)
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = label,
             color = if (isSelected) ButtonPrimary else Color(0xFFB8B8B8),
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+            fontSize = 12.sp
         )
     }
 }
@@ -496,21 +549,45 @@ private fun SortOrderButton(
     
     val leftBackgroundColor by animateColorAsState(
         targetValue = if (sortOrder == SortOrder.ASCENDING) Color(0xFF4A5A6A) else Color.Transparent,
-        animationSpec = tween(300),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "leftBackground"
     )
     val rightBackgroundColor by animateColorAsState(
         targetValue = if (sortOrder == SortOrder.DESCENDING) Color(0xFF4A5A6A) else Color.Transparent,
-        animationSpec = tween(300),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "rightBackground"
     )
     
+    val leftIconOffset by animateDpAsState(
+        targetValue = if (sortOrder == SortOrder.ASCENDING) (-2).dp else 0.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "leftIconOffset"
+    )
+
+    val rightIconOffset by animateDpAsState(
+        targetValue = if (sortOrder == SortOrder.DESCENDING) 2.dp else 0.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "rightIconOffset"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .border(1.dp, ButtonPrimary, RoundedCornerShape(24.dp))
-            .clip(RoundedCornerShape(24.dp))
+            .height(44.dp)
+            .border(1.5.dp, ButtonPrimary, RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
     ) {
         Box(
             modifier = Modifier
@@ -525,13 +602,15 @@ private fun SortOrderButton(
                     imageVector = Icons.Default.KeyboardArrowUp,
                     contentDescription = null,
                     tint = if (sortOrder == SortOrder.ASCENDING) ButtonPrimary else Color(0xFF6B7178),
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier
+                        .size(19.dp)
+                        .offset(y = leftIconOffset)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = leftText,
                     color = if (sortOrder == SortOrder.ASCENDING) ButtonPrimary else Color.White,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -549,13 +628,15 @@ private fun SortOrderButton(
                     imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = null,
                     tint = if (sortOrder == SortOrder.DESCENDING) ButtonPrimary else Color(0xFF6B7178),
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier
+                        .size(19.dp)
+                        .offset(y = rightIconOffset)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = rightText,
                     color = if (sortOrder == SortOrder.DESCENDING) ButtonPrimary else Color.White,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -572,117 +653,128 @@ private fun FieldsSelection(
     onDateAddedChange: (Boolean) -> Unit,
     onReleaseDateChange: (Boolean) -> Unit
 ) {
+    val dateAddedScale by animateFloatAsState(
+        targetValue = if (showDateAdded) 1.02f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "dateAddedScale"
+    )
+
+    val releaseDateScale by animateFloatAsState(
+        targetValue = if (showReleaseDate) 1.02f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "releaseDateScale"
+    )
+
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // Date Added chip
-        FilterChip(
-            selected = showDateAdded,
+        CustomFieldChip(
+            text = "Date Added",
+            isSelected = showDateAdded,
             onClick = { onDateAddedChange(!showDateAdded) },
-            label = {
-                Text(
-                    text = "Date Added",
-                    fontSize = 14.sp
-                )
-            },
-            leadingIcon = {
-                if (mediaLayout == MediaLayout.GRID) {
-                    // Radio button icon for GRID mode
-                    Icon(
-                        imageVector = if (showDateAdded) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                } else {
-                    // Checkbox icon for LIST mode
-                    if (showDateAdded) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Circle,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color(0xFF4A5A6A),
-                selectedLabelColor = ButtonPrimary,
-                selectedLeadingIconColor = ButtonPrimary,
-                containerColor = Color(0xFF353940),
-                labelColor = Color(0xFFB8B8B8),
-                iconColor = Color(0xFF6B7178)
-            ),
-            border = FilterChipDefaults.filterChipBorder(
-                enabled = true,
-                selected = showDateAdded,
-                borderColor = if (showDateAdded) ButtonPrimary else Color(0xFF4A5057),
-                selectedBorderColor = ButtonPrimary,
-                borderWidth = 1.5.dp,
-                selectedBorderWidth = 1.5.dp
-            ),
+            mediaLayout = mediaLayout,
+            scale = dateAddedScale,
             modifier = Modifier.weight(1f)
         )
 
         // Release Date chip
-        FilterChip(
-            selected = showReleaseDate,
+        CustomFieldChip(
+            text = "Release Date",
+            isSelected = showReleaseDate,
             onClick = { onReleaseDateChange(!showReleaseDate) },
-            label = {
-                Text(
-                    text = "Release Date",
-                    fontSize = 14.sp
-                )
-            },
-            leadingIcon = {
-                if (mediaLayout == MediaLayout.GRID) {
-                    // Radio button icon for GRID mode
-                    Icon(
-                        imageVector = if (showReleaseDate) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                } else {
-                    // Checkbox icon for LIST mode
-                    if (showReleaseDate) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Circle,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color(0xFF4A5A6A),
-                selectedLabelColor = ButtonPrimary,
-                selectedLeadingIconColor = ButtonPrimary,
-                containerColor = Color(0xFF353940),
-                labelColor = Color(0xFFB8B8B8),
-                iconColor = Color(0xFF6B7178)
-            ),
-            border = FilterChipDefaults.filterChipBorder(
-                enabled = true,
-                selected = showReleaseDate,
-                borderColor = if (showReleaseDate) ButtonPrimary else Color(0xFF4A5057),
-                selectedBorderColor = ButtonPrimary,
-                borderWidth = 1.5.dp,
-                selectedBorderWidth = 1.5.dp
-            ),
+            mediaLayout = mediaLayout,
+            scale = releaseDateScale,
             modifier = Modifier.weight(1f)
         )
+    }
+}
+
+@Composable
+private fun CustomFieldChip(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    mediaLayout: MediaLayout,
+    scale: Float,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) Color(0xFF4A5A6A) else Color(0xFF353940),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "backgroundColor"
+    )
+
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) ButtonPrimary else Color(0xFF4A5057),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "borderColor"
+    )
+
+    val textColor by animateColorAsState(
+        targetValue = if (isSelected) ButtonPrimary else Color(0xFFB8B8B8),
+        animationSpec = tween(350),
+        label = "textColor"
+    )
+
+    val iconColor by animateColorAsState(
+        targetValue = if (isSelected) ButtonPrimary else Color(0xFF6B7178),
+        animationSpec = tween(350),
+        label = "iconColor"
+    )
+
+    Box(
+        modifier = modifier
+            .height(36.dp)
+            .scale(scale)
+            .border(1.5.dp, borderColor, RoundedCornerShape(18.dp))
+            .background(backgroundColor, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Icon without any animation - just instant switch
+            if (mediaLayout == MediaLayout.GRID) {
+                Icon(
+                    imageVector = if (isSelected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.Circle,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = text,
+                fontSize = 13.sp,
+                color = textColor,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            )
+        }
     }
 }
 
