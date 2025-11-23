@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -87,9 +89,38 @@ fun GameRatingSheet(
         }
     }
 
+    // Function to save current state
+    val saveCurrentState = {
+        val hours = when(selectedPlaytime) {
+            "50h+" -> 50
+            "20h" -> 20
+            "10h" -> 10
+            else -> 0
+        }
+
+        val updatedGame = game.copy(
+            aspects = selectedAspects.toList(),
+            status = selectedClassification,
+            hoursPlayed = hours,
+            rating = if (sliderValue > 0f) sliderValue else null,
+            updatedAt = System.currentTimeMillis()
+        )
+
+        // Only save if something changed
+        if (updatedGame.aspects != game.aspects ||
+            updatedGame.status != game.status ||
+            updatedGame.hoursPlayed != game.hoursPlayed ||
+            updatedGame.rating != game.rating) {
+            onSave(updatedGame)
+        }
+    }
+
     if (isOpen) {
         ModalBottomSheet(
-            onDismissRequest = onDismiss,
+            onDismissRequest = {
+                saveCurrentState()
+                onDismiss()
+            },
             sheetState = sheetState,
             containerColor = Color(0xFF0A1929),
             contentColor = TextSecondary
@@ -97,9 +128,10 @@ fun GameRatingSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp)
+                    .padding(horizontal = 18.dp)
+                    .padding(bottom = 24.dp, top = 8.dp)
             ) {
                 SheetTitle(
                     gameName = game.name,
@@ -108,7 +140,7 @@ fun GameRatingSheet(
                     onClose = onDismiss
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 GameBestAspectsSection(
                     isExpanded = isBestAspectsExpanded,
@@ -139,7 +171,7 @@ fun GameRatingSheet(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 ClassificationSection(
                     isExpanded = isClassificationExpanded,
@@ -148,16 +180,18 @@ fun GameRatingSheet(
                     onClassificationSelect = { selectedClassification = it }
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 PlaytimeSection(
                     isExpanded = isPlaytimeExpanded,
                     onToggleExpanded = { isPlaytimeExpanded = !isPlaytimeExpanded },
                     selectedPlaytime = selectedPlaytime,
-                    onPlaytimeSelect = { selectedPlaytime = it }
+                    onPlaytimeSelect = {
+                        selectedPlaytime = if (it.isEmpty()) null else it
+                    }
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 SlideToRateSection(
                     isExpanded = isSlideToRateExpanded,
@@ -166,34 +200,23 @@ fun GameRatingSheet(
                     onSliderChange = { sliderValue = it }
                 )
                 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
 
                 Button(
                     onClick = {
-                        val hours = when(selectedPlaytime) {
-                            "50h+" -> 50
-                            "20h" -> 20
-                            "10h" -> 10
-                            else -> 0
-                        }
-                        
-                        val updatedGame = game.copy(
-                            aspects = selectedAspects.toList(),
-                            status = selectedClassification,
-                            hoursPlayed = hours,
-                            rating = if (sliderValue > 0f) sliderValue else null,
-                            updatedAt = System.currentTimeMillis()
-                        )
-                        onSave(updatedGame)
+                        saveCurrentState()
+                        onDismiss()
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ButtonPrimary
                     )){
-                    Text("Save Changes", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Save Changes", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -212,26 +235,32 @@ fun SheetTitle(
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = gameName,
                 style = MaterialTheme.typography.titleLarge,
-                fontSize = 24.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextSecondary
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = "Rating: $rating",
                 style = MaterialTheme.typography.bodyMedium,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 color = TextSecondary.copy(alpha = 0.7f)
             )
-            if (ratingDescription.isNotEmpty()) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = ratingDescription.isNotEmpty(),
+                enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(300)) +
+                        androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(300)),
+                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
+                       androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(200))
+            ) {
                 Text(
                     text = ratingDescription,
                     style = MaterialTheme.typography.bodySmall,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = TextSecondary.copy(alpha = 0.6f),
                     fontWeight = FontWeight.Medium
                 )
@@ -241,7 +270,8 @@ fun SheetTitle(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Close",
-                tint = TextSecondary
+                tint = TextSecondary,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
