@@ -28,9 +28,12 @@ android {
                 load(localPropertiesFile.inputStream())
             }
             val rawgApiKey = localProperties.getProperty("RAWG_API_KEY", "")
+            val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY", "")
             buildConfigField("String", "RAWG_API_KEY", "\"$rawgApiKey\"")
+            buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
         } else {
             buildConfigField("String", "RAWG_API_KEY", "\"\"")
+            buildConfigField("String", "GEMINI_API_KEY", "\"\"")
         }
     }
 
@@ -78,7 +81,7 @@ dependencies {
     implementation(libs.firebase.storage)
 
     //Icons
-    implementation("androidx.compose.material:material-icons-extended:1.7.8")
+    implementation(libs.androidx.compose.material.icons.extended)
 
     // Google Sign-In
     implementation(libs.play.services.auth)
@@ -103,8 +106,8 @@ dependencies {
     implementation(libs.coil.network.okhttp)
 
     //video playback
-    implementation("androidx.media3:media3-exoplayer:1.8.0")
-    implementation("androidx.media3:media3-ui:1.8.0")
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
 
 
     // Koin
@@ -121,6 +124,9 @@ dependencies {
 
     // Kotlin Serialization
     implementation(libs.kotlinx.serialization.json)
+
+    // Gemini AI
+    implementation(libs.generativeai)
 
     // Tests
     testImplementation(libs.junit)
