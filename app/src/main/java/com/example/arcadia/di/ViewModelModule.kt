@@ -1,6 +1,7 @@
 package com.example.arcadia.di
 
 import com.example.arcadia.presentation.components.sign_in.SignInViewModel
+import com.example.arcadia.presentation.screens.analytics.AnalyticsViewModel
 import com.example.arcadia.presentation.screens.authScreen.AuthViewModel
 import com.example.arcadia.presentation.screens.detailsScreen.DetailsScreenViewModel
 import com.example.arcadia.presentation.screens.home.HomeViewModel
@@ -18,4 +19,5 @@ val viewModelModule = module {
     viewModel { MyGamesViewModel(get(), get()) }
     viewModel { DetailsScreenViewModel(get(), get()) }
     viewModel { SearchViewModel(get(), get()) }
+    viewModel { AnalyticsViewModel(get()) }
 }

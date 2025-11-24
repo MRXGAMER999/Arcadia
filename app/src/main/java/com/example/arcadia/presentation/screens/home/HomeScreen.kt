@@ -27,6 +27,7 @@ fun NewHomeScreen(
     onNavigateToProfile: () -> Unit = {},
     onNavigateToMyGames: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToAnalytics: () -> Unit = {},
     onGameClick: (Int) -> Unit = {},
     viewModel: HomeViewModel = org.koin.androidx.compose.koinViewModel()
 ) {
@@ -84,6 +85,7 @@ fun NewHomeScreen(
                 HomeTabsNavContent(
                     selectedIndex = selectedTab,
                     onGameClick = onGameClick,
+                    onNavigateToAnalytics = onNavigateToAnalytics,
                     snackbarHostState = snackbarHostState,
                     viewModel = viewModel
                 )

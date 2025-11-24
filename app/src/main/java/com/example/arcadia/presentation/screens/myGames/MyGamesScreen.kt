@@ -59,7 +59,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.LaunchedEffect
-import com.example.arcadia.domain.repository.SortOrder
 import com.example.arcadia.presentation.components.LibraryEmptyState
 import com.example.arcadia.presentation.components.ListGameCard
 import com.example.arcadia.presentation.components.MediaLayout
@@ -83,6 +82,7 @@ import androidx.compose.foundation.lazy.items as lazyItems
 fun MyGamesScreen(
     onNavigateBack: () -> Unit = {},
     onGameClick: (Int) -> Unit = {},
+    onNavigateToAnalytics: () -> Unit = {},
     showBackButton: Boolean = false
 ) {
     val viewModel: MyGamesViewModel = koinViewModel()
@@ -303,7 +303,10 @@ fun MyGamesScreen(
                                                 enter = expandVertically() + fadeIn(),
                                                 exit = shrinkVertically() + fadeOut()
                                             ) {
-                                                GameStatsCard(games = state.data)
+                                                GameStatsCard(
+                                                    games = state.data,
+                                                    onSeeMoreClick = onNavigateToAnalytics
+                                                )
                                             }
                                         }
                                         
@@ -340,7 +343,10 @@ fun MyGamesScreen(
                                                 enter = expandVertically() + fadeIn(),
                                                 exit = shrinkVertically() + fadeOut()
                                             ) {
-                                                GameStatsCard(games = state.data)
+                                                GameStatsCard(
+                                                    games = state.data,
+                                                    onSeeMoreClick = onNavigateToAnalytics
+                                                )
                                             }
                                         }
                                         
