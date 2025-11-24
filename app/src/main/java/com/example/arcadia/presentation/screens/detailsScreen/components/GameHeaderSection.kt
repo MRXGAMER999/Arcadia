@@ -38,12 +38,12 @@ fun GameHeaderSection(game: Game) {
     val config = LocalConfiguration.current
     val density = LocalDensity.current
     val widthPx = with(density) { config.screenWidthDp.dp.roundToPx() }
-    val heightPx = with(density) { 300.dp.roundToPx() }
+    val heightPx = with(density) { 350.dp.roundToPx() }
     
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(350.dp)
     ) {
         if (game.backgroundImage != null) {
             SubcomposeAsyncImage(
@@ -58,7 +58,7 @@ fun GameHeaderSection(game: Game) {
                 contentDescription = "Game background",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp),
+                    .height(350.dp),
                 contentScale = ContentScale.Crop,
                 loading = {
                     Box(
@@ -86,12 +86,10 @@ fun GameHeaderSection(game: Game) {
                 .fillMaxSize()
                 .background(
                     brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Surface
-                        ),
-                        startY = 400f,
-                        endY = 600f
+                        colorStops = arrayOf(
+                            0.5f to Color.Transparent,
+                            1.0f to Surface
+                        )
                     )
                 )
         )
@@ -113,7 +111,7 @@ private fun GameHeaderPlaceholder(gameName: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(350.dp)
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(

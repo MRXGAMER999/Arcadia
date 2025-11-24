@@ -65,9 +65,7 @@ fun GameDetailsContent(
     onAddToLibrary: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
-        GameHeaderSection(game = game)
-
+    Column(modifier = modifier) {
         // Stats in a Card
         Card(
             modifier = Modifier

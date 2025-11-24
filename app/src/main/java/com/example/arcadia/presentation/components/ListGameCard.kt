@@ -76,11 +76,11 @@ fun ListGameCard(
         modifier = modifier
             .fillMaxWidth()
             .height(140.dp)
+            .clip(RoundedCornerShape(12.dp))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF0F1B41)
         ),
