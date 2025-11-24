@@ -3,6 +3,7 @@ package com.example.arcadia.di
 import com.example.arcadia.data.GamerRepositoryImpl
 import com.example.arcadia.data.repository.GameListRepositoryImpl
 import com.example.arcadia.data.repository.GameRepositoryImpl
+import com.example.arcadia.data.repository.GeminiRepository
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.domain.repository.GameRepository
@@ -12,4 +13,5 @@ val repositoryModule = module {
     single<GamerRepository> { GamerRepositoryImpl() }
     single<GameRepository> { GameRepositoryImpl(get()) }
     single<GameListRepository> { GameListRepositoryImpl() }
+    single { GeminiRepository() }
 }

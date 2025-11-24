@@ -26,7 +26,10 @@ data class AnalyticsState(
     val gamingPersonality: GamingPersonality = GamingPersonality.Explorer,
     val genreRatingAnalysis: List<GenreRatingStats> = emptyList(),
     val gamesAddedByYear: List<Pair<String, Int>> = emptyList(),
-    val recentTrend: String = ""
+    val recentTrend: String = "",
+    val aiInsights: com.example.arcadia.data.repository.GameInsights? = null,
+    val isLoadingInsights: Boolean = false,
+    val insightsError: String? = null
 )
 
 data class GenreRatingStats(
@@ -45,7 +48,8 @@ enum class GamingPersonality(val title: String, val description: String) {
 }
 
 class AnalyticsViewModel(
-    private val gameListRepository: GameListRepository
+    private val gameListRepository: GameListRepository,
+    private val geminiRepository: com.example.arcadia.data.repository.GeminiRepository
 ) : ViewModel() {
 
     var state by mutableStateOf(AnalyticsState())
@@ -62,8 +66,49 @@ class AnalyticsViewModel(
             gameListRepository.getGameList(SortOrder.TITLE_A_Z).collect { result ->
                 if (result is RequestState.Success) {
                     calculateStats(result.data)
+                    // Load AI insights after basic stats are calculated
+                    loadAIInsights(result.data)
                 } else if (result is RequestState.Error) {
                     state = state.copy(isLoading = false)
+                }
+            }
+        }
+    }
+
+    fun loadAIInsights(games: List<GameListEntry>) {
+        if (games.isEmpty()) {
+            state = state.copy(
+                isLoadingInsights = false,
+                insightsError = null
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            state = state.copy(isLoadingInsights = true, insightsError = null)
+
+            val result = geminiRepository.analyzeGamingProfile(games)
+
+            result.onSuccess { insights ->
+                state = state.copy(
+                    aiInsights = insights,
+                    isLoadingInsights = false,
+                    insightsError = null
+                )
+            }.onFailure { error ->
+                state = state.copy(
+                    isLoadingInsights = false,
+                    insightsError = error.message ?: "Failed to generate insights"
+                )
+            }
+        }
+    }
+
+    fun retryLoadInsights() {
+        viewModelScope.launch {
+            gameListRepository.getGameList(SortOrder.TITLE_A_Z).collect { result ->
+                if (result is RequestState.Success) {
+                    loadAIInsights(result.data)
                 }
             }
         }

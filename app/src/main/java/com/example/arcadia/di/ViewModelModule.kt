@@ -19,5 +19,5 @@ val viewModelModule = module {
     viewModel { MyGamesViewModel(get(), get()) }
     viewModel { DetailsScreenViewModel(get(), get()) }
     viewModel { SearchViewModel(get(), get()) }
-    viewModel { AnalyticsViewModel(get()) }
+    viewModel { AnalyticsViewModel(get(), get()) }
 }
