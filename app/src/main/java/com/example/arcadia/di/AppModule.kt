@@ -5,4 +5,5 @@ val appModule = listOf(
     repositoryModule,
     networkModule,
     imageLoaderModule,
+    utilModule,
 )

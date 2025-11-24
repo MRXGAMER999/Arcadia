@@ -177,42 +177,6 @@ fun MyGamesScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 // Filter Chips
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    // "All" chip
-                    item {
-                        FilterChip(
-                            selected = screenState.selectedGenre == null,
-                            onClick = { viewModel.selectGenre(null) },
-                            label = { Text("All") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = ButtonPrimary,
-                                selectedLabelColor = Color.White,
-                                containerColor = Color(0xFF1E2A47),
-                                labelColor = TextSecondary
-                            )
-                        )
-                    }
-                    
-                    // Genre chips
-                    items(viewModel.availableGenres) { genre ->
-                        FilterChip(
-                            selected = screenState.selectedGenre == genre,
-                            onClick = { viewModel.selectGenre(genre) },
-                            label = { Text(genre) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = ButtonPrimary,
-                                selectedLabelColor = Color.White,
-                                containerColor = Color(0xFF1E2A47),
-                                labelColor = TextSecondary
-                            )
-                        )
-                    }
-                }
-                
                 // Quick Settings and Stats Toggle
                 Row(
                     modifier = Modifier
@@ -230,8 +194,10 @@ fun MyGamesScreen(
                             tint = ButtonPrimary,
                             modifier = Modifier.size(20.dp)
                         )
+                        val activeFilterCount = screenState.quickSettingsState.selectedGenres.size + 
+                                               screenState.quickSettingsState.selectedStatuses.size
                         Text(
-                            text = "Quick Settings",
+                            text = if (activeFilterCount > 0) "Quick Settings ($activeFilterCount)" else "Quick Settings",
                             color = ButtonPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
@@ -266,9 +232,51 @@ fun MyGamesScreen(
                     
                     is RequestState.Success -> {
                         if (state.data.isEmpty()) {
-                            LibraryEmptyState(
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            val hasActiveFilters = screenState.quickSettingsState.selectedGenres.isNotEmpty() || 
+                                                  screenState.quickSettingsState.selectedStatuses.isNotEmpty()
+                            if (hasActiveFilters) {
+                                // Show filtered empty state
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "🔍",
+                                        fontSize = 48.sp
+                                    )
+                                    Text(
+                                        text = "No games match your filters",
+                                        color = TextSecondary,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
+                                    Text(
+                                        text = "Try adjusting or clearing your filters",
+                                        color = TextSecondary.copy(alpha = 0.7f),
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                    TextButton(
+                                        onClick = { viewModel.showQuickSettingsDialog() },
+                                        modifier = Modifier.padding(top = 16.dp)
+                                    ) {
+                                        Text(
+                                            text = "Adjust Filters",
+                                            color = ButtonPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            } else {
+                                LibraryEmptyState(
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         } else {
                             // Switch between List and Grid view based on settings with animation
                             AnimatedContent(
@@ -408,7 +416,13 @@ fun MyGamesScreen(
                     viewModel.updateQuickSettings(newSettings)
                 },
                 onDismiss = { viewModel.dismissQuickSettingsDialog() },
-                onDone = { viewModel.applyQuickSettings() }
+                onDone = { viewModel.applyQuickSettings() },
+                availableGenres = viewModel.getAvailableGenres(),
+                availableStatuses = viewModel.getAvailableStatuses(),
+                totalGames = viewModel.getTotalGamesCount(),
+                filteredGamesCount = viewModel.getFilteredGamesCount(),
+                onClearGenres = { viewModel.clearGenreFilters() },
+                onClearStatuses = { viewModel.clearStatusFilters() }
             )
         }
     }
