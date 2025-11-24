@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.GameListEntry
+import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.SortOrder
 import com.example.arcadia.presentation.components.MediaLayout
@@ -17,8 +18,8 @@ import kotlinx.coroutines.launch
 
 data class MyGamesScreenState(
     val games: RequestState<List<GameListEntry>> = RequestState.Idle,
-    val selectedGenre: String? = null,
-    val sortOrder: SortOrder = SortOrder.NEWEST_FIRST,
+    val allGames: List<GameListEntry> = emptyList(),
+    val sortOrder: SortOrder = SortOrder.RATING_HIGH,
     val selectedGameToEdit: GameListEntry? = null,
     val showSuccessNotification: Boolean = false,
     val notificationMessage: String = "",
@@ -31,7 +32,8 @@ data class MyGamesScreenState(
 )
 
 class MyGamesViewModel(
-    private val gameListRepository: GameListRepository
+    private val gameListRepository: GameListRepository,
+    private val preferencesManager: com.example.arcadia.util.PreferencesManager
 ) : ViewModel() {
     
     var screenState by mutableStateOf(MyGamesScreenState())
@@ -40,25 +42,172 @@ class MyGamesViewModel(
     private var gamesJob: Job? = null
     private val pendingDeletions = mutableMapOf<String, Job>()
 
-    // Predefined genres matching the Figma design
-    val availableGenres = listOf(
-        "Action",
-        "RPG",
-        "Platformer",
-        "Adventure",
-        "Shooter",
-        "Strategy"
-    )
-    
     init {
+        // Load saved filter preferences
+        val savedGenres = preferencesManager.getSelectedGenres()
+        val savedStatuses = preferencesManager.getSelectedStatuses()
+        
+        screenState = screenState.copy(
+            quickSettingsState = screenState.quickSettingsState.copy(
+                selectedGenres = savedGenres,
+                selectedStatuses = savedStatuses
+            )
+        )
+        
         loadGames()
     }
     
-    fun selectGenre(genre: String?) {
-        if (screenState.selectedGenre != genre) {
-            screenState = screenState.copy(selectedGenre = genre)
-            loadGames()
+    private fun filterGames(games: List<GameListEntry>): List<GameListEntry> {
+        val selectedGenres = screenState.quickSettingsState.selectedGenres
+        val selectedStatuses = screenState.quickSettingsState.selectedStatuses
+        
+        return filterGamesWithState(games, selectedGenres, selectedStatuses)
+    }
+    
+    private fun filterGamesWithState(
+        games: List<GameListEntry>,
+        selectedGenres: Set<String>,
+        selectedStatuses: Set<GameStatus>
+    ): List<GameListEntry> {
+        // Early return if no filters
+        if (selectedGenres.isEmpty() && selectedStatuses.isEmpty()) {
+            return games
         }
+        
+        // Convert to HashSet for O(1) lookup
+        val genreSet = selectedGenres.toHashSet()
+        val statusSet = selectedStatuses.toHashSet()
+        
+        return games.filter { game ->
+            // Genre filter: if no genres selected, pass all; otherwise check if game has at least one selected genre
+            // Use case-insensitive comparison
+            val passesGenreFilter = genreSet.isEmpty() || 
+                game.genres.any { genre -> 
+                    genreSet.any { selectedGenre -> 
+                        selectedGenre.equals(genre, ignoreCase = true) 
+                    }
+                }
+            
+            // Status filter: if no statuses selected, pass all; otherwise check if game status matches
+            val passesStatusFilter = statusSet.isEmpty() || 
+                statusSet.contains(game.status)
+            
+            // Game must pass both filters
+            passesGenreFilter && passesStatusFilter
+        }
+    }
+    
+    private fun sortGames(games: List<GameListEntry>, sortOrder: SortOrder): List<GameListEntry> {
+        return when (sortOrder) {
+            SortOrder.TITLE_A_Z -> games.sortedBy { it.name.lowercase() }
+            SortOrder.TITLE_Z_A -> games.sortedByDescending { it.name.lowercase() }
+            SortOrder.NEWEST_FIRST -> games.sortedByDescending { it.addedAt }
+            SortOrder.OLDEST_FIRST -> games.sortedBy { it.addedAt }
+            SortOrder.RATING_HIGH -> games.sortedByDescending { it.rating ?: -1f }
+            SortOrder.RATING_LOW -> games.sortedBy { it.rating ?: Float.MAX_VALUE }
+            SortOrder.RELEASE_NEW -> games.sortedByDescending { it.releaseDate ?: "" }
+            SortOrder.RELEASE_OLD -> games.sortedBy { it.releaseDate ?: "9999" }
+        }
+    }
+    
+    fun getAvailableGenres(): List<String> {
+        return screenState.allGames
+            .flatMap { it.genres }
+            .distinct()
+            .sorted()
+    }
+    
+    fun getAvailableStatuses(): List<GameStatus> {
+        return GameStatus.entries.toList()
+    }
+    
+    fun getFilteredGamesCount(): Int {
+        val filteredGames = filterGames(screenState.allGames)
+        return filteredGames.size
+    }
+    
+    fun getTotalGamesCount(): Int {
+        return screenState.allGames.size
+    }
+    
+    fun saveFilterPreset(name: String) {
+        val preset = com.example.arcadia.util.FilterPreset(
+            name = name,
+            genres = screenState.quickSettingsState.selectedGenres,
+            statuses = screenState.quickSettingsState.selectedStatuses
+        )
+        preferencesManager.saveFilterPreset(preset)
+    }
+    
+    fun getFilterPresets(): List<com.example.arcadia.util.FilterPreset> {
+        return preferencesManager.getFilterPresets()
+    }
+    
+    fun loadFilterPreset(preset: com.example.arcadia.util.FilterPreset) {
+        screenState = screenState.copy(
+            quickSettingsState = screenState.quickSettingsState.copy(
+                selectedGenres = preset.genres,
+                selectedStatuses = preset.statuses
+            )
+        )
+        applyCurrentFilters()
+    }
+    
+    fun deleteFilterPreset(presetName: String) {
+        preferencesManager.deleteFilterPreset(presetName)
+    }
+    
+    fun applyFilters(genres: Set<String>, statuses: Set<GameStatus>) {
+        // Validate genres exist in available genres
+        val validGenres = genres.filter { it in getAvailableGenres() }.toSet()
+        
+        screenState = screenState.copy(
+            quickSettingsState = screenState.quickSettingsState.copy(
+                selectedGenres = validGenres,
+                selectedStatuses = statuses
+            )
+        )
+        
+        applyCurrentFilters()
+    }
+    
+    fun clearAllFilters() {
+        screenState = screenState.copy(
+            quickSettingsState = screenState.quickSettingsState.copy(
+                selectedGenres = emptySet(),
+                selectedStatuses = emptySet()
+            )
+        )
+        
+        applyCurrentFilters()
+    }
+    
+    fun clearGenreFilters() {
+        screenState = screenState.copy(
+            quickSettingsState = screenState.quickSettingsState.copy(
+                selectedGenres = emptySet()
+            )
+        )
+        applyCurrentFilters()
+    }
+    
+    fun clearStatusFilters() {
+        screenState = screenState.copy(
+            quickSettingsState = screenState.quickSettingsState.copy(
+                selectedStatuses = emptySet()
+            )
+        )
+        applyCurrentFilters()
+    }
+    
+    private fun applyCurrentFilters() {
+        val filteredGames = filterGames(screenState.allGames)
+        val sortedGames = sortGames(filteredGames, screenState.sortOrder)
+        screenState = screenState.copy(games = RequestState.Success(sortedGames))
+        
+        // Save preferences
+        preferencesManager.saveSelectedGenres(screenState.quickSettingsState.selectedGenres)
+        preferencesManager.saveSelectedStatuses(screenState.quickSettingsState.selectedStatuses)
     }
     
     fun toggleSortOrder() {
@@ -86,20 +235,36 @@ class MyGamesViewModel(
     private fun loadGames() {
         gamesJob?.cancel()
         gamesJob = viewModelScope.launch {
-            val selectedGenre = screenState.selectedGenre
             val sortOrder = screenState.sortOrder
+            val selectedGenres = screenState.quickSettingsState.selectedGenres
+            val selectedStatuses = screenState.quickSettingsState.selectedStatuses
             
-            if (selectedGenre != null) {
-                gameListRepository.getGameListByGenre(selectedGenre, sortOrder)
-                    .collect { state ->
-                        screenState = screenState.copy(games = state)
+            // Fetch all games without genre filtering (client-side filtering will be applied)
+            gameListRepository.getGameList(sortOrder)
+                .collect { state ->
+                    when (state) {
+                        is RequestState.Success -> {
+                            // Store unfiltered games
+                            val allGames = state.data
+                            screenState = screenState.copy(allGames = allGames)
+                            
+                            // Apply client-side filtering with captured state
+                            val filteredGames = filterGamesWithState(allGames, selectedGenres, selectedStatuses)
+                            val sortedGames = sortGames(filteredGames, sortOrder)
+                            screenState = screenState.copy(games = RequestState.Success(sortedGames))
+                        }
+                        is RequestState.Error -> {
+                            // Keep existing allGames and filter state
+                            screenState = screenState.copy(games = state)
+                        }
+                        is RequestState.Loading -> {
+                            screenState = screenState.copy(games = state)
+                        }
+                        else -> {
+                            screenState = screenState.copy(games = state)
+                        }
                     }
-            } else {
-                gameListRepository.getGameList(sortOrder)
-                    .collect { state ->
-                        screenState = screenState.copy(games = state)
-                    }
-            }
+                }
         }
     }
     
@@ -224,9 +389,12 @@ class MyGamesViewModel(
     
     fun updateQuickSettings(settings: QuickSettingsState) {
         screenState = screenState.copy(quickSettingsState = settings)
+        applyCurrentFilters()
     }
     
     fun applyQuickSettings() {
+        applyCurrentFilters()
+        
         // Map QuickSettingsState to repository SortOrder
         val newSortOrder = when (screenState.quickSettingsState.sortType) {
             com.example.arcadia.presentation.components.SortType.TITLE -> {

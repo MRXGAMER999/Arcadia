@@ -3,6 +3,7 @@ package com.example.arcadia.presentation.components
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,10 +39,12 @@ enum class SortOrder { ASCENDING, DESCENDING }
 
 data class QuickSettingsState(
     val mediaLayout: MediaLayout = MediaLayout.LIST,
-    val sortType: SortType = SortType.TITLE,
-    val sortOrder: SortOrder = SortOrder.ASCENDING,
+    val sortType: SortType = SortType.RATING,
+    val sortOrder: SortOrder = SortOrder.DESCENDING,
     val showDateAdded: Boolean = true,
-    val showReleaseDate: Boolean = false
+    val showReleaseDate: Boolean = false,
+    val selectedGenres: Set<String> = emptySet(),
+    val selectedStatuses: Set<com.example.arcadia.domain.model.GameStatus> = emptySet()
 )
 
 @Composable
@@ -48,8 +52,17 @@ fun QuickSettingsDialog(
     state: QuickSettingsState,
     onStateChange: (QuickSettingsState) -> Unit,
     onDismiss: () -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    availableGenres: List<String> = emptyList(),
+    availableStatuses: List<com.example.arcadia.domain.model.GameStatus> = emptyList(),
+    totalGames: Int = 0,
+    filteredGamesCount: Int = 0,
+    onClearGenres: () -> Unit = {},
+    onClearStatuses: () -> Unit = {}
 ) {
+    var genreFilterExpanded by remember { mutableStateOf(false) }
+    var statusFilterExpanded by remember { mutableStateOf(false) }
+    
     Dialog(onDismissRequest = onDismiss) {
         AnimatedVisibility(
             visible = true,
@@ -146,6 +159,107 @@ fun QuickSettingsDialog(
 
                     Spacer(modifier = Modifier.height(18.dp))
 
+                    // Genre Filters
+                    if (availableGenres.isNotEmpty()) {
+                        FilterSection(
+                            title = "Genre Filters",
+                            isExpanded = genreFilterExpanded,
+                            selectedCount = state.selectedGenres.size,
+                            onToggleExpanded = { genreFilterExpanded = !genreFilterExpanded },
+                            onClear = onClearGenres
+                        ) {
+                            GenreFilterSection(
+                                availableGenres = availableGenres,
+                                selectedGenres = state.selectedGenres,
+                                onGenreToggle = { genre ->
+                                    val newGenres = if (state.selectedGenres.contains(genre)) {
+                                        state.selectedGenres - genre
+                                    } else {
+                                        state.selectedGenres + genre
+                                    }
+                                    onStateChange(state.copy(selectedGenres = newGenres))
+                                }
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(18.dp))
+                    }
+
+                    // Status Filters
+                    if (availableStatuses.isNotEmpty()) {
+                        FilterSection(
+                            title = "Status Filters",
+                            isExpanded = statusFilterExpanded,
+                            selectedCount = state.selectedStatuses.size,
+                            onToggleExpanded = { statusFilterExpanded = !statusFilterExpanded },
+                            onClear = onClearStatuses
+                        ) {
+                            StatusFilterSection(
+                                availableStatuses = availableStatuses,
+                                selectedStatuses = state.selectedStatuses,
+                                onStatusToggle = { status ->
+                                    val newStatuses = if (state.selectedStatuses.contains(status)) {
+                                        state.selectedStatuses - status
+                                    } else {
+                                        state.selectedStatuses + status
+                                    }
+                                    onStateChange(state.copy(selectedStatuses = newStatuses))
+                                }
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(18.dp))
+                    }
+
+                    // Filter Result Preview
+                    AnimatedVisibility(
+                        visible = totalGames > 0,
+                        enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                    ) {
+                        FilterResultPreview(
+                            filteredCount = filteredGamesCount,
+                            totalCount = totalGames
+                        )
+                    }
+                    
+                    // Clear All Filters Button
+                    AnimatedVisibility(
+                        visible = state.selectedGenres.isNotEmpty() || state.selectedStatuses.isNotEmpty(),
+                        enter = fadeIn(tween(300)) + expandVertically(tween(300)) + scaleIn(initialScale = 0.9f),
+                        exit = fadeOut(tween(200)) + shrinkVertically(tween(200)) + scaleOut(targetScale = 0.9f)
+                    ) {
+                        Column {
+                            Button(
+                                onClick = {
+                                    onStateChange(state.copy(
+                                        selectedGenres = emptySet(),
+                                        selectedStatuses = emptySet()
+                                    ))
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF3A3E45),
+                                    contentColor = Color(0xFFFF6B6B)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Clear All Filters",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+
                     // Fields
                     SectionTitle("Fields")
                     AnimatedVisibility(
@@ -241,6 +355,224 @@ private fun SectionTitle(text: String) {
         fontWeight = FontWeight.SemiBold,
         color = Color(0xFFB8B8B8)
     )
+}
+
+@Composable
+private fun FilterSection(
+    title: String,
+    isExpanded: Boolean,
+    selectedCount: Int,
+    onToggleExpanded: () -> Unit,
+    onClear: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "rotationAngle"
+    )
+    
+    val badgeScale by animateFloatAsState(
+        targetValue = if (selectedCount > 0) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "badgeScale"
+    )
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF353940))
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onToggleExpanded
+                )
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                if (selectedCount > 0) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .scale(badgeScale)
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(ButtonPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = selectedCount.toString(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1A1E25)
+                        )
+                    }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AnimatedVisibility(
+                    visible = selectedCount > 0,
+                    enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.8f),
+                    exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.8f)
+                ) {
+                    IconButton(
+                        onClick = onClear,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Clear",
+                            tint = Color(0xFFFF6B6B),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = ButtonPrimary,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer(rotationZ = rotationAngle)
+                )
+            }
+        }
+        
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = fadeIn(tween(300)) + expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ),
+            exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(12.dp))
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterResultPreview(
+    filteredCount: Int,
+    totalCount: Int
+) {
+    val percentage = if (totalCount > 0) (filteredCount.toFloat() / totalCount * 100).toInt() else 0
+    
+    val countColor by animateColorAsState(
+        targetValue = when {
+            filteredCount == totalCount -> Color(0xFF8AB4F8)
+            filteredCount == 0 -> Color(0xFFFF6B6B)
+            else -> ButtonPrimary
+        },
+        animationSpec = tween(300),
+        label = "countColor"
+    )
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.FilterList,
+                contentDescription = null,
+                tint = Color(0xFF8B8B8B),
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Showing ",
+                fontSize = 13.sp,
+                color = Color(0xFF8B8B8B)
+            )
+            Text(
+                text = "$filteredCount",
+                fontSize = 15.sp,
+                color = countColor,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = " of ",
+                fontSize = 13.sp,
+                color = Color(0xFF8B8B8B)
+            )
+            Text(
+                text = "$totalCount",
+                fontSize = 13.sp,
+                color = Color(0xFFB8B8B8),
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = " games",
+                fontSize = 13.sp,
+                color = Color(0xFF8B8B8B)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "($percentage%)",
+                fontSize = 12.sp,
+                color = Color(0xFF6B7178),
+                fontWeight = FontWeight.Medium
+            )
+        }
+        
+        // Progress bar
+        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Color(0xFF3A3E45))
+        ) {
+            val animatedProgress by animateFloatAsState(
+                targetValue = if (totalCount > 0) filteredCount.toFloat() / totalCount else 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "progress"
+            )
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(animatedProgress)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(countColor)
+            )
+        }
+    }
 }
 
 @Composable
@@ -945,6 +1277,154 @@ private fun QuickSettingsDialogPreview() {
                         Text("Done", color = Color(0xFF8AB4F8))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GenreFilterSection(
+    availableGenres: List<String>,
+    selectedGenres: Set<String>,
+    onGenreToggle: (String) -> Unit
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        availableGenres.forEach { genre ->
+            val isSelected = selectedGenres.contains(genre)
+            FilterChipItem(
+                text = genre,
+                isSelected = isSelected,
+                onClick = { onGenreToggle(genre) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusFilterSection(
+    availableStatuses: List<com.example.arcadia.domain.model.GameStatus>,
+    selectedStatuses: Set<com.example.arcadia.domain.model.GameStatus>,
+    onStatusToggle: (com.example.arcadia.domain.model.GameStatus) -> Unit
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        availableStatuses.forEach { status ->
+            val isSelected = selectedStatuses.contains(status)
+            FilterChipItem(
+                text = status.displayName,
+                isSelected = isSelected,
+                onClick = { onStatusToggle(status) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilterChipItem(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) ButtonPrimary else Color(0xFF3A3E45),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "backgroundColor"
+    )
+    
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) ButtonPrimary else Color(0xFF4A5057),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "borderColor"
+    )
+    
+    val textColor by animateColorAsState(
+        targetValue = if (isSelected) Color(0xFF1A1E25) else Color(0xFFB8B8B8),
+        animationSpec = tween(300),
+        label = "textColor"
+    )
+    
+    val scale by animateFloatAsState(
+        targetValue = when {
+            isPressed -> 0.92f
+            isSelected -> 1.05f
+            else -> 1f
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "scale"
+    )
+    
+    val elevation by animateDpAsState(
+        targetValue = if (isSelected) 2.dp else 0.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "elevation"
+    )
+    
+    Surface(
+        modifier = Modifier.scale(scale),
+        shape = RoundedCornerShape(18.dp),
+        color = backgroundColor,
+        shadowElevation = elevation,
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Box(
+            modifier = Modifier
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                AnimatedVisibility(
+                    visible = isSelected,
+                    enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.5f, animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessHigh
+                    )),
+                    exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.5f)
+                ) {
+                    Row {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = Color(0xFF1A1E25),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                }
+                Text(
+                    text = text,
+                    fontSize = 14.sp,
+                    color = textColor,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                )
             }
         }
     }
