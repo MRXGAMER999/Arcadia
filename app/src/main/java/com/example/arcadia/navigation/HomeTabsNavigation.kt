@@ -14,17 +14,26 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +48,7 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.example.arcadia.presentation.components.DiscoveryFilterDialog
 import com.example.arcadia.presentation.screens.home.HomeViewModel
 import com.example.arcadia.presentation.screens.home.components.GameListItem
 import com.example.arcadia.presentation.screens.home.components.LargeGameCard
@@ -49,7 +59,6 @@ import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.util.RequestState
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 
@@ -149,7 +158,6 @@ private fun HomeTabRoot(
     viewModel: HomeViewModel
 ) {
     val screenState = viewModel.screenState
-    val coroutineScope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         LazyColumn(
@@ -302,7 +310,8 @@ private fun DiscoverTabRoot(
     viewModel: HomeViewModel
 ) {
     val screenState = viewModel.screenState
-    val coroutineScope = rememberCoroutineScope()
+    val discoveryFilterState = viewModel.discoveryFilterState
+    val showFilterDialog = viewModel.showDiscoveryFilterDialog
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         LazyColumn(
@@ -353,12 +362,15 @@ private fun DiscoverTabRoot(
                 }
             }
 
-            // Recommended Games as list items
+            // Recommended Games as list items with discovery filter
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                SectionHeader(
+                DiscoverySectionHeader(
                     title = "Recommended For You",
-                    onSeeAllClick = { /* TODO */ }
+                    filterActive = viewModel.isDiscoveryFilterActive(),
+                    activeFilterCount = discoveryFilterState.activeFilterCount,
+                    onFilterClick = { viewModel.showDiscoveryFilterDialog() },
+                    onClearFilter = { viewModel.clearDiscoveryFilters() }
                 )
             }
 
@@ -376,19 +388,27 @@ private fun DiscoverTabRoot(
                     }
                 }
                 is RequestState.Success -> {
-                    items(
-                        items = state.data,
-                        key = { it.id }
-                    ) { game ->
-                        GameListItem(
-                            game = game,
-                            isInLibrary = viewModel.isGameInLibrary(game.id),
-                            onClick = { onGameClick(game.id) },
-                            onAddToLibrary = {
-                                viewModel.addGameToLibrary(game)
-                            },
-                            modifier = Modifier.animateItem()
-                        )
+                    if (state.data.isEmpty() && viewModel.isDiscoveryFilterActive()) {
+                        item {
+                            EmptyDiscoveryFilterResult(
+                                onClearFilter = { viewModel.clearDiscoveryFilters() }
+                            )
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = state.data,
+                            key = { _, game -> game.id }
+                        ) { index, game ->
+                            GameListItem(
+                                game = game,
+                                isInLibrary = viewModel.isGameInLibrary(game.id),
+                                onClick = { onGameClick(game.id) },
+                                onAddToLibrary = {
+                                    viewModel.addGameToLibrary(game)
+                                },
+                                modifier = Modifier.animateItem()
+                            )
+                        }
                     }
                 }
                 is RequestState.Error -> {
@@ -401,6 +421,21 @@ private fun DiscoverTabRoot(
                 }
                 else -> {}
             }
+        }
+
+        // Discovery Filter Dialog
+        if (showFilterDialog) {
+            DiscoveryFilterDialog(
+                state = discoveryFilterState,
+                onStateChange = { viewModel.updateDiscoveryFilterState(it) },
+                onDismiss = { viewModel.dismissDiscoveryFilterDialog() },
+                onApply = { viewModel.applyDiscoveryFilters() },
+                onDeveloperSearch = { viewModel.searchDevelopers(it) },
+                onSelectDeveloperWithStudios = { developer, _ -> 
+                    viewModel.selectDeveloperWithStudios(developer)
+                },
+                onClearAllFilters = { viewModel.clearDiscoveryFilters() }
+            )
         }
     }
 }
@@ -453,6 +488,197 @@ private fun ErrorSection(
         ) {
             Text(
                 text = "Retry",
+                color = ButtonPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeaderWithFilter(
+    title: String,
+    filterActive: Boolean,
+    filterLabel: String?,
+    onFilterClick: () -> Unit,
+    onClearFilter: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (filterActive && filterLabel != null) {
+                FilterChip(
+                    selected = true,
+                    onClick = onFilterClick,
+                    label = { Text(filterLabel, maxLines = 1) },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = onClearFilter,
+                            modifier = Modifier.size(18.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Clear filter",
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                )
+            } else {
+                IconButton(onClick = onFilterClick) {
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = "Filter by studio",
+                        tint = ButtonPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyFilterResult(
+    studioName: String,
+    onClearFilter: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "🎮",
+            fontSize = 48.sp
+        )
+        Text(
+            text = "No games found",
+            color = TextSecondary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Text(
+            text = "No recommended games from $studioName in your current list",
+            color = TextSecondary.copy(alpha = 0.7f),
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        TextButton(
+            onClick = onClearFilter,
+            modifier = Modifier.padding(top = 16.dp)
+        ) {
+            Text(
+                text = "Clear Filter",
+                color = ButtonPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiscoverySectionHeader(
+    title: String,
+    filterActive: Boolean,
+    activeFilterCount: Int,
+    onFilterClick: () -> Unit,
+    onClearFilter: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (filterActive) {
+                FilterChip(
+                    selected = true,
+                    onClick = onFilterClick,
+                    label = { Text("$activeFilterCount Filters", maxLines = 1) },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = onClearFilter,
+                            modifier = Modifier.size(18.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Clear filters",
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                )
+            } else {
+                IconButton(onClick = onFilterClick) {
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = "Open filters",
+                        tint = ButtonPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyDiscoveryFilterResult(
+    onClearFilter: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "🔍",
+            fontSize = 48.sp
+        )
+        Text(
+            text = "No games found",
+            color = TextSecondary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Text(
+            text = "Try adjusting your filters to find more games",
+            color = TextSecondary.copy(alpha = 0.7f),
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        TextButton(
+            onClick = onClearFilter,
+            modifier = Modifier.padding(top = 16.dp)
+        ) {
+            Text(
+                text = "Clear All Filters",
                 color = ButtonPrimary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold

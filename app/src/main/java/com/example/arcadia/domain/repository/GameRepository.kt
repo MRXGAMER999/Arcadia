@@ -45,5 +45,28 @@ interface GameRepository {
      * Get game details with trailer and screenshots
      */
     fun getGameDetailsWithMedia(gameId: Int): Flow<RequestState<Game>>
+
+    /**
+     * Get games filtered by developer/publisher slugs
+     */
+    fun getGamesByStudios(
+        developerSlugs: String? = null,
+        publisherSlugs: String? = null,
+        page: Int = 1,
+        pageSize: Int = 20
+    ): Flow<RequestState<List<Game>>>
+
+    /**
+     * Get games with comprehensive filters for discovery
+     */
+    fun getFilteredGames(
+        developerSlugs: String? = null,
+        genres: String? = null,
+        startDate: String? = null,
+        endDate: String? = null,
+        ordering: String? = null,
+        page: Int = 1,
+        pageSize: Int = 40
+    ): Flow<RequestState<List<Game>>>
 }
 

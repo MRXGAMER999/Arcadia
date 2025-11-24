@@ -12,6 +12,7 @@ import com.example.arcadia.domain.repository.SortOrder
 import com.example.arcadia.util.RequestState
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -20,13 +21,79 @@ import kotlinx.coroutines.tasks.await
 
 class GameListRepositoryImpl : GameListRepository {
     
-    private val TAG = "GameListRepository"
+    companion object {
+        private const val TAG = "GameListRepository"
+        private const val COLLECTION_USERS = "users"
+        private const val COLLECTION_GAME_LIST = "gameList"
+        private const val FIELD_ADDED_AT = "addedAt"
+        private const val FIELD_STATUS = "status"
+        private const val FIELD_GENRES = "genres"
+        private const val FIELD_RAWG_ID = "rawgId"
+        private const val DEFAULT_FUTURE_DATE = "9999-12-31"
+        private const val MIN_RATING = 0f
+        private const val MAX_RATING = 10f
+    }
+    
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     
     private fun getCurrentUserId(): String? = auth.currentUser?.uid
     
+    /**
+     * Extension function to apply client-side sorting to game list entries.
+     * Extracted to avoid code duplication across multiple query methods.
+     */
+    private fun List<GameListEntry>.applySorting(sortOrder: SortOrder): List<GameListEntry> = 
+        when (sortOrder) {
+            SortOrder.TITLE_A_Z -> sortedBy { it.name.lowercase() }
+            SortOrder.TITLE_Z_A -> sortedByDescending { it.name.lowercase() }
+            SortOrder.RATING_HIGH -> sortedByDescending { it.rating ?: -1f }
+            SortOrder.RATING_LOW -> sortedBy { it.rating ?: Float.MAX_VALUE }
+            SortOrder.RELEASE_NEW -> sortedByDescending { it.releaseDate ?: "" }
+            SortOrder.RELEASE_OLD -> sortedBy { it.releaseDate ?: DEFAULT_FUTURE_DATE }
+            else -> this // Already sorted by Firestore (NEWEST_FIRST, OLDEST_FIRST)
+        }
+    
+    /**
+     * Determines if the sort order can be handled by Firestore directly.
+     */
+    private fun usesFirestoreSort(sortOrder: SortOrder): Boolean = 
+        sortOrder in listOf(SortOrder.NEWEST_FIRST, SortOrder.OLDEST_FIRST)
+    
+    /**
+     * Gets the Firestore query direction for date-based sorting.
+     */
+    private fun getFirestoreDirection(sortOrder: SortOrder): Query.Direction = 
+        when (sortOrder) {
+            SortOrder.NEWEST_FIRST -> Query.Direction.DESCENDING
+            SortOrder.OLDEST_FIRST -> Query.Direction.ASCENDING
+            else -> Query.Direction.DESCENDING
+        }
+    
+    /**
+     * Parses Firestore documents into GameListEntry objects.
+     */
+    private fun parseGameEntries(documents: List<com.google.firebase.firestore.DocumentSnapshot>): List<GameListEntry> =
+        documents.mapNotNull { doc ->
+            try {
+                doc.toObject(GameListEntryDto::class.java)?.toGameListEntry(doc.id)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing game entry: ${e.message}", e)
+                null
+            }
+        }
+    
+    /**
+     * Gets the user's game list collection reference.
+     */
+    private fun getUserGameListCollection(userId: String) = 
+        firestore.collection(COLLECTION_USERS)
+            .document(userId)
+            .collection(COLLECTION_GAME_LIST)
+    
     override fun getGameList(sortOrder: SortOrder): Flow<RequestState<List<GameListEntry>>> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+        
         try {
             val userId = getCurrentUserId()
             if (userId == null) {
@@ -37,25 +104,12 @@ class GameListRepositoryImpl : GameListRepository {
             
             send(RequestState.Loading)
             
-            // For Title and Rating sorting, we need to fetch all and sort client-side
-            // For date-based sorting, we can use Firestore orderBy
-            val usesFirestoreSort = sortOrder in listOf(SortOrder.NEWEST_FIRST, SortOrder.OLDEST_FIRST)
+            val useFirestore = usesFirestoreSort(sortOrder)
+            val direction = getFirestoreDirection(sortOrder)
             
-            val direction = when (sortOrder) {
-                SortOrder.NEWEST_FIRST -> Query.Direction.DESCENDING
-                SortOrder.OLDEST_FIRST -> Query.Direction.ASCENDING
-                else -> Query.Direction.DESCENDING // Default for client-side sorting
-            }
-            
-            val listenerRegistration = firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            listenerRegistration = getUserGameListCollection(userId)
                 .let { query ->
-                    if (usesFirestoreSort) {
-                        query.orderBy("addedAt", direction)
-                    } else {
-                        query // No Firestore sorting, will sort client-side
-                    }
+                    if (useFirestore) query.orderBy(FIELD_ADDED_AT, direction) else query
                 }
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -64,37 +118,19 @@ class GameListRepositoryImpl : GameListRepository {
                         return@addSnapshotListener
                     }
                     
-                    if (snapshot != null) {
-                        val games = snapshot.documents.mapNotNull { doc ->
-                            try {
-                                doc.toObject(GameListEntryDto::class.java)?.toGameListEntry(doc.id)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error parsing game entry: ${e.message}", e)
-                                null
-                            }
-                        }
-                        
-                        // Apply client-side sorting for Title, Rating, and Release Date
-                        val sortedGames = when (sortOrder) {
-                            SortOrder.TITLE_A_Z -> games.sortedBy { it.name.lowercase() }
-                            SortOrder.TITLE_Z_A -> games.sortedByDescending { it.name.lowercase() }
-                            SortOrder.RATING_HIGH -> games.sortedByDescending { it.rating ?: -1f }
-                            SortOrder.RATING_LOW -> games.sortedBy { it.rating ?: Float.MAX_VALUE }
-                            SortOrder.RELEASE_NEW -> games.sortedByDescending { it.releaseDate ?: "" }
-                            SortOrder.RELEASE_OLD -> games.sortedBy { it.releaseDate ?: "9999-12-31" }
-                            else -> games // Already sorted by Firestore
-                        }
-                        
-                        trySend(RequestState.Success(sortedGames))
-                    } else {
-                        trySend(RequestState.Success(emptyList()))
-                    }
+                    val games = snapshot?.documents?.let { parseGameEntries(it) } ?: emptyList()
+                    val sortedGames = games.applySorting(sortOrder)
+                    trySend(RequestState.Success(sortedGames))
                 }
             
-            awaitClose { listenerRegistration.remove() }
+            awaitClose { 
+                listenerRegistration?.remove()
+                Log.d(TAG, "Game list listener removed")
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in getGameList: ${e.message}", e)
+            listenerRegistration?.remove()
             send(RequestState.Error("Error fetching games: ${e.message}"))
             close()
         }
@@ -104,6 +140,8 @@ class GameListRepositoryImpl : GameListRepository {
         status: GameStatus,
         sortOrder: SortOrder
     ): Flow<RequestState<List<GameListEntry>>> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+        
         try {
             val userId = getCurrentUserId()
             if (userId == null) {
@@ -114,24 +152,13 @@ class GameListRepositoryImpl : GameListRepository {
             
             send(RequestState.Loading)
             
-            val usesFirestoreSort = sortOrder in listOf(SortOrder.NEWEST_FIRST, SortOrder.OLDEST_FIRST)
+            val useFirestore = usesFirestoreSort(sortOrder)
+            val direction = getFirestoreDirection(sortOrder)
             
-            val direction = when (sortOrder) {
-                SortOrder.NEWEST_FIRST -> Query.Direction.DESCENDING
-                SortOrder.OLDEST_FIRST -> Query.Direction.ASCENDING
-                else -> Query.Direction.DESCENDING // Default for client-side sorting
-            }
-            
-            val listenerRegistration = firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
-                .whereEqualTo("status", status.name)
+            listenerRegistration = getUserGameListCollection(userId)
+                .whereEqualTo(FIELD_STATUS, status.name)
                 .let { query ->
-                    if (usesFirestoreSort) {
-                        query.orderBy("addedAt", direction)
-                    } else {
-                        query
-                    }
+                    if (useFirestore) query.orderBy(FIELD_ADDED_AT, direction) else query
                 }
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -140,37 +167,19 @@ class GameListRepositoryImpl : GameListRepository {
                         return@addSnapshotListener
                     }
                     
-                    if (snapshot != null) {
-                        val games = snapshot.documents.mapNotNull { doc ->
-                            try {
-                                doc.toObject(GameListEntryDto::class.java)?.toGameListEntry(doc.id)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error parsing game entry: ${e.message}", e)
-                                null
-                            }
-                        }
-                        
-                        // Apply client-side sorting
-                        val sortedGames = when (sortOrder) {
-                            SortOrder.TITLE_A_Z -> games.sortedBy { it.name.lowercase() }
-                            SortOrder.TITLE_Z_A -> games.sortedByDescending { it.name.lowercase() }
-                            SortOrder.RATING_HIGH -> games.sortedByDescending { it.rating ?: -1f }
-                            SortOrder.RATING_LOW -> games.sortedBy { it.rating ?: Float.MAX_VALUE }
-                            SortOrder.RELEASE_NEW -> games.sortedByDescending { it.releaseDate ?: "" }
-                            SortOrder.RELEASE_OLD -> games.sortedBy { it.releaseDate ?: "9999-12-31" }
-                            else -> games
-                        }
-                        
-                        trySend(RequestState.Success(sortedGames))
-                    } else {
-                        trySend(RequestState.Success(emptyList()))
-                    }
+                    val games = snapshot?.documents?.let { parseGameEntries(it) } ?: emptyList()
+                    val sortedGames = games.applySorting(sortOrder)
+                    trySend(RequestState.Success(sortedGames))
                 }
             
-            awaitClose { listenerRegistration.remove() }
+            awaitClose { 
+                listenerRegistration?.remove()
+                Log.d(TAG, "Game list by status listener removed")
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in getGameListByStatus: ${e.message}", e)
+            listenerRegistration?.remove()
             send(RequestState.Error("Error fetching games: ${e.message}"))
             close()
         }
@@ -180,6 +189,8 @@ class GameListRepositoryImpl : GameListRepository {
         genre: String,
         sortOrder: SortOrder
     ): Flow<RequestState<List<GameListEntry>>> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+        
         try {
             val userId = getCurrentUserId()
             if (userId == null) {
@@ -190,24 +201,13 @@ class GameListRepositoryImpl : GameListRepository {
             
             send(RequestState.Loading)
             
-            val usesFirestoreSort = sortOrder in listOf(SortOrder.NEWEST_FIRST, SortOrder.OLDEST_FIRST)
+            val useFirestore = usesFirestoreSort(sortOrder)
+            val direction = getFirestoreDirection(sortOrder)
             
-            val direction = when (sortOrder) {
-                SortOrder.NEWEST_FIRST -> Query.Direction.DESCENDING
-                SortOrder.OLDEST_FIRST -> Query.Direction.ASCENDING
-                else -> Query.Direction.DESCENDING
-            }
-            
-            val listenerRegistration = firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
-                .whereArrayContains("genres", genre)
+            listenerRegistration = getUserGameListCollection(userId)
+                .whereArrayContains(FIELD_GENRES, genre)
                 .let { query ->
-                    if (usesFirestoreSort) {
-                        query.orderBy("addedAt", direction)
-                    } else {
-                        query
-                    }
+                    if (useFirestore) query.orderBy(FIELD_ADDED_AT, direction) else query
                 }
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -216,43 +216,27 @@ class GameListRepositoryImpl : GameListRepository {
                         return@addSnapshotListener
                     }
                     
-                    if (snapshot != null) {
-                        val games = snapshot.documents.mapNotNull { doc ->
-                            try {
-                                doc.toObject(GameListEntryDto::class.java)?.toGameListEntry(doc.id)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error parsing game entry: ${e.message}", e)
-                                null
-                            }
-                        }
-                        
-                        // Apply client-side sorting
-                        val sortedGames = when (sortOrder) {
-                            SortOrder.TITLE_A_Z -> games.sortedBy { it.name.lowercase() }
-                            SortOrder.TITLE_Z_A -> games.sortedByDescending { it.name.lowercase() }
-                            SortOrder.RATING_HIGH -> games.sortedByDescending { it.rating ?: -1f }
-                            SortOrder.RATING_LOW -> games.sortedBy { it.rating ?: Float.MAX_VALUE }
-                            SortOrder.RELEASE_NEW -> games.sortedByDescending { it.releaseDate ?: "" }
-                            SortOrder.RELEASE_OLD -> games.sortedBy { it.releaseDate ?: "9999-12-31" }
-                            else -> games
-                        }
-                        
-                        trySend(RequestState.Success(sortedGames))
-                    } else {
-                        trySend(RequestState.Success(emptyList()))
-                    }
+                    val games = snapshot?.documents?.let { parseGameEntries(it) } ?: emptyList()
+                    val sortedGames = games.applySorting(sortOrder)
+                    trySend(RequestState.Success(sortedGames))
                 }
             
-            awaitClose { listenerRegistration.remove() }
+            awaitClose { 
+                listenerRegistration?.remove()
+                Log.d(TAG, "Game list by genre listener removed")
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in getGameListByGenre: ${e.message}", e)
+            listenerRegistration?.remove()
             send(RequestState.Error("Error fetching games: ${e.message}"))
             close()
         }
     }
     
     override fun getGameEntry(entryId: String): Flow<RequestState<GameListEntry>> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+        
         try {
             val userId = getCurrentUserId()
             if (userId == null) {
@@ -263,9 +247,7 @@ class GameListRepositoryImpl : GameListRepository {
             
             send(RequestState.Loading)
             
-            val listenerRegistration = firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            listenerRegistration = getUserGameListCollection(userId)
                 .document(entryId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -291,10 +273,14 @@ class GameListRepositoryImpl : GameListRepository {
                     }
                 }
             
-            awaitClose { listenerRegistration.remove() }
+            awaitClose { 
+                listenerRegistration?.remove()
+                Log.d(TAG, "Game entry listener removed")
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in getGameEntry: ${e.message}", e)
+            listenerRegistration?.remove()
             send(RequestState.Error("Error fetching game: ${e.message}"))
             close()
         }
@@ -306,13 +292,10 @@ class GameListRepositoryImpl : GameListRepository {
     ): RequestState<String> {
         return try {
             val userId = getCurrentUserId()
-            if (userId == null) {
-                return RequestState.Error("User not authenticated")
-            }
+                ?: return RequestState.Error("User not authenticated")
             
             // Check if game already exists
-            val existingId = getEntryIdByRawgId(game.id)
-            if (existingId != null) {
+            if (getEntryIdByRawgId(game.id) != null) {
                 return RequestState.Error("Game already in list")
             }
             
@@ -333,9 +316,7 @@ class GameListRepositoryImpl : GameListRepository {
                 releaseDate = game.released
             )
             
-            val docRef = firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            val docRef = getUserGameListCollection(userId)
                 .add(entry.toDto())
                 .await()
             
@@ -351,19 +332,14 @@ class GameListRepositoryImpl : GameListRepository {
     override suspend fun addGameListEntry(entry: GameListEntry): RequestState<String> {
         return try {
             val userId = getCurrentUserId()
-            if (userId == null) {
-                return RequestState.Error("User not authenticated")
-            }
+                ?: return RequestState.Error("User not authenticated")
             
             // Check if game already exists
-            val existingId = getEntryIdByRawgId(entry.rawgId)
-            if (existingId != null) {
+            if (getEntryIdByRawgId(entry.rawgId) != null) {
                 return RequestState.Error("Game already in list")
             }
             
-            val docRef = firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            val docRef = getUserGameListCollection(userId)
                 .add(entry.toDto())
                 .await()
             
@@ -379,18 +355,14 @@ class GameListRepositoryImpl : GameListRepository {
     override suspend fun updateGameStatus(entryId: String, status: GameStatus): RequestState<Unit> {
         return try {
             val userId = getCurrentUserId()
-            if (userId == null) {
-                return RequestState.Error("User not authenticated")
-            }
+                ?: return RequestState.Error("User not authenticated")
             
             val updates = mapOf(
-                "status" to status.name,
+                FIELD_STATUS to status.name,
                 "updatedAt" to System.currentTimeMillis()
             )
             
-            firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            getUserGameListCollection(userId)
                 .document(entryId)
                 .update(updates)
                 .await()
@@ -407,13 +379,11 @@ class GameListRepositoryImpl : GameListRepository {
     override suspend fun updateGameRating(entryId: String, rating: Float?): RequestState<Unit> {
         return try {
             val userId = getCurrentUserId()
-            if (userId == null) {
-                return RequestState.Error("User not authenticated")
-            }
+                ?: return RequestState.Error("User not authenticated")
             
             // Validate rating
-            if (rating != null && (rating < 0f || rating > 10f)) {
-                return RequestState.Error("Rating must be between 0 and 10")
+            if (rating != null && (rating < MIN_RATING || rating > MAX_RATING)) {
+                return RequestState.Error("Rating must be between $MIN_RATING and $MAX_RATING")
             }
             
             val updates = mapOf(
@@ -421,9 +391,7 @@ class GameListRepositoryImpl : GameListRepository {
                 "updatedAt" to System.currentTimeMillis()
             )
             
-            firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            getUserGameListCollection(userId)
                 .document(entryId)
                 .update(updates)
                 .await()
@@ -440,18 +408,14 @@ class GameListRepositoryImpl : GameListRepository {
     override suspend fun updateGameReview(entryId: String, review: String): RequestState<Unit> {
         return try {
             val userId = getCurrentUserId()
-            if (userId == null) {
-                return RequestState.Error("User not authenticated")
-            }
+                ?: return RequestState.Error("User not authenticated")
             
             val updates = mapOf(
                 "review" to review,
                 "updatedAt" to System.currentTimeMillis()
             )
             
-            firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            getUserGameListCollection(userId)
                 .document(entryId)
                 .update(updates)
                 .await()
@@ -468,9 +432,7 @@ class GameListRepositoryImpl : GameListRepository {
     override suspend fun updateHoursPlayed(entryId: String, hours: Int): RequestState<Unit> {
         return try {
             val userId = getCurrentUserId()
-            if (userId == null) {
-                return RequestState.Error("User not authenticated")
-            }
+                ?: return RequestState.Error("User not authenticated")
             
             if (hours < 0) {
                 return RequestState.Error("Hours played cannot be negative")
@@ -481,9 +443,7 @@ class GameListRepositoryImpl : GameListRepository {
                 "updatedAt" to System.currentTimeMillis()
             )
             
-            firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            getUserGameListCollection(userId)
                 .document(entryId)
                 .update(updates)
                 .await()
@@ -500,21 +460,17 @@ class GameListRepositoryImpl : GameListRepository {
     override suspend fun updateGameEntry(entry: GameListEntry): RequestState<Unit> {
         return try {
             val userId = getCurrentUserId()
-            if (userId == null) {
-                return RequestState.Error("User not authenticated")
-            }
+                ?: return RequestState.Error("User not authenticated")
             
             // Validate rating
-            if (entry.rating != null && (entry.rating < 0f || entry.rating > 10f)) {
-                return RequestState.Error("Rating must be between 0 and 10")
+            if (entry.rating != null && (entry.rating < MIN_RATING || entry.rating > MAX_RATING)) {
+                return RequestState.Error("Rating must be between $MIN_RATING and $MAX_RATING")
             }
             
             // Update the updatedAt timestamp
             val updatedEntry = entry.copy(updatedAt = System.currentTimeMillis())
             
-            firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            getUserGameListCollection(userId)
                 .document(entry.id)
                 .set(updatedEntry.toDto())
                 .await()
@@ -531,13 +487,9 @@ class GameListRepositoryImpl : GameListRepository {
     override suspend fun removeGameFromList(entryId: String): RequestState<Unit> {
         return try {
             val userId = getCurrentUserId()
-            if (userId == null) {
-                return RequestState.Error("User not authenticated")
-            }
+                ?: return RequestState.Error("User not authenticated")
             
-            firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
+            getUserGameListCollection(userId)
                 .document(entryId)
                 .delete()
                 .await()
@@ -555,10 +507,8 @@ class GameListRepositoryImpl : GameListRepository {
         return try {
             val userId = getCurrentUserId() ?: return false
             
-            val snapshot = firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
-                .whereEqualTo("rawgId", rawgId)
+            val snapshot = getUserGameListCollection(userId)
+                .whereEqualTo(FIELD_RAWG_ID, rawgId)
                 .limit(1)
                 .get()
                 .await()
@@ -575,19 +525,13 @@ class GameListRepositoryImpl : GameListRepository {
         return try {
             val userId = getCurrentUserId() ?: return null
             
-            val snapshot = firestore.collection("users")
-                .document(userId)
-                .collection("gameList")
-                .whereEqualTo("rawgId", rawgId)
+            val snapshot = getUserGameListCollection(userId)
+                .whereEqualTo(FIELD_RAWG_ID, rawgId)
                 .limit(1)
                 .get()
                 .await()
             
-            if (!snapshot.isEmpty) {
-                snapshot.documents.first().id
-            } else {
-                null
-            }
+            snapshot.documents.firstOrNull()?.id
             
         } catch (e: Exception) {
             Log.e(TAG, "Error getting entry ID by RAWG ID: ${e.message}", e)

@@ -1,10 +1,16 @@
 package com.example
 
 import android.app.Application
+import com.example.arcadia.data.local.StudioCacheManager
 import com.example.arcadia.di.appModule
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import org.koin.android.ext.android.get
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.GlobalContext.startKoin
@@ -52,6 +58,17 @@ class MyApplication : Application() {
             androidContext(this@MyApplication)
             modules(appModule)
         }
-    }
 
+        // Prefetch popular studios cache on startup (fire-and-forget)
+        val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        applicationScope.launch {
+            try {
+                val cacheManager: StudioCacheManager = get()
+                cacheManager.prefetchPopularStudios()
+                android.util.Log.d("MyApplication", "Studio cache prefetched")
+            } catch (e: Exception) {
+                android.util.Log.w("MyApplication", "Studio prefetch failed", e)
+            }
+        }
+    }
 }

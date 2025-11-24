@@ -15,7 +15,7 @@ val viewModelModule = module {
     viewModel { SignInViewModel() }
     viewModel { AuthViewModel(get()) }
     viewModel { EditProfileViewModel(get()) }
-    viewModel { HomeViewModel(get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
     viewModel { MyGamesViewModel(get(), get()) }
     viewModel { DetailsScreenViewModel(get(), get()) }
     viewModel { SearchViewModel(get(), get()) }
