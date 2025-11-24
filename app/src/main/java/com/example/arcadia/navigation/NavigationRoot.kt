@@ -41,6 +41,9 @@ object MyGamesScreenKey : NavKey
 object SearchScreenKey : NavKey
 
 @Serializable
+object AnalyticsScreenKey : NavKey
+
+@Serializable
 data class DetailsScreenKey(val gameId: Int) : NavKey
 
 @Composable
@@ -99,6 +102,9 @@ fun NavigationRoot(
                             onNavigateToSearch = {
                                 backStack.add(SearchScreenKey)
                             },
+                            onNavigateToAnalytics = {
+                                backStack.add(AnalyticsScreenKey)
+                            },
                             onGameClick = { gameId ->
                                 backStack.add(DetailsScreenKey(gameId))
                             }
@@ -146,6 +152,9 @@ fun NavigationRoot(
                             onGameClick = { gameId ->
                                 backStack.add(DetailsScreenKey(gameId))
                             },
+                            onNavigateToAnalytics = {
+                                backStack.add(AnalyticsScreenKey)
+                            },
                             showBackButton = true
                         )
                     }
@@ -161,6 +170,15 @@ fun NavigationRoot(
                             onGameClick = { gameId ->
                                 backStack.add(DetailsScreenKey(gameId))
                             }
+                        )
+                    }
+                }
+                is AnalyticsScreenKey -> {
+                    NavEntry(
+                        key = key,
+                    ) {
+                        com.example.arcadia.presentation.screens.analytics.AnalyticsScreen(
+                            onNavigateBack = { backStack.remove(key) }
                         )
                     }
                 }

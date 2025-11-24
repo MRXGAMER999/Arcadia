@@ -70,6 +70,7 @@ fun HomeTabsNavContent(
     modifier: Modifier = Modifier,
     selectedIndex: Int,
     onGameClick: (Int) -> Unit = {},
+    onNavigateToAnalytics: () -> Unit = {},
     snackbarHostState: SnackbarHostState,
     viewModel: HomeViewModel
 ) {
@@ -111,7 +112,10 @@ fun HomeTabsNavContent(
 							)
 						}
 						is LibraryTab -> NavEntry(key) {
-							LibraryTabRoot(onGameClick = onGameClick)
+							LibraryTabRoot(
+								onGameClick = onGameClick,
+								onNavigateToAnalytics = onNavigateToAnalytics
+							)
 						}
 						else -> error("Unknown key for Home tabs backstack: $key")
 					}
@@ -403,12 +407,14 @@ private fun DiscoverTabRoot(
 
 @Composable
 private fun LibraryTabRoot(
-    onGameClick: (Int) -> Unit
+    onGameClick: (Int) -> Unit,
+    onNavigateToAnalytics: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         MyGamesScreen(
             onNavigateBack = { /* Don't navigate back, we're in a tab */ },
-            onGameClick = onGameClick
+            onGameClick = onGameClick,
+            onNavigateToAnalytics = onNavigateToAnalytics
         )
     }
 }
