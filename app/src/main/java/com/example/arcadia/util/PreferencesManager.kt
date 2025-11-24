@@ -2,7 +2,10 @@ package com.example.arcadia.util
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.arcadia.domain.model.DiscoverySortOrder
+import com.example.arcadia.domain.model.DiscoverySortType
 import com.example.arcadia.domain.model.GameStatus
+import com.example.arcadia.domain.model.ReleaseTimeframe
 import com.example.arcadia.util.Constants.PREFERENCES_KEY
 import com.example.arcadia.util.Constants.PREFERENCES_NAME
 import androidx.core.content.edit
@@ -23,6 +26,13 @@ class PreferencesManager(context: Context) {
         private const val KEY_SELECTED_GENRES = "selected_genres"
         private const val KEY_SELECTED_STATUSES = "selected_statuses"
         private const val KEY_FILTER_PRESETS = "filter_presets"
+        
+        // Discovery filter keys
+        private const val KEY_DISCOVERY_SORT_TYPE = "discovery_sort_type"
+        private const val KEY_DISCOVERY_SORT_ORDER = "discovery_sort_order"
+        private const val KEY_DISCOVERY_GENRES = "discovery_genres"
+        private const val KEY_DISCOVERY_TIMEFRAME = "discovery_timeframe"
+        private const val KEY_DISCOVERY_DEVELOPERS = "discovery_developers"
     }
     
     fun setOnBoardingCompleted(completed: Boolean) {
@@ -134,6 +144,92 @@ class PreferencesManager(context: Context) {
         
         preferences.edit { 
             putString(KEY_FILTER_PRESETS, jsonArray.toString())
+        }
+    }
+    
+    // ==================== Discovery Filter Preferences ====================
+    
+    fun saveDiscoverySortType(sortType: DiscoverySortType) {
+        preferences.edit { putString(KEY_DISCOVERY_SORT_TYPE, sortType.name) }
+    }
+    
+    fun getDiscoverySortType(): DiscoverySortType {
+        val name = preferences.getString(KEY_DISCOVERY_SORT_TYPE, null)
+        return try {
+            name?.let { DiscoverySortType.valueOf(it) } ?: DiscoverySortType.POPULARITY
+        } catch (e: IllegalArgumentException) {
+            DiscoverySortType.POPULARITY
+        }
+    }
+    
+    fun saveDiscoverySortOrder(sortOrder: DiscoverySortOrder) {
+        preferences.edit { putString(KEY_DISCOVERY_SORT_ORDER, sortOrder.name) }
+    }
+    
+    fun getDiscoverySortOrder(): DiscoverySortOrder {
+        val name = preferences.getString(KEY_DISCOVERY_SORT_ORDER, null)
+        return try {
+            name?.let { DiscoverySortOrder.valueOf(it) } ?: DiscoverySortOrder.DESCENDING
+        } catch (e: IllegalArgumentException) {
+            DiscoverySortOrder.DESCENDING
+        }
+    }
+    
+    fun saveDiscoveryGenres(genres: Set<String>) {
+        preferences.edit { putStringSet(KEY_DISCOVERY_GENRES, genres) }
+    }
+    
+    fun getDiscoveryGenres(): Set<String> {
+        return preferences.getStringSet(KEY_DISCOVERY_GENRES, emptySet()) ?: emptySet()
+    }
+    
+    fun saveDiscoveryTimeframe(timeframe: ReleaseTimeframe) {
+        preferences.edit { putString(KEY_DISCOVERY_TIMEFRAME, timeframe.name) }
+    }
+    
+    fun getDiscoveryTimeframe(): ReleaseTimeframe {
+        val name = preferences.getString(KEY_DISCOVERY_TIMEFRAME, null)
+        return try {
+            name?.let { ReleaseTimeframe.valueOf(it) } ?: ReleaseTimeframe.ALL
+        } catch (e: IllegalArgumentException) {
+            ReleaseTimeframe.ALL
+        }
+    }
+    
+    fun saveDiscoveryDevelopers(developers: Map<String, Set<String>>) {
+        val jsonObject = JSONObject()
+        developers.forEach { (parent, subStudios) ->
+            jsonObject.put(parent, JSONArray(subStudios.toList()))
+        }
+        preferences.edit { putString(KEY_DISCOVERY_DEVELOPERS, jsonObject.toString()) }
+    }
+    
+    fun getDiscoveryDevelopers(): Map<String, Set<String>> {
+        val json = preferences.getString(KEY_DISCOVERY_DEVELOPERS, null) ?: return emptyMap()
+        return try {
+            val jsonObject = JSONObject(json)
+            val result = mutableMapOf<String, Set<String>>()
+            jsonObject.keys().forEach { key ->
+                val subStudiosArray = jsonObject.getJSONArray(key)
+                val subStudios = mutableSetOf<String>()
+                for (i in 0 until subStudiosArray.length()) {
+                    subStudios.add(subStudiosArray.getString(i))
+                }
+                result[key] = subStudios
+            }
+            result
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+    
+    fun clearDiscoveryFilters() {
+        preferences.edit {
+            remove(KEY_DISCOVERY_SORT_TYPE)
+            remove(KEY_DISCOVERY_SORT_ORDER)
+            remove(KEY_DISCOVERY_GENRES)
+            remove(KEY_DISCOVERY_TIMEFRAME)
+            remove(KEY_DISCOVERY_DEVELOPERS)
         }
     }
 }

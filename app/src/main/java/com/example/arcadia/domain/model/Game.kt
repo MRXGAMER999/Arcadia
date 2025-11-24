@@ -16,7 +16,9 @@ data class Game(
     val tags: List<String>,
     val screenshots: List<String> = emptyList(),
     val trailerUrl: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    val developers: List<String> = emptyList(),
+    val publishers: List<String> = emptyList()
 )
 
 

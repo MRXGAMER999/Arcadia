@@ -19,7 +19,9 @@ fun GameDto.toGame(): Game {
         genres = genres?.map { it.name } ?: emptyList(),
         tags = tags?.take(5)?.map { it.name } ?: emptyList(), // Limit to 5 tags
         screenshots = shortScreenshots?.map { it.image } ?: emptyList(),
-        description = descriptionRaw ?: description
+        description = descriptionRaw ?: description,
+        developers = developers?.map { it.name } ?: emptyList(),
+        publishers = publishers?.map { it.name } ?: emptyList()
     )
 }
 

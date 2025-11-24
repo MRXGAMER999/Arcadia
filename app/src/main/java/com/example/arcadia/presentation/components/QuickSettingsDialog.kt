@@ -62,6 +62,15 @@ fun QuickSettingsDialog(
 ) {
     var genreFilterExpanded by remember { mutableStateOf(false) }
     var statusFilterExpanded by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    
+    // Scroll to bottom when sections expand
+    LaunchedEffect(genreFilterExpanded, statusFilterExpanded) {
+        if (genreFilterExpanded || statusFilterExpanded) {
+            kotlinx.coroutines.delay(100)
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
     
     Dialog(onDismissRequest = onDismiss) {
         AnimatedVisibility(
@@ -93,20 +102,22 @@ fun QuickSettingsDialog(
         ) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth(0.96f)
-                    .fillMaxHeight(0.88f),
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.85f),
                 shape = RoundedCornerShape(20.dp),
                 color = Color(0xFF2A2E35)
             ) {
-            Column {
-                // Scrollable content
                 Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 18.dp)
-                        .padding(top = 18.dp, bottom = 12.dp)
+                    modifier = Modifier.fillMaxSize()
                 ) {
+                    // Scrollable content
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 20.dp, bottom = 12.dp)
+                    ) {
                     // Title with animated gradient effect
                     Text(
                         text = "Quick Settings",
@@ -304,18 +315,18 @@ fun QuickSettingsDialog(
                     )
                 }
 
-                // Fixed action buttons at bottom
-                HorizontalDivider(
-                    color = Color(0xFF3A3E45),
-                    thickness = 1.dp
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                    // Fixed action buttons at bottom
+                    HorizontalDivider(
+                        color = Color(0xFF3A3E45),
+                        thickness = 1.dp
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     TextButton(onClick = onDismiss) {
                         Text(
                             text = "Cancel",
@@ -460,13 +471,8 @@ private fun FilterSection(
         
         AnimatedVisibility(
             visible = isExpanded,
-            enter = fadeIn(tween(300)) + expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ),
-            exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+            enter = fadeIn(tween(200)) + expandVertically(tween(200)),
+            exit = fadeOut(tween(150)) + shrinkVertically(tween(150))
         ) {
             Column {
                 Spacer(modifier = Modifier.height(12.dp))

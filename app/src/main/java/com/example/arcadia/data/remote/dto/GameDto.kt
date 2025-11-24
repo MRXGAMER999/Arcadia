@@ -26,7 +26,7 @@ data class GameDto(
     @SerialName("released")
     val released: String? = null,
     @SerialName("tba")
-    val tba: Boolean,
+    val tba: Boolean = false,
     @SerialName("background_image")
     val backgroundImage: String? = null,
     @SerialName("rating")
@@ -50,7 +50,31 @@ data class GameDto(
     @SerialName("description")
     val description: String? = null,
     @SerialName("description_raw")
-    val descriptionRaw: String? = null
+    val descriptionRaw: String? = null,
+    @SerialName("developers")
+    val developers: List<DeveloperDto>? = null,
+    @SerialName("publishers")
+    val publishers: List<PublisherDto>? = null
+)
+
+@Serializable
+data class DeveloperDto(
+    @SerialName("id")
+    val id: Int,
+    @SerialName("name")
+    val name: String,
+    @SerialName("slug")
+    val slug: String
+)
+
+@Serializable
+data class PublisherDto(
+    @SerialName("id")
+    val id: Int,
+    @SerialName("name")
+    val name: String,
+    @SerialName("slug")
+    val slug: String
 )
 
 @Serializable
