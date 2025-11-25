@@ -91,8 +91,8 @@ class DetailsScreenViewModel(
             // If already in library, we just open the sheet to edit (tempGameEntry should be populated)
              uiState = uiState.copy(showRatingSheet = true)
         } else {
-            // If new, create a fresh entry and open sheet
-            val newEntry = game.toGameListEntry()
+            // If new, create a fresh entry with FINISHED status and open sheet
+            val newEntry = game.toGameListEntry(status = GameStatus.FINISHED)
             uiState = uiState.copy(tempGameEntry = newEntry, showRatingSheet = true)
         }
     }

@@ -49,6 +49,14 @@ fun GameRatingSheet(
     onSave: (GameListEntry) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scrollState = rememberScrollState()
+    
+    // Auto-scroll to bottom when sheet opens
+    LaunchedEffect(isOpen) {
+        if (isOpen) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
     
     // State management for sections
     var isBestAspectsExpanded by remember { mutableStateOf(true) }
@@ -129,7 +137,7 @@ fun GameRatingSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     .padding(horizontal = 18.dp)
                     .padding(bottom = 24.dp, top = 8.dp)
             ) {

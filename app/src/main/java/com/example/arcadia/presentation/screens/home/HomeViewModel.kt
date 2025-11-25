@@ -40,7 +40,9 @@ data class HomeScreenState(
     val newReleases: RequestState<List<Game>> = RequestState.Idle,
     val gamesInLibrary: Set<Int> = emptySet(), // Track rawgIds of games in library (now merged into gameListIds logic)
     val animatingGameIds: Set<Int> = emptySet(), // Games currently animating out
-    val addToLibraryState: AddToLibraryState = AddToLibraryState.Idle
+    val addToLibraryState: AddToLibraryState = AddToLibraryState.Idle,
+    val gameToAddWithStatus: Game? = null, // Game pending status selection
+    val isRefreshing: Boolean = false // Pull-to-refresh state
 )
 
 class HomeViewModel(
@@ -304,17 +306,16 @@ class HomeViewModel(
         // Exclude games in library but keep games that are currently animating out
         val excludeIds = screenState.gamesInLibrary - screenState.animatingGameIds
 
-        // Only refilter if exclude set changed AND we have filtered at least once
-        // This prevents skipping the initial filter when both sets are empty
-        if (excludeIds == lastExcludeIds && lastFilteredRecommendations.isNotEmpty()) {
-            android.util.Log.d("HomeViewModel", "Filter skipped: no changes (excludeIds=${excludeIds.size})")
-            // Still update state to ensure UI shows current filtered list
-            screenState = screenState.copy(recommendedGames = RequestState.Success(lastFilteredRecommendations))
+        // Always filter with the latest data to include newly loaded games
+        val filtered = lastRecommended.filter { it.id !in excludeIds }
+        
+        // Only skip if nothing has changed (same exclude set AND same filtered result size)
+        if (excludeIds == lastExcludeIds && filtered.size == lastFilteredRecommendations.size && lastFilteredRecommendations.isNotEmpty()) {
+            android.util.Log.d("HomeViewModel", "Filter skipped: no changes (excludeIds=${excludeIds.size}, games=${filtered.size})")
             return
         }
 
         lastExcludeIds = excludeIds
-        val filtered = lastRecommended.filter { it.id !in excludeIds }
         lastFilteredRecommendations = filtered
         android.util.Log.d("HomeViewModel", "Filter applied: ${lastRecommended.size} -> ${filtered.size} games (excluded ${excludeIds.size})")
         screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
@@ -336,11 +337,162 @@ class HomeViewModel(
         loadAllData()
     }
     
+    /**
+     * Refresh Home tab data - used for pull-to-refresh on Home screen.
+     * Loads more recommended games and refreshes horizontal sections.
+     */
+    fun refreshHome() {
+        viewModelScope.launch {
+            screenState = screenState.copy(isRefreshing = true)
+            
+            try {
+                // Load more recommended games directly (bypass guard)
+                fetchMoreRecommendedGames()
+                
+                // Also refresh the horizontal sections with fresh data
+                loadPopularGames()
+                loadUpcomingGames()
+                loadNewReleases()
+                
+                // Give a small delay for the refresh indicator to be visible
+                delay(800)
+            } finally {
+                screenState = screenState.copy(isRefreshing = false)
+            }
+        }
+    }
+    
+    /**
+     * Refresh Discover tab data - used for pull-to-refresh on Discover screen.
+     * Loads more discovery games based on current filters.
+     */
+    fun refreshDiscover() {
+        viewModelScope.launch {
+            screenState = screenState.copy(isRefreshing = true)
+            
+            try {
+                // Load more discovery games (works with or without filters)
+                fetchMoreDiscoveryGames()
+                
+                // Give a small delay for the refresh indicator to be visible
+                delay(800)
+            } finally {
+                screenState = screenState.copy(isRefreshing = false)
+            }
+        }
+    }
+    
+    /**
+     * Directly fetch more recommended games for pull-to-refresh.
+     * This bypasses the isLoadingMoreRecommendations guard.
+     */
+    private suspend fun fetchMoreRecommendedGames() {
+        try {
+            recommendationPage++
+            android.util.Log.d(TAG, "Refresh: Fetching recommended games page $recommendationPage")
+            gameRepository.getRecommendedGames(
+                tags = DEFAULT_RECOMMENDATION_TAGS,
+                page = recommendationPage,
+                pageSize = RECOMMENDATION_PAGE_SIZE
+            ).collect { state ->
+                if (state is RequestState.Success) {
+                    android.util.Log.d(TAG, "Refresh: Got ${state.data.size} new games")
+                    lastRecommended = lastRecommended + state.data
+                    applyRecommendationFilter()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Error fetching more recommendations on refresh", e)
+        }
+    }
+    
+    /**
+     * Directly fetch more discovery games for pull-to-refresh.
+     * This bypasses the isLoadingMoreDiscovery guard.
+     * If no filters are active, it fetches games with default ordering.
+     */
+    private suspend fun fetchMoreDiscoveryGames() {
+        try {
+            discoveryFilterPage++
+            android.util.Log.d(TAG, "Refresh: Fetching discovery games page $discoveryFilterPage (hasFilters=${discoveryFilterState.hasActiveFilters})")
+            
+            val developerSlugs = if (discoveryFilterState.selectedDevelopers.isNotEmpty()) {
+                discoveryFilterState.getAllDeveloperSlugs()
+            } else null
+
+            val genreSlugs = if (discoveryFilterState.selectedGenres.isNotEmpty()) {
+                discoveryFilterState.selectedGenres.joinToString(",") {
+                    it.lowercase().replace(" ", "-")
+                }
+            } else null
+
+            val (startDate, endDate) = calculateDateRange(discoveryFilterState.releaseTimeframe)
+            val ordering = getApiOrdering(discoveryFilterState.sortType, discoveryFilterState.sortOrder)
+
+            gameRepository.getFilteredGames(
+                developerSlugs = developerSlugs,
+                genres = genreSlugs,
+                startDate = startDate,
+                endDate = endDate,
+                ordering = ordering,
+                page = discoveryFilterPage,
+                pageSize = 40
+            ).collect { state ->
+                if (state is RequestState.Success && state.data.isNotEmpty()) {
+                    android.util.Log.d(TAG, "Refresh: Got ${state.data.size} new discovery games")
+                    lastDiscoveryResults = lastDiscoveryResults + state.data
+                    val filtered = lastDiscoveryResults.filter { it.id !in screenState.gamesInLibrary }
+                    screenState = screenState.copy(
+                        recommendedGames = RequestState.Success(filtered)
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Error fetching more discovery games on refresh", e)
+        }
+    }
+    
     fun isGameInLibrary(gameId: Int): Boolean {
         return screenState.gamesInLibrary.contains(gameId)
     }
     
+    /**
+     * Shows the status picker sheet for a game before adding to library.
+     */
     fun addGameToLibrary(game: Game) {
+        // Check if game is already in library first
+        if (isGameInLibrary(game.id)) {
+            viewModelScope.launch {
+                screenState = screenState.copy(
+                    addToLibraryState = AddToLibraryState.Error(
+                        message = "${game.name} is already in your library",
+                        gameId = game.id
+                    )
+                )
+                delay(DUPLICATE_CHECK_DELAY_MS)
+                screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
+            }
+            return
+        }
+        
+        // Show the status picker sheet
+        screenState = screenState.copy(gameToAddWithStatus = game)
+    }
+    
+    /**
+     * Dismisses the status picker sheet without adding the game.
+     */
+    fun dismissStatusPicker() {
+        screenState = screenState.copy(gameToAddWithStatus = null)
+    }
+    
+    /**
+     * Adds the game to library with the selected status.
+     */
+    fun addGameWithStatus(game: Game, status: GameStatus) {
+        // Dismiss the sheet immediately
+        screenState = screenState.copy(gameToAddWithStatus = null)
+        
         viewModelScope.launch {
             // Thread-safe check: add returns false if already present
             if (!gamesBeingAdded.add(game.id)) {
@@ -349,19 +501,6 @@ class HomeViewModel(
             }
 
             try {
-                // Check if game is already in library
-                if (isGameInLibrary(game.id)) {
-                    screenState = screenState.copy(
-                        addToLibraryState = AddToLibraryState.Error(
-                            message = "${game.name} is already in your library",
-                            gameId = game.id
-                        )
-                    )
-                    delay(DUPLICATE_CHECK_DELAY_MS)
-                    screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                    return@launch
-                }
-
                 // Set loading state
                 screenState = screenState.copy(
                     addToLibraryState = AddToLibraryState.Loading(gameId = game.id),
@@ -369,8 +508,8 @@ class HomeViewModel(
                 )
 
                 try {
-                    // Add to library - local state is kept in sync via real-time flow
-                    when (val result = gameListRepository.addGameToList(game, GameStatus.WANT)) {
+                    // Add to library with the selected status
+                    when (val result = gameListRepository.addGameToList(game, status)) {
                         is RequestState.Success -> {
                             screenState = screenState.copy(
                                 addToLibraryState = AddToLibraryState.Success(
