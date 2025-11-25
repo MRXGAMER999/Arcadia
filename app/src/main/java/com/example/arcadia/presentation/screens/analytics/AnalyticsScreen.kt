@@ -615,7 +615,7 @@ fun ErrorInsightsState(error: String, @Suppress("UNUSED_PARAMETER") onRetry: () 
 }
 
 @Composable
-fun AIInsightsContent(insights: com.example.arcadia.data.repository.GameInsights) {
+fun AIInsightsContent(insights: com.example.arcadia.domain.repository.GeminiRepository.GameInsights) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)

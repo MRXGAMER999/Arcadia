@@ -4,30 +4,128 @@ import android.util.Log
 import com.example.arcadia.BuildConfig
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
+import com.example.arcadia.domain.repository.GeminiRepository
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.generationConfig
+import kotlinx.serialization.Serializable
 import java.util.Locale
 
 /**
- * Repository for interacting with Google's Gemini AI
+ * Implementation of GeminiRepository for interacting with Google's Gemini AI
  */
-class GeminiRepository {
+class GeminiRepositoryImpl : GeminiRepository {
 
-    private val generativeModel = GenerativeModel(
+    // Model for structured data tasks (Game Suggestions) - Strict, JSON-only
+    private val jsonModel = GenerativeModel(
         modelName = "gemini-2.0-flash",
         apiKey = BuildConfig.GEMINI_API_KEY,
         generationConfig = generationConfig {
-            temperature = 0.8f
+            temperature = 0.4f // Lower temperature for accuracy
+            topK = 32
+            topP = 0.9f
+            maxOutputTokens = 2048
+            responseMimeType = "application/json"
+        }
+    )
+
+    // Model for creative writing tasks (Profile Analysis) - Creative, Free-form text
+    private val textModel = GenerativeModel(
+        modelName = "gemini-2.0-flash",
+        apiKey = BuildConfig.GEMINI_API_KEY,
+        generationConfig = generationConfig {
+            temperature = 0.8f // Higher temperature for creative personality analysis
             topK = 40
             topP = 0.95f
             maxOutputTokens = 2048
+            // No MIME type enforcement - allows natural text
         }
     )
 
     /**
+     * Internal DTO for JSON parsing of AI game suggestions
+     */
+    @Serializable
+    private data class AIGameSuggestionsDto(
+        val games: List<String>,
+        val reasoning: String? = null
+    )
+
+    /**
+     * Ask Gemini to suggest game names based on a natural language query.
+     * Returns a list of game names that can be searched via RAWG API.
+     */
+    override suspend fun suggestGames(userQuery: String, count: Int): Result<GeminiRepository.AIGameSuggestions> {
+        return try {
+            val prompt = """
+You are an elite gaming curator and industry expert with deep knowledge of game mechanics, narrative structures, and player psychology. Your goal is to provide the perfect game recommendations based on the user's intent.
+
+User Query: "$userQuery"
+Target Count: $count games
+
+# Analysis Steps:
+1. **Decode Intent:** Analyze the user's query to understand what they *really* want (e.g., "relaxing" = low stress/cozy; "hard" = challenge/mastery; "story" = narrative focus).
+2. **Identify Key Elements:** If they mention a specific game (e.g., "like Elden Ring"), identify its core pillars (exploration, difficulty, environmental storytelling) and find games that share those specific pillars.
+3. **Select Candidates:** Choose exactly $count games that best fit the criteria.
+
+# Selection Rules:
+1. **Strict Reality Check:** Return ONLY real, commercially released video games. No mods, no unreleased titles, no hallucinations.
+2. **Title Precision:** Use the exact official English title (e.g., "The Legend of Zelda: Breath of the Wild", not just "BotW").
+3. **Quality Filter:** Prioritize games with high critical acclaim (Metacritic/Steam ratings) unless the user specifically asks for "bad" or "trash" games.
+4. **Diversity:** Unless the query is very specific (e.g., "FPS games"), provide a mix of AAA hits and top-tier indie gems.
+5. **Relevance:** If a time period is mentioned, strictly adhere to it.
+6. **Sorting:** Order the list by relevance to the query, with the absolute best match first.
+
+# Output Format:
+Respond ONLY with a valid JSON object. Do not include markdown formatting (like ```json).
+{
+  "games": ["Exact Title 1", "Exact Title 2", ...],
+  "reasoning": "A concise, persuasive summary (max 2 sentences) explaining WHY these specific games fit the user's query. Highlight the common thread connecting them."
+}
+
+# Examples:
+- Query: "games like Stardew Valley"
+  -> {"games": ["Animal Crossing: New Horizons", "Graveyard Keeper", "Coral Island", ...], "reasoning": "These titles capture the cozy farming simulation loop, relationship building, and relaxing pacing you enjoy in Stardew Valley."}
+
+- Query: "hardest games ever"
+  -> {"games": ["Sekiro: Shadows Die Twice", "Super Meat Boy", "Celeste", ...], "reasoning": "These games are renowned for their punishing difficulty curves, requiring precise mechanical mastery and patience."}
+            """.trimIndent()
+
+            Log.d("GeminiRepository", "Asking Gemini for game suggestions: $userQuery")
+            
+            val response = jsonModel.generateContent(prompt)
+            val text = response.text?.trim() ?: throw Exception("Empty response from AI")
+            
+            Log.d("GeminiRepository", "Gemini response: $text")
+            
+            // Clean up response
+            val cleanJson = text
+                .removePrefix("```json")
+                .removePrefix("```")
+                .removeSuffix("```")
+                .trim()
+            
+            val json = kotlinx.serialization.json.Json { 
+                ignoreUnknownKeys = true 
+                isLenient = true
+            }
+            val parsed = json.decodeFromString<AIGameSuggestionsDto>(cleanJson)
+            
+            Log.d("GeminiRepository", "Parsed ${parsed.games.size} game suggestions")
+            Result.success(GeminiRepository.AIGameSuggestions(
+                games = parsed.games,
+                reasoning = parsed.reasoning
+            ))
+            
+        } catch (e: Exception) {
+            Log.e("GeminiRepository", "Error getting game suggestions", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Analyzes a user's gaming profile and returns personalized insights
      */
-    suspend fun analyzeGamingProfile(games: List<GameListEntry>): Result<GameInsights> {
+    override suspend fun analyzeGamingProfile(games: List<GameListEntry>): Result<GeminiRepository.GameInsights> {
         return try {
             if (games.isEmpty()) {
                 return Result.failure(Exception("No games to analyze"))
@@ -38,7 +136,7 @@ class GeminiRepository {
 
             Log.d("GeminiRepository", "Sending prompt to Gemini AI...")
 
-            val response = generativeModel.generateContent(prompt)
+            val response = textModel.generateContent(prompt)
             val analysisText = response.text ?: throw Exception("Empty response from AI")
 
             Log.d("GeminiRepository", "Received response: ${analysisText.take(100)}...")
@@ -248,7 +346,7 @@ Now analyze this player's profile with these guidelines in mind.
     /**
      * Parses the AI response and extracts structured insights
      */
-    private fun parseAIResponse(response: String, games: List<GameListEntry>): GameInsights {
+    private fun parseAIResponse(response: String, games: List<GameListEntry>): GeminiRepository.GameInsights {
         try {
             val personalitySection = extractSection(response, "PERSONALITY ANALYSIS")
             val playStyleSection = extractSection(response, "PLAY STYLE")
@@ -270,7 +368,7 @@ Now analyze this player's profile with these guidelines in mind.
                 .take(3)
                 .map { it.first }
 
-            return GameInsights(
+            return GeminiRepository.GameInsights(
                 personalityAnalysis = personalitySection.ifEmpty { "You're building your gaming journey! Keep adding games to discover your unique gaming identity." },
                 preferredGenres = topGenres,
                 playStyle = playStyleSection.ifEmpty { "Your play style is emerging as you build your collection." },
@@ -303,15 +401,4 @@ Now analyze this player's profile with these guidelines in mind.
         return sectionText.trim()
     }
 }
-
-/**
- * Represents AI-generated insights about a user's gaming profile
- */
-data class GameInsights(
-    val personalityAnalysis: String,
-    val preferredGenres: List<String>,
-    val playStyle: String,
-    val funFacts: List<String>,
-    val recommendations: String
-)
 
