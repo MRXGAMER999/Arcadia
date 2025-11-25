@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import com.example.arcadia.presentation.components.TopNotification
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchField
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchResultCard
+import com.example.arcadia.presentation.screens.searchScreen.components.SearchSuggestions
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
@@ -138,7 +139,26 @@ fun SearchScreen(
                     modifier = Modifier.fillMaxSize(),
                     onIdle = {
                         if (state.aiError == null) {
-                            EmptySearchState(isAIMode = state.isAIMode)
+                            // Show suggestions when idle (history, trending, personalized)
+                            val hasContent = state.searchHistory.isNotEmpty() || 
+                                           state.trendingGames is RequestState.Success ||
+                                           state.personalizedSuggestions.isNotEmpty()
+                            
+                            if (hasContent) {
+                                SearchSuggestions(
+                                    searchHistory = state.searchHistory,
+                                    trendingGames = state.trendingGames,
+                                    personalizedSuggestions = state.personalizedSuggestions,
+                                    isAIMode = state.isAIMode,
+                                    onHistoryItemClick = { query -> viewModel.selectHistoryItem(query) },
+                                    onHistoryItemRemove = { query -> viewModel.removeFromHistory(query) },
+                                    onClearHistory = { viewModel.clearHistory() },
+                                    onTrendingGameClick = onGameClick,
+                                    onSuggestionClick = { suggestion -> viewModel.selectHistoryItem(suggestion) }
+                                )
+                            } else {
+                                EmptySearchState(isAIMode = state.isAIMode)
+                            }
                         }
                     },
                     onLoading = {

@@ -33,6 +33,10 @@ class PreferencesManager(context: Context) {
         private const val KEY_DISCOVERY_GENRES = "discovery_genres"
         private const val KEY_DISCOVERY_TIMEFRAME = "discovery_timeframe"
         private const val KEY_DISCOVERY_DEVELOPERS = "discovery_developers"
+        
+        // Search history keys
+        private const val KEY_SEARCH_HISTORY = "search_history"
+        private const val MAX_SEARCH_HISTORY = 10
     }
     
     fun setOnBoardingCompleted(completed: Boolean) {
@@ -231,6 +235,48 @@ class PreferencesManager(context: Context) {
             remove(KEY_DISCOVERY_TIMEFRAME)
             remove(KEY_DISCOVERY_DEVELOPERS)
         }
+    }
+    
+    // ==================== Search History ====================
+    
+    fun addSearchQuery(query: String) {
+        if (query.isBlank()) return
+        
+        val history = getSearchHistory().toMutableList()
+        // Remove if already exists (to move to top)
+        history.remove(query)
+        // Add to beginning
+        history.add(0, query)
+        // Keep only last MAX_SEARCH_HISTORY items
+        val trimmed = history.take(MAX_SEARCH_HISTORY)
+        
+        val jsonArray = JSONArray(trimmed)
+        preferences.edit { putString(KEY_SEARCH_HISTORY, jsonArray.toString()) }
+    }
+    
+    fun getSearchHistory(): List<String> {
+        val json = preferences.getString(KEY_SEARCH_HISTORY, null) ?: return emptyList()
+        return try {
+            val jsonArray = JSONArray(json)
+            val history = mutableListOf<String>()
+            for (i in 0 until jsonArray.length()) {
+                history.add(jsonArray.getString(i))
+            }
+            history
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+    
+    fun removeSearchQuery(query: String) {
+        val history = getSearchHistory().toMutableList()
+        history.remove(query)
+        val jsonArray = JSONArray(history)
+        preferences.edit { putString(KEY_SEARCH_HISTORY, jsonArray.toString()) }
+    }
+    
+    fun clearSearchHistory() {
+        preferences.edit { remove(KEY_SEARCH_HISTORY) }
     }
 }
 
