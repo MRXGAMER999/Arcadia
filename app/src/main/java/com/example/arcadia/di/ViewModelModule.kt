@@ -20,6 +20,6 @@ val viewModelModule = module {
     viewModel { DiscoveryViewModel(get(), get(), get()) }
     viewModel { MyGamesViewModel(get(), get()) }
     viewModel { DetailsScreenViewModel(get(), get()) }
-    viewModel { SearchViewModel(get(), get(), get()) }
+    viewModel { SearchViewModel(get(), get(), get(), get()) }
     viewModel { AnalyticsViewModel(get(), get()) }
 }

@@ -12,6 +12,7 @@ import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.GeminiRepository
+import com.example.arcadia.util.PreferencesManager
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -30,34 +31,109 @@ data class SearchScreenState(
     val aiStatus: String? = null,
     val aiReasoning: String? = null,
     val searchProgress: Pair<Int, Int>? = null,  // (current, total) for progress
-    val aiError: String? = null  // Separate AI error to avoid flash
+    val aiError: String? = null,  // Separate AI error to avoid flash
+    // Search suggestions
+    val searchHistory: List<String> = emptyList(),
+    val trendingGames: RequestState<List<Game>> = RequestState.Idle,
+    val personalizedSuggestions: List<String> = emptyList() // Genre-based suggestions
 )
 
 class SearchViewModel(
     private val gameRepository: GameRepository,
     private val gameListRepository: GameListRepository,
-    private val geminiRepository: GeminiRepository
+    private val geminiRepository: GeminiRepository,
+    private val preferencesManager: PreferencesManager
 ) : ViewModel() {
     
     var screenState by mutableStateOf(SearchScreenState())
         private set
     
     private var searchJob: Job? = null
+    private var userGenres: Set<String> = emptySet()
     
     init {
         // Observe user games library to keep track of which games are already added
         loadGamesInLibrary()
+        loadSearchHistory()
+        loadTrendingGames()
     }
     
     private fun loadGamesInLibrary() {
         viewModelScope.launch {
             gameListRepository.getGameList().collect { state ->
                 if (state is RequestState.Success<*>) {
-                    val gameIds = (state.data as List<GameListEntry>).map { it.rawgId }.toSet()
-                    screenState = screenState.copy(gamesInLibrary = gameIds)
+                    val games = state.data as List<GameListEntry>
+                    val gameIds = games.map { it.rawgId }.toSet()
+                    
+                    // Extract user's favorite genres for personalized suggestions
+                    val genreCounts = mutableMapOf<String, Int>()
+                    games.forEach { game ->
+                        game.genres.forEach { genre ->
+                            genreCounts[genre] = (genreCounts[genre] ?: 0) + 1
+                        }
+                    }
+                    userGenres = genreCounts.entries
+                        .sortedByDescending { it.value }
+                        .take(5)
+                        .map { it.key }
+                        .toSet()
+                    
+                    // Generate personalized search suggestions based on genres
+                    val suggestions = generatePersonalizedSuggestions(userGenres)
+                    
+                    screenState = screenState.copy(
+                        gamesInLibrary = gameIds,
+                        personalizedSuggestions = suggestions
+                    )
                 }
             }
         }
+    }
+    
+    private fun generatePersonalizedSuggestions(genres: Set<String>): List<String> {
+        if (genres.isEmpty()) return emptyList()
+        
+        val suggestions = mutableListOf<String>()
+        genres.take(3).forEach { genre ->
+            suggestions.add("Best $genre games")
+            suggestions.add("New $genre releases")
+        }
+        return suggestions.take(5)
+    }
+    
+    private fun loadSearchHistory() {
+        val history = preferencesManager.getSearchHistory()
+        screenState = screenState.copy(searchHistory = history)
+    }
+    
+    private fun loadTrendingGames() {
+        viewModelScope.launch {
+            gameRepository.getPopularGames(page = 1, pageSize = 6).collect { state ->
+                screenState = screenState.copy(trendingGames = state)
+            }
+        }
+    }
+    
+    fun saveSearchToHistory(query: String) {
+        if (query.isBlank()) return
+        preferencesManager.addSearchQuery(query)
+        loadSearchHistory()
+    }
+    
+    fun removeFromHistory(query: String) {
+        preferencesManager.removeSearchQuery(query)
+        loadSearchHistory()
+    }
+    
+    fun clearHistory() {
+        preferencesManager.clearSearchHistory()
+        loadSearchHistory()
+    }
+    
+    fun selectHistoryItem(query: String) {
+        screenState = screenState.copy(query = query)
+        // Trigger search
+        updateQuery(query)
     }
 
     /**
@@ -95,6 +171,9 @@ class SearchViewModel(
         // Debounce: longer delay for AI mode since it's more expensive
         searchJob = viewModelScope.launch {
             delay(if (screenState.isAIMode) 1000 else 500)
+            
+            // Save to history when search is actually performed
+            saveSearchToHistory(newQuery)
             
             if (screenState.isAIMode) {
                 performAISearch(newQuery)
