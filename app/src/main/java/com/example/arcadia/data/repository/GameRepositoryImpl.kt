@@ -6,7 +6,10 @@ import com.example.arcadia.data.remote.dto.GameDto
 import com.example.arcadia.data.remote.mapper.toGame
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.domain.repository.GameRepository
+import com.example.arcadia.util.DateUtils
 import com.example.arcadia.util.RequestState
+import com.example.arcadia.util.safeGameListApiFlow
+import com.example.arcadia.util.safeRequestState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -14,8 +17,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 class GameRepositoryImpl(
     private val apiService: RawgApiService
@@ -23,161 +24,76 @@ class GameRepositoryImpl(
     
     private val TAG = "GameRepository"
     
-    override fun getPopularGames(page: Int, pageSize: Int): Flow<RequestState<List<Game>>> = flow {
-        try {
-            emit(RequestState.Loading)
-            
-            // Get date range for current year
-            val now = LocalDate.now()
-            val startOfYear = now.withDayOfYear(1)
-            val endOfYear = now.withMonth(12).withDayOfMonth(31)
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-            val dates = "${startOfYear.format(formatter)},${endOfYear.format(formatter)}"
-            
-            val response = apiService.getGames(
+    override fun getPopularGames(page: Int, pageSize: Int): Flow<RequestState<List<Game>>> =
+        safeGameListApiFlow(TAG, "popular games") {
+            val dates = DateUtils.getCurrentYearRange()
+            apiService.getGames(
                 page = page,
                 pageSize = pageSize,
                 dates = dates,
-                ordering = "-rating,-added" // Order by rating and number of people who added it
-            )
-            
-            val games = response.results.map { it.toGame() }
-            emit(RequestState.Success(games))
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching popular games: ${e.message}", e)
-            emit(RequestState.Error("Failed to fetch popular games: ${e.message}"))
+                ordering = "-rating,-added"
+            ).results
         }
-    }.flowOn(Dispatchers.IO)
     
-    override fun getUpcomingGames(page: Int, pageSize: Int): Flow<RequestState<List<Game>>> = flow {
-        try {
-            emit(RequestState.Loading)
-            
-            // Get date range for upcoming games (today to 1 year from now)
-            val today = LocalDate.now()
-            val nextYear = today.plusYears(1)
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-            val dates = "${today.format(formatter)},${nextYear.format(formatter)}"
-            
-            val response = apiService.getGames(
+    override fun getUpcomingGames(page: Int, pageSize: Int): Flow<RequestState<List<Game>>> =
+        safeGameListApiFlow(TAG, "upcoming games") {
+            val dates = DateUtils.getUpcomingRange()
+            apiService.getGames(
                 page = page,
                 pageSize = pageSize,
                 dates = dates,
-                ordering = "released" // Order by release date (nearest first)
-            )
-            
-            val games = response.results.map { it.toGame() }
-            emit(RequestState.Success(games))
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching upcoming games: ${e.message}", e)
-            emit(RequestState.Error("Failed to fetch upcoming games: ${e.message}"))
+                ordering = "released"
+            ).results
         }
-    }.flowOn(Dispatchers.IO)
     
-    override fun getNewReleases(page: Int, pageSize: Int): Flow<RequestState<List<Game>>> = flow {
-        try {
-            emit(RequestState.Loading)
-            
-            // Get date range for new releases (last 60 days)
-            val today = LocalDate.now()
-            val twoMonthsAgo = today.minusDays(60)
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-            val dates = "${twoMonthsAgo.format(formatter)},${today.format(formatter)}"
-            
-            val response = apiService.getGames(
+    override fun getNewReleases(page: Int, pageSize: Int): Flow<RequestState<List<Game>>> =
+        safeGameListApiFlow(TAG, "new releases") {
+            val dates = DateUtils.getRecentRange(60)
+            apiService.getGames(
                 page = page,
                 pageSize = pageSize,
                 dates = dates,
-                ordering = "-released,-rating" // Order by release date (newest first) and rating
-            )
-            
-            val games = response.results.map { it.toGame() }
-            emit(RequestState.Success(games))
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching new releases: ${e.message}", e)
-            emit(RequestState.Error("Failed to fetch new releases: ${e.message}"))
+                ordering = "-released,-rating"
+            ).results
         }
-    }.flowOn(Dispatchers.IO)
     
-    override fun getGamesByGenre(genreId: Int, page: Int, pageSize: Int): Flow<RequestState<List<Game>>> = flow {
-        try {
-            emit(RequestState.Loading)
-            
-            val response = apiService.getGames(
+    override fun getGamesByGenre(genreId: Int, page: Int, pageSize: Int): Flow<RequestState<List<Game>>> =
+        safeGameListApiFlow(TAG, "games by genre") {
+            apiService.getGames(
                 page = page,
                 pageSize = pageSize,
                 genres = genreId.toString(),
                 ordering = "-rating"
-            )
-            
-            val games = response.results.map { it.toGame() }
-            emit(RequestState.Success(games))
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching games by genre: ${e.message}", e)
-            emit(RequestState.Error("Failed to fetch games by genre: ${e.message}"))
+            ).results
         }
-    }.flowOn(Dispatchers.IO)
     
-    override fun getRecommendedGames(tags: String, page: Int, pageSize: Int): Flow<RequestState<List<Game>>> = flow {
-        try {
-            emit(RequestState.Loading)
-            
-            // Get date range for last 5 years
-            val today = LocalDate.now()
-            val fiveYearsAgo = today.minusYears(5)
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-            val dates = "${fiveYearsAgo.format(formatter)},${today.format(formatter)}"
-            
-            val response = apiService.getGames(
+    override fun getRecommendedGames(tags: String, page: Int, pageSize: Int): Flow<RequestState<List<Game>>> =
+        safeGameListApiFlow(TAG, "recommended games") {
+            val dates = DateUtils.getYearsBackRange(5)
+            apiService.getGames(
                 page = page,
                 pageSize = pageSize,
                 tags = tags,
                 dates = dates,
                 ordering = "-rating,-added"
-            )
-            
-            val games = response.results.map { it.toGame() }
-            emit(RequestState.Success(games))
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching recommended games: ${e.message}", e)
-            emit(RequestState.Error("Failed to fetch recommended games: ${e.message}"))
+            ).results
         }
-    }.flowOn(Dispatchers.IO)
     
-    override fun searchGames(query: String, page: Int, pageSize: Int): Flow<RequestState<List<Game>>> = flow {
-        try {
-            emit(RequestState.Loading)
-            
-            val response = apiService.getGames(
+    override fun searchGames(query: String, page: Int, pageSize: Int): Flow<RequestState<List<Game>>> =
+        safeGameListApiFlow(TAG, "search games") {
+            apiService.getGames(
                 page = page,
                 pageSize = pageSize,
                 search = query,
                 ordering = "-rating,-added"
-            )
-            
-            val games = response.results.map { it.toGame() }
-            emit(RequestState.Success(games))
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error searching games: ${e.message}", e)
-            emit(RequestState.Error("Failed to search games: ${e.message}"))
+            ).results
         }
-    }.flowOn(Dispatchers.IO)
 
     override fun getGameDetails(gameId: Int): Flow<RequestState<Game>> = flow {
-        try {
-            emit(RequestState.Loading)
-            val dto = apiService.getGameDetails(gameId)
-            emit(RequestState.Success(dto.toGame()))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching game details: ${e.message}", e)
-            emit(RequestState.Error("Failed to fetch game details: ${e.message}"))
-        }
+        emit(RequestState.Loading)
+        emit(safeRequestState(TAG, "game details") {
+            apiService.getGameDetails(gameId).toGame()
+        })
     }.flowOn(Dispatchers.IO)
 
     override fun getGameDetailsWithMedia(gameId: Int): Flow<RequestState<Game>> = flow {
@@ -236,7 +152,6 @@ class GameRepositoryImpl(
             emit(RequestState.Loading)
             
             // Fetch multiple pages in parallel for more results
-            // Pages 1-3 for both developers and publishers = up to 240 games
             val pagesToFetch = listOf(1, 2, 3)
             val fetchPageSize = 40 // Max per page
             
@@ -248,14 +163,14 @@ class GameRepositoryImpl(
                     pagesToFetch.forEach { pageNum ->
                         deferredResults.add(async {
                             try {
-                                val response = apiService.getGames(
+                                apiService.getGames(
                                     page = pageNum,
                                     pageSize = fetchPageSize,
                                     developers = developerSlugs,
                                     ordering = "-rating,-added"
-                                )
-                                Log.d(TAG, "Fetched ${response.results.size} games by developers (page $pageNum)")
-                                response.results
+                                ).results.also {
+                                    Log.d(TAG, "Fetched ${it.size} games by developers (page $pageNum)")
+                                }
                             } catch (e: Exception) {
                                 Log.w(TAG, "Error fetching developers page $pageNum: ${e.message}")
                                 emptyList()
@@ -269,14 +184,14 @@ class GameRepositoryImpl(
                     pagesToFetch.forEach { pageNum ->
                         deferredResults.add(async {
                             try {
-                                val response = apiService.getGames(
+                                apiService.getGames(
                                     page = pageNum,
                                     pageSize = fetchPageSize,
                                     publishers = publisherSlugs,
                                     ordering = "-rating,-added"
-                                )
-                                Log.d(TAG, "Fetched ${response.results.size} games by publishers (page $pageNum)")
-                                response.results
+                                ).results.also {
+                                    Log.d(TAG, "Fetched ${it.size} games by publishers (page $pageNum)")
+                                }
                             } catch (e: Exception) {
                                 Log.w(TAG, "Error fetching publishers page $pageNum: ${e.message}")
                                 emptyList()
@@ -320,33 +235,23 @@ class GameRepositoryImpl(
         ordering: String?,
         page: Int,
         pageSize: Int
-    ): Flow<RequestState<List<Game>>> = flow {
-        try {
-            emit(RequestState.Loading)
-            
-            // Build date range if provided
+    ): Flow<RequestState<List<Game>>> =
+        safeGameListApiFlow(TAG, "filtered games") {
             val dates = if (startDate != null && endDate != null) {
-                "$startDate,$endDate"
+                DateUtils.formatDateRange(startDate, endDate)
             } else null
             
             Log.d(TAG, "Filtering games: developers=$developerSlugs, genres=$genres, dates=$dates, ordering=$ordering")
             
-            val response = apiService.getGames(
+            apiService.getGames(
                 page = page,
                 pageSize = pageSize,
                 developers = developerSlugs,
                 genres = genres,
                 dates = dates,
                 ordering = ordering ?: "-rating,-added"
-            )
-            
-            val games = response.results.map { it.toGame() }
-            Log.d(TAG, "Filtered games result: ${games.size} games")
-            emit(RequestState.Success(games))
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error filtering games: ${e.message}", e)
-            emit(RequestState.Error("Failed to filter games: ${e.message}"))
+            ).results.also {
+                Log.d(TAG, "Filtered games result: ${it.size} games")
+            }
         }
-    }.flowOn(Dispatchers.IO)
 }
