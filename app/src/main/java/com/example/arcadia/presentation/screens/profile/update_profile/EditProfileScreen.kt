@@ -240,59 +240,59 @@ fun EditProfileScreen(
                             trailingIcon = {}  // No clear button for disabled field
                         )
 
-                        // Username Field
+                        // Username Field (Optional)
                         ProfileTextField(
                             value = localState.username,
                             onValueChange = viewModel::updateLocalUsername,
-                            label = "Username",
+                            label = "Username (Optional)",
                             placeholder = "",
                             isError = showValidationErrors && viewModel.validateUsername().isNotEmpty(),
                             errorMessage = if (showValidationErrors) viewModel.validateUsername() else null
                         )
 
-                        // Country and City Row
+                        // Country and City Row (Optional)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Country Dropdown
+                            // Country Dropdown (Optional)
                             ProfileDropdown(
-                                label = "Country",
+                                label = "Country (Optional)",
                                 options = Countries.countries,
                                 selected = localState.country,
                                 onSelected = viewModel::updateLocalCountry,
                                 modifier = Modifier.weight(1f),
-                                isError = showValidationErrors && viewModel.validateCountry().isNotEmpty(),
-                                errorMessage = if (showValidationErrors) viewModel.validateCountry() else null
+                                isError = false,
+                                errorMessage = null
                             )
 
-                            // City Dropdown
+                            // City Dropdown (Optional)
                             ProfileDropdown(
-                                label = "City",
+                                label = "City (Optional)",
                                 options = Countries.getCitiesForCountry(localState.country),
                                 selected = localState.city,
                                 onSelected = viewModel::updateLocalCity,
                                 modifier = Modifier.weight(1f),
-                                isError = showValidationErrors && viewModel.validateCity().isNotEmpty(),
-                                errorMessage = if (showValidationErrors) viewModel.validateCity() else null
+                                isError = false,
+                                errorMessage = null
                             )
                         }
 
-                        // Gender Dropdown
+                        // Gender Dropdown (Optional)
                         ProfileDropdown(
-                            label = "Gender",
+                            label = "Gender (Optional)",
                             options = genders,
                             selected = localState.gender,
                             onSelected = viewModel::updateLocalGender,
-                            isError = showValidationErrors && viewModel.validateGender().isNotEmpty(),
-                            errorMessage = if (showValidationErrors) viewModel.validateGender() else null
+                            isError = false,
+                            errorMessage = null
                         )
 
-                        // Bio/Description Field
+                        // Bio/Description Field (Optional)
                         ProfileTextField(
                             value = localState.description,
                             onValueChange = viewModel::updateLocalDescription,
-                            label = "Bio",
+                            label = "Bio (Optional)",
                             singleLine = false,
                             maxLines = 5,
                             minLines = 4,

@@ -57,23 +57,28 @@ class EditProfileViewModel(
         private set
     
     // Validation functions for local state
+    // Only Name and Username are required (email, photo come from Google)
     fun validateName(): String = when {
+        localState.name.isEmpty() -> "Name is required"
         localState.name.length < 3 -> "Name must be at least 3 characters"
         localState.name.any { !it.isLetter() && !it.isWhitespace() } -> "Name cannot contain symbols"
         else -> ""
     }
 
+    // Username is optional - only validate format if filled
     fun validateUsername(): String = when {
+        localState.username.isEmpty() -> "" // Optional
         localState.username.length < 3 -> "Username must be at least 3 characters"
-        localState.username.any { !it.isLetterOrDigit() && it != '_' } -> "Username cannot contain symbols"
+        localState.username.any { !it.isLetterOrDigit() && it != '_' } -> "Username can only contain letters, numbers, and underscores"
         else -> ""
     }
 
-    fun validateCountry(): String = if (localState.country.isEmpty()) "Please select a country" else ""
+    // Optional fields - only validate format if filled
+    fun validateCountry(): String = "" // Optional
     
-    fun validateCity(): String = if (localState.city.isEmpty()) "Please select a city" else ""
+    fun validateCity(): String = "" // Optional
     
-    fun validateGender(): String = if (localState.gender.isEmpty()) "Please select a gender" else ""
+    fun validateGender(): String = "" // Optional
     
     fun validateDescription(): String = when {
         localState.description.isEmpty() -> "" // Empty is valid (optional field)
@@ -81,12 +86,11 @@ class EditProfileViewModel(
         else -> ""
     }
     
+    // Only Name is required
     val isFormValid: Boolean
         get() = validateName().isEmpty() &&
                 validateUsername().isEmpty() &&
-                validateCountry().isEmpty() &&
-                validateCity().isEmpty() &&
-                validateGender().isEmpty() &&
+                validateUsername().isEmpty() &&
                 validateDescription().isEmpty()
     
     private var dataLoadJob: Job? = null
