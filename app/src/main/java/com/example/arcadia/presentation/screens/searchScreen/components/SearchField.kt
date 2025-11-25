@@ -19,12 +19,13 @@ import com.example.arcadia.ui.theme.TextSecondary
 fun SearchField(
     query: String,
     onQueryChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    placeholder: String = "Search games..."
 ) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        placeholder = { Text("Search games...", color = TextSecondary.copy(alpha = 0.5f)) },
+        placeholder = { Text(placeholder, color = TextSecondary.copy(alpha = 0.5f)) },
         singleLine = true,
         shape = RoundedCornerShape(50.dp),
         modifier = modifier

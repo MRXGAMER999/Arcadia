@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
+import com.example.arcadia.domain.repository.GeminiRepository
 import com.example.arcadia.domain.repository.SortOrder
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.launch
@@ -27,7 +28,7 @@ data class AnalyticsState(
     val genreRatingAnalysis: List<GenreRatingStats> = emptyList(),
     val gamesAddedByYear: List<Pair<String, Int>> = emptyList(),
     val recentTrend: String = "",
-    val aiInsights: com.example.arcadia.data.repository.GameInsights? = null,
+    val aiInsights: GeminiRepository.GameInsights? = null,
     val isLoadingInsights: Boolean = false,
     val insightsError: String? = null
 )
@@ -49,7 +50,7 @@ enum class GamingPersonality(val title: String, val description: String) {
 
 class AnalyticsViewModel(
     private val gameListRepository: GameListRepository,
-    private val geminiRepository: com.example.arcadia.data.repository.GeminiRepository
+    private val geminiRepository: GeminiRepository
 ) : ViewModel() {
 
     var state by mutableStateOf(AnalyticsState())
