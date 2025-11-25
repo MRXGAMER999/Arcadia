@@ -11,19 +11,37 @@ import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.GeminiRepository
-import com.example.arcadia.domain.usecase.ParallelGameFilter
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
+/**
+ * Koin module for repository dependency injection.
+ * Contains all data layer dependencies.
+ */
 val repositoryModule = module {
+    
+    // ==================== Repositories ====================
+    
+    /** Repository for gamer/user data */
     single<GamerRepository> { GamerRepositoryImpl() }
+    
+    /** Repository for game data from RAWG API */
     single<GameRepository> { GameRepositoryImpl(get()) }
+    
+    /** Repository for user's game list (Firebase) */
     single<GameListRepository> { GameListRepositoryImpl() }
+    
+    /** Repository for Gemini AI operations */
     single<GeminiRepository> { GeminiRepositoryImpl() }
     
-    // Studio expansion dependencies
+    // ==================== Studio Expansion Dependencies ====================
+    
+    /** Local database for studio caching */
     single { StudioCacheDatabase.getInstance(androidContext()) }
+    
+    /** Manager for studio cache operations */
     single { StudioCacheManager(get()) }
+    
+    /** Repository for studio expansion features */
     single { StudioExpansionRepository(get()) }
-    factory { ParallelGameFilter() }
 }
