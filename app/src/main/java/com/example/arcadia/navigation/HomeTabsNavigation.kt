@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -37,6 +38,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -49,6 +53,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.arcadia.presentation.components.DiscoveryFilterDialog
+import com.example.arcadia.presentation.components.QuickStatusSheet
 import com.example.arcadia.presentation.screens.home.HomeViewModel
 import com.example.arcadia.presentation.screens.home.components.GameListItem
 import com.example.arcadia.presentation.screens.home.components.LargeGameCard
@@ -149,7 +154,7 @@ fun HomeTabsNavContent(
 			animationSpec = tween(durationMillis = animationDuration)
 		)
 	}
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 
 @Composable
 private fun HomeTabRoot(
@@ -158,15 +163,31 @@ private fun HomeTabRoot(
     viewModel: HomeViewModel
 ) {
     val screenState = viewModel.screenState
+    val pullToRefreshState = rememberPullToRefreshState()
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Surface),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
+        PullToRefreshBox(
+            isRefreshing = screenState.isRefreshing,
+            onRefresh = { viewModel.refreshHome() },
+            modifier = Modifier.fillMaxSize(),
+            state = pullToRefreshState,
+            indicator = {
+                PullToRefreshDefaults.LoadingIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = screenState.isRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    containerColor = Surface,
+                    color = ButtonPrimary
+                )
+            }
         ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Surface),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
             // Popular Games Section (Carousel)
             item {
                 SectionHeader(
@@ -299,10 +320,23 @@ private fun HomeTabRoot(
                 else -> {}
             }
         }
+        }
+        
+        // Quick Status Sheet for adding games (Home Tab)
+        screenState.gameToAddWithStatus?.let { game ->
+            QuickStatusSheet(
+                game = game,
+                isOpen = true,
+                onDismiss = { viewModel.dismissStatusPicker() },
+                onStatusSelected = { status ->
+                    viewModel.addGameWithStatus(game, status)
+                }
+            )
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun DiscoverTabRoot(
     onGameClick: (Int) -> Unit,
@@ -312,15 +346,31 @@ private fun DiscoverTabRoot(
     val screenState = viewModel.screenState
     val discoveryFilterState = viewModel.discoveryFilterState
     val showFilterDialog = viewModel.showDiscoveryFilterDialog
+    val pullToRefreshState = rememberPullToRefreshState()
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Surface),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
+        PullToRefreshBox(
+            isRefreshing = screenState.isRefreshing,
+            onRefresh = { viewModel.refreshDiscover() },
+            modifier = Modifier.fillMaxSize(),
+            state = pullToRefreshState,
+            indicator = {
+                PullToRefreshDefaults.LoadingIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = screenState.isRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    containerColor = Surface,
+                    color = ButtonPrimary
+                )
+            }
         ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Surface),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
             // New Releases Section
             item {
                 SectionHeader(
@@ -422,6 +472,7 @@ private fun DiscoverTabRoot(
                 else -> {}
             }
         }
+        }
 
         // Discovery Filter Dialog
         if (showFilterDialog) {
@@ -435,6 +486,18 @@ private fun DiscoverTabRoot(
                     viewModel.selectDeveloperWithStudios(developer)
                 },
                 onClearAllFilters = { viewModel.clearDiscoveryFilters() }
+            )
+        }
+        
+        // Quick Status Sheet for adding games (Discover Tab)
+        screenState.gameToAddWithStatus?.let { game ->
+            QuickStatusSheet(
+                game = game,
+                isOpen = true,
+                onDismiss = { viewModel.dismissStatusPicker() },
+                onStatusSelected = { status ->
+                    viewModel.addGameWithStatus(game, status)
+                }
             )
         }
     }
