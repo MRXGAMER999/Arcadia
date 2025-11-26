@@ -252,7 +252,7 @@ fun HomeTabContent(
             onReopen = { viewModel.reopenAddGameWithUnsavedChanges() },
             onSave = { viewModel.saveUnsavedAddGameChanges() },
             onDismiss = { viewModel.dismissUnsavedAddGameChanges() },
-            modifier = Modifier.padding(bottom = 64.dp) // Above bottom navigation
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 }
