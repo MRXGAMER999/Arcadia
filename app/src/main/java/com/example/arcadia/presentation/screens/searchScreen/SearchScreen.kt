@@ -229,9 +229,17 @@ fun SearchScreen(
             isOpen = true,
             onDismiss = { viewModel.dismissStatusPicker() },
             onSave = { entry ->
-                viewModel.addGameWithStatus(
-                    game = game,
-                    status = entry.status,
+                // Use addGameWithEntry to preserve all fields (rating, aspects, hoursPlayed, etc.)
+                val entryWithGameData = entry.copy(
+                    rawgId = game.id,
+                    name = game.name,
+                    backgroundImage = game.backgroundImage,
+                    genres = game.genres,
+                    platforms = game.platforms,
+                    releaseDate = game.released
+                )
+                viewModel.addGameWithEntry(
+                    entry = entryWithGameData,
                     onSuccess = {
                         notificationMessage = "${game.name} added to My Games"
                         isSuccess = true
