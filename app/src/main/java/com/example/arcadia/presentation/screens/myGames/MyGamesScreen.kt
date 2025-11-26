@@ -421,7 +421,8 @@ fun MyGamesScreen(
                                         // Games List items
                                         lazyItems(
                                             items = visibleGames,
-                                            key = { game -> game.id }
+                                            key = { game -> game.id },
+                                            contentType = { "game_list_item" }
                                         ) { game ->
                                             SwipeToDeleteItem(
                                                 onDelete = { 
@@ -451,7 +452,8 @@ fun MyGamesScreen(
                                     ) {
                                         // Stats Card as first item (with animation)
                                         item(
-                                            span = { GridItemSpan(3) }
+                                            span = { GridItemSpan(3) },
+                                            contentType = "stats_card"
                                         ) {
                                             AnimatedVisibility(
                                                 visible = showStats,
@@ -468,7 +470,8 @@ fun MyGamesScreen(
                                         // Games Grid items
                                         items(
                                             items = visibleGames,
-                                            key = { game -> game.id }
+                                            key = { game -> game.id },
+                                            contentType = { "game_grid_item" }
                                         ) { game ->
                                             MyGameCard(
                                                 game = game,

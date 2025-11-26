@@ -40,6 +40,13 @@ class PreferencesManager(context: Context) {
         
         // Pending deletions key
         private const val KEY_PENDING_DELETIONS = "pending_deletions"
+
+        // My Games Screen Settings
+        private const val KEY_MEDIA_LAYOUT = "media_layout"
+        private const val KEY_SORT_TYPE = "sort_type"
+        private const val KEY_SORT_ORDER = "sort_order"
+        private const val KEY_SHOW_DATE_ADDED = "show_date_added"
+        private const val KEY_SHOW_RELEASE_DATE = "show_release_date"
     }
     
     fun setOnBoardingCompleted(completed: Boolean) {
@@ -76,6 +83,48 @@ class PreferencesManager(context: Context) {
                 null
             }
         }.toSet()
+    }
+    
+    // ==================== My Games Screen Settings ====================
+
+    fun saveMediaLayout(layout: String) {
+        preferences.edit { putString(KEY_MEDIA_LAYOUT, layout) }
+    }
+
+    fun getMediaLayout(): String? {
+        return preferences.getString(KEY_MEDIA_LAYOUT, null)
+    }
+
+    fun saveSortType(sortType: String) {
+        preferences.edit { putString(KEY_SORT_TYPE, sortType) }
+    }
+
+    fun getSortType(): String? {
+        return preferences.getString(KEY_SORT_TYPE, null)
+    }
+
+    fun saveSortOrder(sortOrder: String) {
+        preferences.edit { putString(KEY_SORT_ORDER, sortOrder) }
+    }
+
+    fun getSortOrder(): String? {
+        return preferences.getString(KEY_SORT_ORDER, null)
+    }
+
+    fun saveShowDateAdded(show: Boolean) {
+        preferences.edit { putBoolean(KEY_SHOW_DATE_ADDED, show) }
+    }
+
+    fun getShowDateAdded(): Boolean {
+        return preferences.getBoolean(KEY_SHOW_DATE_ADDED, true) // Default true
+    }
+
+    fun saveShowReleaseDate(show: Boolean) {
+        preferences.edit { putBoolean(KEY_SHOW_RELEASE_DATE, show) }
+    }
+
+    fun getShowReleaseDate(): Boolean {
+        return preferences.getBoolean(KEY_SHOW_RELEASE_DATE, false) // Default false
     }
     
     fun saveFilterPreset(preset: FilterPreset) {

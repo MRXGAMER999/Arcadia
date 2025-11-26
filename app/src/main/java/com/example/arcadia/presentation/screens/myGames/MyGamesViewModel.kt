@@ -12,7 +12,9 @@ import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
 import com.example.arcadia.domain.usecase.FilterGamesUseCase
 import com.example.arcadia.domain.usecase.RemoveGameFromLibraryUseCase
 import com.example.arcadia.domain.usecase.SortGamesUseCase
+import com.example.arcadia.presentation.components.MediaLayout
 import com.example.arcadia.presentation.components.QuickSettingsState
+import com.example.arcadia.presentation.components.SortType
 import com.example.arcadia.util.RequestState
 
 data class MyGamesScreenState(
@@ -63,12 +65,37 @@ class MyGamesViewModel(
         val savedGenres = preferencesManager.getSelectedGenres()
         val savedStatuses = preferencesManager.getSelectedStatuses()
         
+        // Load other settings
+        val savedMediaLayout = preferencesManager.getMediaLayout()?.let { 
+            try { MediaLayout.valueOf(it) } catch (e: Exception) { null } 
+        }
+        val savedSortType = preferencesManager.getSortType()?.let {
+            try { SortType.valueOf(it) } catch (e: Exception) { null }
+        }
+        val savedSortOrder = preferencesManager.getSortOrder()?.let {
+            try { com.example.arcadia.presentation.components.SortOrder.valueOf(it) } catch (e: Exception) { null }
+        }
+        val savedShowDateAdded = preferencesManager.getShowDateAdded()
+        val savedShowReleaseDate = preferencesManager.getShowReleaseDate()
+        
         screenState = screenState.copy(
             quickSettingsState = screenState.quickSettingsState.copy(
                 selectedGenres = savedGenres,
-                selectedStatuses = savedStatuses
+                selectedStatuses = savedStatuses,
+                mediaLayout = savedMediaLayout ?: screenState.quickSettingsState.mediaLayout,
+                sortType = savedSortType ?: screenState.quickSettingsState.sortType,
+                sortOrder = savedSortOrder ?: screenState.quickSettingsState.sortOrder,
+                showDateAdded = savedShowDateAdded,
+                showReleaseDate = savedShowReleaseDate
             )
         )
+        
+        // Also update the main sortOrder based on the loaded quick settings
+        val initialSortOrder = mapToRepositorySortOrder(
+            screenState.quickSettingsState.sortType,
+            screenState.quickSettingsState.sortOrder
+        )
+        screenState = screenState.copy(sortOrder = initialSortOrder)
         
         loadGames()
     }
@@ -178,6 +205,11 @@ class MyGamesViewModel(
         with(screenState.quickSettingsState) {
             preferencesManager.saveSelectedGenres(selectedGenres)
             preferencesManager.saveSelectedStatuses(selectedStatuses)
+            preferencesManager.saveMediaLayout(mediaLayout.name)
+            preferencesManager.saveSortType(sortType.name)
+            preferencesManager.saveSortOrder(sortOrder.name)
+            preferencesManager.saveShowDateAdded(showDateAdded)
+            preferencesManager.saveShowReleaseDate(showReleaseDate)
         }
     }
     

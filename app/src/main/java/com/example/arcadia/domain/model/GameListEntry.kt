@@ -1,8 +1,11 @@
 package com.example.arcadia.domain.model
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Represents a game in the user's game list with tracking information
  */
+@Immutable
 data class GameListEntry(
     val id: String = "", // Firestore document ID
     val rawgId: Int = 0, // Game ID from RAWG API
