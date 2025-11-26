@@ -170,21 +170,20 @@ fun EditProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
-                        .imePadding(),
+                        .imePadding()
+                        .padding(horizontal = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Scrollable content
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .verticalScroll(rememberScrollState()),
+                            .verticalScroll(rememberScrollState())
+                            .padding(vertical = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // Profile Image Picker
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
                         Box(contentAlignment = Alignment.Center) {
                             ProfileImagePicker(
                                 imageUrl = localState.profileImageUrl,
@@ -216,8 +215,6 @@ fun EditProfileScreen(
                                 textAlign = TextAlign.Center
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(8.dp))
 
                         // Name Field
                         ProfileTextField(

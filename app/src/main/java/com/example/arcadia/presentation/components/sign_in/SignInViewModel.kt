@@ -1,13 +1,13 @@
 package com.example.arcadia.presentation.components.sign_in
 
-import androidx.lifecycle.ViewModel
+import com.example.arcadia.presentation.base.BaseViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-class SignInViewModel: ViewModel() {
+class SignInViewModel: BaseViewModel() {
     private val _state = MutableStateFlow(SignInState())
     val state = _state.asStateFlow()
 

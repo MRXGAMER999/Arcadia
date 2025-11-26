@@ -1,5 +1,7 @@
 package com.example.arcadia.di
 
+import com.example.arcadia.data.remote.GroqApiService
+import com.example.arcadia.data.remote.GroqConfig
 import com.example.arcadia.data.remote.RawgApiService
 import kotlinx.serialization.json.Json
 import okhttp3.Cache
@@ -8,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -77,9 +80,35 @@ val networkModule = module {
             .build()
     }
     
-    // API Service
+    // RAWG API Service
     single<RawgApiService> {
         get<Retrofit>().create(RawgApiService::class.java)
+    }
+    
+    // Groq OkHttpClient (no RAWG interceptor)
+    single(named("groqClient")) {
+        OkHttpClient.Builder()
+            .addInterceptor(get<HttpLoggingInterceptor>())
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+    }
+    
+    // Groq Retrofit
+    single(named("groqRetrofit")) {
+        val json = get<Json>()
+        val contentType = "application/json".toMediaType()
+        Retrofit.Builder()
+            .baseUrl(GroqConfig.BASE_URL)
+            .client(get(named("groqClient")))
+            .addConverterFactory(json.asConverterFactory(contentType))
+            .build()
+    }
+    
+    // Groq API Service
+    single<GroqApiService> {
+        get<Retrofit>(named("groqRetrofit")).create(GroqApiService::class.java)
     }
 }
 

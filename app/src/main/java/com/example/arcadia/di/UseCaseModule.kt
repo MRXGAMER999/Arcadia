@@ -15,6 +15,9 @@ import com.example.arcadia.domain.usecase.RemoveGameFromLibraryUseCase
 import com.example.arcadia.domain.usecase.SearchGamesUseCase
 import com.example.arcadia.domain.usecase.SortGamesUseCase
 import com.example.arcadia.domain.usecase.UpdateGameEntryUseCase
+import com.example.arcadia.domain.usecase.studio.GetLocalStudioSuggestionsUseCase
+import com.example.arcadia.domain.usecase.studio.GetStudioExpansionUseCase
+import com.example.arcadia.domain.usecase.studio.SearchStudiosUseCase
 import org.koin.dsl.module
 
 /**
@@ -77,4 +80,15 @@ val useCaseModule = module {
     
     /** Filters games by various criteria */
     factory { FilterGamesUseCase() }
+    
+    // ==================== Studio Use Cases ====================
+    
+    /** Searches for studios/developers/publishers using AI */
+    factory { SearchStudiosUseCase(get()) }
+    
+    /** Expands a parent studio to find subsidiaries */
+    factory { GetStudioExpansionUseCase(get()) }
+    
+    /** Gets local studio suggestions without AI */
+    factory { GetLocalStudioSuggestionsUseCase(get()) }
 }

@@ -235,4 +235,204 @@ object HardcodedStudioMappings {
     }
 
     fun getAllMappings(): Map<String, List<StudioInfo>> = NORMALIZED_MAP
+    
+    // ==================== Game Series to Studio Mappings ====================
+    
+    /**
+     * Maps popular game series/franchises to their primary developer studios.
+     * This provides instant, accurate results for game-based searches.
+     */
+    private val GAME_SERIES_TO_STUDIOS: Map<String, List<StudioInfo>> = mapOf(
+        // Sega / Ryu Ga Gotoku
+        "yakuza" to listOf(StudioInfo("Ryu Ga Gotoku Studio", "ryu-ga-gotoku-studio")),
+        "like a dragon" to listOf(StudioInfo("Ryu Ga Gotoku Studio", "ryu-ga-gotoku-studio")),
+        "judgment" to listOf(StudioInfo("Ryu Ga Gotoku Studio", "ryu-ga-gotoku-studio")),
+        "lost judgment" to listOf(StudioInfo("Ryu Ga Gotoku Studio", "ryu-ga-gotoku-studio")),
+        
+        // Call of Duty (multiple studios)
+        "call of duty" to listOf(
+            StudioInfo("Infinity Ward", "infinity-ward"),
+            StudioInfo("Treyarch", "treyarch"),
+            StudioInfo("Sledgehammer Games", "sledgehammer-games")
+        ),
+        "cod" to listOf(
+            StudioInfo("Infinity Ward", "infinity-ward"),
+            StudioInfo("Treyarch", "treyarch"),
+            StudioInfo("Sledgehammer Games", "sledgehammer-games")
+        ),
+        "modern warfare" to listOf(StudioInfo("Infinity Ward", "infinity-ward")),
+        "black ops" to listOf(StudioInfo("Treyarch", "treyarch")),
+        "warzone" to listOf(
+            StudioInfo("Infinity Ward", "infinity-ward"),
+            StudioInfo("Raven Software", "raven-software")
+        ),
+        
+        // PlayStation Studios
+        "god of war" to listOf(StudioInfo("Santa Monica Studio", "santa-monica-studio")),
+        "the last of us" to listOf(StudioInfo("Naughty Dog", "naughty-dog")),
+        "uncharted" to listOf(StudioInfo("Naughty Dog", "naughty-dog")),
+        "spider-man" to listOf(StudioInfo("Insomniac Games", "insomniac-games")),
+        "ratchet" to listOf(StudioInfo("Insomniac Games", "insomniac-games")),
+        "horizon" to listOf(StudioInfo("Guerrilla Games", "guerrilla-games")),
+        "ghost of tsushima" to listOf(StudioInfo("Sucker Punch Productions", "sucker-punch-productions")),
+        "infamous" to listOf(StudioInfo("Sucker Punch Productions", "sucker-punch-productions")),
+        "gran turismo" to listOf(StudioInfo("Polyphony Digital", "polyphony-digital")),
+        "returnal" to listOf(StudioInfo("Housemarque", "housemarque")),
+        "demon's souls" to listOf(StudioInfo("Bluepoint Games", "bluepoint-games")),
+        "days gone" to listOf(StudioInfo("Bend Studio", "bend-studio")),
+        
+        // Xbox Game Studios
+        "halo" to listOf(StudioInfo("343 Industries", "343-industries")),
+        "gears of war" to listOf(StudioInfo("The Coalition", "the-coalition")),
+        "gears" to listOf(StudioInfo("The Coalition", "the-coalition")),
+        "forza horizon" to listOf(StudioInfo("Playground Games", "playground-games")),
+        "forza motorsport" to listOf(StudioInfo("Turn 10 Studios", "turn-10-studios")),
+        "sea of thieves" to listOf(StudioInfo("Rare", "rare")),
+        "hellblade" to listOf(StudioInfo("Ninja Theory", "ninja-theory")),
+        "outer worlds" to listOf(StudioInfo("Obsidian Entertainment", "obsidian-entertainment")),
+        "avowed" to listOf(StudioInfo("Obsidian Entertainment", "obsidian-entertainment")),
+        "pillars of eternity" to listOf(StudioInfo("Obsidian Entertainment", "obsidian-entertainment")),
+        "wasteland" to listOf(StudioInfo("inXile Entertainment", "inxile-entertainment")),
+        "psychonauts" to listOf(StudioInfo("Double Fine Productions", "double-fine-productions")),
+        "state of decay" to listOf(StudioInfo("Undead Labs", "undead-labs")),
+        
+        // Bethesda
+        "elder scrolls" to listOf(StudioInfo("Bethesda Game Studios", "bethesda-game-studios")),
+        "skyrim" to listOf(StudioInfo("Bethesda Game Studios", "bethesda-game-studios")),
+        "fallout" to listOf(StudioInfo("Bethesda Game Studios", "bethesda-game-studios")),
+        "starfield" to listOf(StudioInfo("Bethesda Game Studios", "bethesda-game-studios")),
+        "doom" to listOf(StudioInfo("id Software", "id-software")),
+        "quake" to listOf(StudioInfo("id Software", "id-software")),
+        "dishonored" to listOf(StudioInfo("Arkane Studios", "arkane-studios")),
+        "deathloop" to listOf(StudioInfo("Arkane Studios", "arkane-studios")),
+        "prey" to listOf(StudioInfo("Arkane Studios", "arkane-studios")),
+        "evil within" to listOf(StudioInfo("Tango Gameworks", "tango-gameworks")),
+        "hi-fi rush" to listOf(StudioInfo("Tango Gameworks", "tango-gameworks")),
+        "wolfenstein" to listOf(StudioInfo("MachineGames", "machinegames")),
+        "indiana jones" to listOf(StudioInfo("MachineGames", "machinegames")),
+        
+        // Rockstar
+        "gta" to listOf(StudioInfo("Rockstar North", "rockstar-north")),
+        "grand theft auto" to listOf(StudioInfo("Rockstar North", "rockstar-north")),
+        "red dead" to listOf(StudioInfo("Rockstar Games", "rockstar-games")),
+        
+        // Ubisoft
+        "assassin's creed" to listOf(
+            StudioInfo("Ubisoft Montreal", "ubisoft-montreal"),
+            StudioInfo("Ubisoft Quebec", "ubisoft-quebec")
+        ),
+        "assassins creed" to listOf(
+            StudioInfo("Ubisoft Montreal", "ubisoft-montreal"),
+            StudioInfo("Ubisoft Quebec", "ubisoft-quebec")
+        ),
+        "far cry" to listOf(StudioInfo("Ubisoft Montreal", "ubisoft-montreal")),
+        "watch dogs" to listOf(StudioInfo("Ubisoft Montreal", "ubisoft-montreal")),
+        "rainbow six" to listOf(StudioInfo("Ubisoft Montreal", "ubisoft-montreal")),
+        "the division" to listOf(StudioInfo("Massive Entertainment", "massive-entertainment")),
+        "avatar" to listOf(StudioInfo("Massive Entertainment", "massive-entertainment")),
+        
+        // EA
+        "battlefield" to listOf(StudioInfo("EA DICE", "ea-dice")),
+        "apex legends" to listOf(StudioInfo("Respawn Entertainment", "respawn-entertainment")),
+        "titanfall" to listOf(StudioInfo("Respawn Entertainment", "respawn-entertainment")),
+        "jedi" to listOf(StudioInfo("Respawn Entertainment", "respawn-entertainment")),
+        "star wars jedi" to listOf(StudioInfo("Respawn Entertainment", "respawn-entertainment")),
+        "mass effect" to listOf(StudioInfo("BioWare", "bioware")),
+        "dragon age" to listOf(StudioInfo("BioWare", "bioware")),
+        "dead space" to listOf(StudioInfo("Motive Studios", "motive-studios")),
+        "need for speed" to listOf(StudioInfo("Criterion Games", "criterion-games")),
+        "burnout" to listOf(StudioInfo("Criterion Games", "criterion-games")),
+        "f1" to listOf(StudioInfo("Codemasters", "codemasters")),
+        "dirt" to listOf(StudioInfo("Codemasters", "codemasters")),
+        
+        // Nintendo
+        "zelda" to listOf(StudioInfo("Nintendo EPD", "nintendo-epd")),
+        "mario" to listOf(StudioInfo("Nintendo EPD", "nintendo-epd")),
+        "metroid prime" to listOf(StudioInfo("Retro Studios", "retro-studios")),
+        "donkey kong" to listOf(StudioInfo("Retro Studios", "retro-studios")),
+        "xenoblade" to listOf(StudioInfo("Monolith Soft", "monolith-soft")),
+        "kirby" to listOf(StudioInfo("HAL Laboratory", "hal-laboratory")),
+        "smash bros" to listOf(StudioInfo("HAL Laboratory", "hal-laboratory")),
+        "fire emblem" to listOf(StudioInfo("Intelligent Systems", "intelligent-systems")),
+        "pokemon" to listOf(StudioInfo("Game Freak", "game-freak")),
+        
+        // FromSoftware
+        "dark souls" to listOf(StudioInfo("FromSoftware", "fromsoftware")),
+        "elden ring" to listOf(StudioInfo("FromSoftware", "fromsoftware")),
+        "sekiro" to listOf(StudioInfo("FromSoftware", "fromsoftware")),
+        "bloodborne" to listOf(StudioInfo("FromSoftware", "fromsoftware")),
+        "armored core" to listOf(StudioInfo("FromSoftware", "fromsoftware")),
+        
+        // Square Enix
+        "final fantasy" to listOf(StudioInfo("Square Enix", "square-enix")),
+        "kingdom hearts" to listOf(StudioInfo("Square Enix", "square-enix")),
+        "tomb raider" to listOf(StudioInfo("Crystal Dynamics", "crystal-dynamics")),
+        "deus ex" to listOf(StudioInfo("Eidos Montreal", "eidos-montreal")),
+        "guardians of the galaxy" to listOf(StudioInfo("Eidos Montreal", "eidos-montreal")),
+        
+        // CD Projekt
+        "witcher" to listOf(StudioInfo("CD Projekt Red", "cd-projekt-red")),
+        "cyberpunk" to listOf(StudioInfo("CD Projekt Red", "cd-projekt-red")),
+        
+        // Capcom
+        "resident evil" to listOf(StudioInfo("Capcom", "capcom")),
+        "monster hunter" to listOf(StudioInfo("Capcom", "capcom")),
+        "devil may cry" to listOf(StudioInfo("Capcom", "capcom")),
+        "street fighter" to listOf(StudioInfo("Capcom", "capcom")),
+        
+        // Warner Bros
+        "batman arkham" to listOf(StudioInfo("Rocksteady Studios", "rocksteady-studios")),
+        "suicide squad" to listOf(StudioInfo("Rocksteady Studios", "rocksteady-studios")),
+        "mortal kombat" to listOf(StudioInfo("NetherRealm Studios", "netherrealm-studios")),
+        "injustice" to listOf(StudioInfo("NetherRealm Studios", "netherrealm-studios")),
+        "shadow of mordor" to listOf(StudioInfo("Monolith Productions", "monolith-productions")),
+        "shadow of war" to listOf(StudioInfo("Monolith Productions", "monolith-productions")),
+        "lego" to listOf(StudioInfo("TT Games", "tt-games")),
+        "hogwarts legacy" to listOf(StudioInfo("Avalanche Software", "avalanche-software")),
+        
+        // Atlus
+        "persona" to listOf(StudioInfo("Atlus", "atlus")),
+        "shin megami tensei" to listOf(StudioInfo("Atlus", "atlus")),
+        "smt" to listOf(StudioInfo("Atlus", "atlus")),
+        
+        // Other notable series
+        "civilization" to listOf(StudioInfo("Firaxis Games", "firaxis-games")),
+        "xcom" to listOf(StudioInfo("Firaxis Games", "firaxis-games")),
+        "borderlands" to listOf(StudioInfo("Gearbox Software", "gearbox-software")),
+        "mafia" to listOf(StudioInfo("Hangar 13", "hangar-13")),
+        "metro" to listOf(StudioInfo("4A Games", "4a-games")),
+        "saints row" to listOf(StudioInfo("Volition", "volition")),
+        "serious sam" to listOf(StudioInfo("Croteam", "croteam")),
+        "cities skylines" to listOf(StudioInfo("Colossal Order", "colossal-order")),
+        "crusader kings" to listOf(StudioInfo("Paradox Development Studio", "paradox-development-studio")),
+        "europa universalis" to listOf(StudioInfo("Paradox Development Studio", "paradox-development-studio")),
+        "stellaris" to listOf(StudioInfo("Paradox Development Studio", "paradox-development-studio"))
+    )
+    
+    /**
+     * Get studios that develop a specific game series.
+     * Returns null if the query doesn't match a known game series.
+     */
+    fun getStudiosForGameSeries(query: String): List<StudioInfo>? {
+        val normalized = query.lowercase().trim()
+        
+        // Direct lookup
+        GAME_SERIES_TO_STUDIOS[normalized]?.let { return it }
+        
+        // Partial match - find series that contain the query
+        GAME_SERIES_TO_STUDIOS.entries.find { (series, _) ->
+            series.contains(normalized) || normalized.contains(series)
+        }?.let { return it.value }
+        
+        return null
+    }
+    
+    /**
+     * Check if query matches a known game series.
+     */
+    fun isGameSeries(query: String): Boolean {
+        val normalized = query.lowercase().trim()
+        return GAME_SERIES_TO_STUDIOS.containsKey(normalized) ||
+               GAME_SERIES_TO_STUDIOS.keys.any { it.contains(normalized) || normalized.contains(it) }
+    }
 }

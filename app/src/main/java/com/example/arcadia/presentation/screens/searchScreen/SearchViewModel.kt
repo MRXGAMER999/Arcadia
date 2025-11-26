@@ -4,90 +4,80 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.arcadia.domain.model.AIError
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
-import com.example.arcadia.domain.repository.GeminiRepository
+import com.example.arcadia.domain.repository.AIRepository
+import com.example.arcadia.presentation.base.LibraryAwareViewModel
 import com.example.arcadia.util.PreferencesManager
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 
 data class SearchScreenState(
     val query: String = "",
     val results: RequestState<List<Game>> = RequestState.Idle,
-    val gamesInLibrary: Set<Int> = emptySet(),
     // AI MODE
     val isAIMode: Boolean = false,
     val aiStatus: String? = null,
     val aiReasoning: String? = null,
-    val searchProgress: Pair<Int, Int>? = null,  // (current, total) for progress
-    val aiError: String? = null,  // Separate AI error to avoid flash
+    val searchProgress: Pair<Int, Int>? = null,
+    val aiError: String? = null,
+    val isAIErrorRetryable: Boolean = false,
+    val isFromCache: Boolean = false,
     // Search suggestions
     val searchHistory: List<String> = emptyList(),
     val trendingGames: RequestState<List<Game>> = RequestState.Idle,
-    val personalizedSuggestions: List<String> = emptyList() // Genre-based suggestions
+    val personalizedSuggestions: List<String> = emptyList()
 )
 
 class SearchViewModel(
     private val gameRepository: GameRepository,
-    private val gameListRepository: GameListRepository,
-    private val geminiRepository: GeminiRepository,
+    gameListRepository: GameListRepository,
+    private val aiRepository: AIRepository,
     private val preferencesManager: PreferencesManager
-) : ViewModel() {
+) : LibraryAwareViewModel(gameListRepository) {
     
     var screenState by mutableStateOf(SearchScreenState())
         private set
     
-    private var searchJob: Job? = null
     private var userGenres: Set<String> = emptySet()
     
+    // AI Search pagination
+    private var lastAIQuery = ""
+    private var allAIResults = mutableListOf<Game>()
+    private var isLoadingMoreAI = false
+    
     init {
-        // Observe user games library to keep track of which games are already added
-        loadGamesInLibrary()
         loadSearchHistory()
         loadTrendingGames()
     }
     
-    private fun loadGamesInLibrary() {
-        viewModelScope.launch {
-            gameListRepository.getGameList().collect { state ->
-                if (state is RequestState.Success<*>) {
-                    val games = state.data as List<GameListEntry>
-                    val gameIds = games.map { it.rawgId }.toSet()
-                    
-                    // Extract user's favorite genres for personalized suggestions
-                    val genreCounts = mutableMapOf<String, Int>()
-                    games.forEach { game ->
-                        game.genres.forEach { genre ->
-                            genreCounts[genre] = (genreCounts[genre] ?: 0) + 1
-                        }
-                    }
-                    userGenres = genreCounts.entries
-                        .sortedByDescending { it.value }
-                        .take(5)
-                        .map { it.key }
-                        .toSet()
-                    
-                    // Generate personalized search suggestions based on genres
-                    val suggestions = generatePersonalizedSuggestions(userGenres)
-                    
-                    screenState = screenState.copy(
-                        gamesInLibrary = gameIds,
-                        personalizedSuggestions = suggestions
-                    )
-                }
+    override fun onLibraryUpdated(games: List<GameListEntry>) {
+        // Extract user's favorite genres
+        val genreCounts = mutableMapOf<String, Int>()
+        games.forEach { game ->
+            game.genres.forEach { genre ->
+                genreCounts[genre] = (genreCounts[genre] ?: 0) + 1
             }
         }
+        userGenres = genreCounts.entries
+            .sortedByDescending { it.value }
+            .take(5)
+            .map { it.key }
+            .toSet()
+        
+        // Generate personalized search suggestions
+        val suggestions = generatePersonalizedSuggestions(userGenres)
+        screenState = screenState.copy(personalizedSuggestions = suggestions)
     }
     
     private fun generatePersonalizedSuggestions(genres: Set<String>): List<String> {
@@ -107,7 +97,7 @@ class SearchViewModel(
     }
     
     private fun loadTrendingGames() {
-        viewModelScope.launch {
+        launchWithKey("trending_games") {
             gameRepository.getPopularGames(page = 1, pageSize = 6).collect { state ->
                 screenState = screenState.copy(trendingGames = state)
             }
@@ -132,31 +122,41 @@ class SearchViewModel(
     
     fun selectHistoryItem(query: String) {
         screenState = screenState.copy(query = query)
-        // Trigger search
         updateQuery(query)
     }
 
-    /**
-     * Toggle AI search mode
-     */
     fun toggleAIMode() {
+        val currentQuery = screenState.query
+        val newIsAIMode = !screenState.isAIMode
+        
         screenState = screenState.copy(
-            isAIMode = !screenState.isAIMode,
+            isAIMode = newIsAIMode,
             results = RequestState.Idle,
             aiStatus = null,
             aiReasoning = null,
             searchProgress = null,
             aiError = null
         )
+        
+        if (currentQuery.isNotBlank()) {
+            launchWithDebounce(
+                key = "search",
+                delay = 300L
+            ) {
+                if (newIsAIMode) {
+                    performAISearch(currentQuery)
+                } else {
+                    gameRepository.searchGames(currentQuery, page = 1, pageSize = 40).collect { state ->
+                        screenState = screenState.copy(results = state)
+                    }
+                }
+            }
+        }
     }
     
     fun updateQuery(newQuery: String) {
         screenState = screenState.copy(query = newQuery)
         
-        // Cancel previous search job (including ongoing collection)
-        searchJob?.cancel()
-        
-        // If query is empty, reset to idle
         if (newQuery.isBlank()) {
             screenState = screenState.copy(
                 results = RequestState.Idle,
@@ -168,17 +168,15 @@ class SearchViewModel(
             return
         }
         
-        // Debounce: longer delay for AI mode since it's more expensive
-        searchJob = viewModelScope.launch {
-            delay(if (screenState.isAIMode) 1000 else 500)
-            
-            // Save to history when search is actually performed
+        launchWithDebounce(
+            key = "search",
+            delay = if (screenState.isAIMode) 1000L else 500L
+        ) {
             saveSearchToHistory(newQuery)
             
             if (screenState.isAIMode) {
                 performAISearch(newQuery)
             } else {
-                // Regular text search
                 gameRepository.searchGames(newQuery, page = 1, pageSize = 40).collect { state ->
                     screenState = screenState.copy(results = state)
                 }
@@ -186,29 +184,31 @@ class SearchViewModel(
         }
     }
 
-    /**
-     * Perform AI-powered search:
-     * 1. Ask Gemini for game suggestions
-     * 2. Search RAWG for each game
-     * 3. Combine results
-     */
     private suspend fun performAISearch(query: String) {
+        lastAIQuery = query
+        allAIResults.clear()
+        
         screenState = screenState.copy(
             results = RequestState.Loading,
             aiStatus = "Asking AI for recommendations...",
             aiReasoning = null,
             searchProgress = null,
-            aiError = null // Clear any previous errors
+            aiError = null,
+            isAIErrorRetryable = false,
+            isFromCache = false
         )
         
-        // Step 1: Get game suggestions from Gemini
-        val suggestionsResult = geminiRepository.suggestGames(query, count = 8)
+        val suggestionsResult = aiRepository.suggestGames(query, count = 15)
         
         suggestionsResult.onFailure { error ->
+            val aiError = if (error is AIError) error else AIError.from(error)
+            val isRetryable = with(AIError.Companion) { aiError.isRetryable() }
+            
             screenState = screenState.copy(
-                results = RequestState.Idle, // Use Idle instead of Error to avoid flash
+                results = RequestState.Idle,
                 aiStatus = null,
-                aiError = "AI unavailable: ${error.message}"
+                aiError = aiError.message ?: "AI unavailable",
+                isAIErrorRetryable = isRetryable
             )
             return
         }
@@ -220,19 +220,20 @@ class SearchViewModel(
             screenState = screenState.copy(
                 results = RequestState.Idle,
                 aiStatus = null,
-                aiError = "No games found for your query"
+                aiError = "No games found for your query",
+                isAIErrorRetryable = true
             )
             return
         }
         
         screenState = screenState.copy(
-            aiStatus = "Searching ${gameNames.size} games...",
+            aiStatus = if (suggestions.fromCache) "Using cached results..." else "Searching ${gameNames.size} games...",
             aiReasoning = suggestions.reasoning,
             searchProgress = Pair(0, gameNames.size),
-            aiError = null
+            aiError = null,
+            isFromCache = suggestions.fromCache
         )
         
-        // Step 2: Search RAWG for each game name in parallel
         val allGames = mutableListOf<Game>()
         val seenIds = mutableSetOf<Int>()
         
@@ -243,7 +244,6 @@ class SearchViewModel(
                         var foundGame: Game? = null
                         gameRepository.searchGames(gameName, pageSize = 5).collect { result ->
                             if (result is RequestState.Success) {
-                                // Take the first result that closely matches
                                 foundGame = result.data.firstOrNull { game ->
                                     game.name.contains(gameName, ignoreCase = true) ||
                                     gameName.contains(game.name, ignoreCase = true) ||
@@ -252,7 +252,6 @@ class SearchViewModel(
                             }
                         }
                         
-                        // Update progress
                         screenState = screenState.copy(
                             searchProgress = Pair(index + 1, gameNames.size)
                         )
@@ -265,10 +264,8 @@ class SearchViewModel(
                 }
             }
             
-            // Await all searches
             val results = searchJobs.awaitAll()
             
-            // Combine and deduplicate
             results.filterNotNull().forEach { game ->
                 if (game.id !in seenIds) {
                     seenIds.add(game.id)
@@ -277,22 +274,117 @@ class SearchViewModel(
             }
         }
         
-        // Step 3: Return combined results
+        allAIResults.addAll(allGames)
+        
         screenState = screenState.copy(
             results = if (allGames.isEmpty()) {
-                RequestState.Idle // Use Idle to show custom AI message instead of Error
+                RequestState.Idle
             } else {
-                RequestState.Success(allGames)
+                RequestState.Success(allAIResults.toList())
             },
             aiStatus = null,
             searchProgress = null,
-            aiError = if (allGames.isEmpty()) "Couldn't find any matching games" else null
+            aiError = if (allGames.isEmpty()) "Couldn't find any matching games" else null,
+            isAIErrorRetryable = allGames.isEmpty(),
+            isFromCache = suggestions.fromCache
         )
     }
+    
+    fun loadMoreAIResults() {
+        if (lastAIQuery.isBlank() || isLoadingMoreAI) return
+        
+        launchWithKey("load_more_ai") {
+            isLoadingMoreAI = true
+            
+            screenState = screenState.copy(
+                aiStatus = "Finding more games...",
+                searchProgress = null
+            )
+            
+            try {
+                val excludeNames = allAIResults.take(5).joinToString(", ") { it.name }
+                val modifiedQuery = "$lastAIQuery (different from: $excludeNames)"
+                val moreResult = aiRepository.suggestGames(
+                    userQuery = modifiedQuery,
+                    count = 10
+                )
+                
+                moreResult.onSuccess { suggestions ->
+                    val gameNames = suggestions.games
+                    if (gameNames.isEmpty()) {
+                        screenState = screenState.copy(
+                            aiStatus = null,
+                            aiError = "No more games found"
+                        )
+                        return@launchWithKey
+                    }
+                    
+                    screenState = screenState.copy(
+                        aiStatus = "Searching ${gameNames.size} more games...",
+                        searchProgress = Pair(0, gameNames.size)
+                    )
+                    
+                    val newGames = mutableListOf<Game>()
+                    val existingIds = allAIResults.map { it.id }.toSet()
+                    
+                    supervisorScope {
+                        val searchJobs = gameNames.mapIndexed { index, gameName ->
+                            async {
+                                try {
+                                    var foundGame: Game? = null
+                                    gameRepository.searchGames(gameName, pageSize = 5).collect { result ->
+                                        if (result is RequestState.Success) {
+                                            foundGame = result.data.firstOrNull { game ->
+                                                game.name.contains(gameName, ignoreCase = true) ||
+                                                gameName.contains(game.name, ignoreCase = true) ||
+                                                calculateSimilarity(game.name, gameName) > 0.6
+                                            } ?: result.data.firstOrNull()
+                                        }
+                                    }
+                                    
+                                    screenState = screenState.copy(
+                                        searchProgress = Pair(index + 1, gameNames.size)
+                                    )
+                                    
+                                    foundGame
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            }
+                        }
+                        
+                        val results = searchJobs.awaitAll()
+                        results.filterNotNull().forEach { game ->
+                            if (game.id !in existingIds) {
+                                newGames.add(game)
+                            }
+                        }
+                    }
+                    
+                    allAIResults.addAll(newGames)
+                    
+                    screenState = screenState.copy(
+                        results = RequestState.Success(allAIResults.toList()),
+                        aiStatus = null,
+                        searchProgress = null,
+                        aiError = if (newGames.isEmpty()) "No more unique games found" else null
+                    )
+                }
+                
+                moreResult.onFailure { error ->
+                    val aiError = if (error is AIError) error else AIError.from(error)
+                    screenState = screenState.copy(
+                        aiStatus = null,
+                        aiError = aiError.message ?: "Couldn't load more",
+                        isAIErrorRetryable = with(AIError.Companion) { aiError.isRetryable() }
+                    )
+                }
+            } finally {
+                isLoadingMoreAI = false
+            }
+        }
+    }
 
-    /**
-     * Simple string similarity check (Jaccard-like)
-     */
     private fun calculateSimilarity(s1: String, s2: String): Double {
         val words1 = s1.lowercase().split(" ", ":", "-").filter { it.isNotBlank() }.toSet()
         val words2 = s2.lowercase().split(" ", ":", "-").filter { it.isNotBlank() }.toSet()
@@ -303,31 +395,5 @@ class SearchViewModel(
         val union = words1.union(words2).size
         
         return intersection.toDouble() / union.toDouble()
-    }
-    
-    fun toggleGameInLibrary(
-        game: Game,
-        onSuccess: () -> Unit = {},
-        onError: (String) -> Unit = {}
-    ) {
-        viewModelScope.launch {
-            val gameId = game.id
-            
-            if (gameId in screenState.gamesInLibrary) {
-                // Game is already in library, do nothing or show message
-                onError("Game is already in your library")
-            } else {
-                // Add game to library (Game List with default status WANT)
-                when (val result = gameListRepository.addGameToList(game, GameStatus.WANT)) {
-                    is RequestState.Success -> onSuccess()
-                    is RequestState.Error -> onError(result.message)
-                    else -> {}
-                }
-            }
-        }
-    }
-    
-    fun isGameInLibrary(gameId: Int): Boolean {
-        return gameId in screenState.gamesInLibrary
     }
 }

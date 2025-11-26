@@ -1,5 +1,7 @@
 package com.example.arcadia.presentation.components.game_rating
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,13 +11,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.domain.model.GameListEntry
+import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.TextSecondary
 
@@ -46,7 +52,10 @@ fun GameRatingSheet(
     game: GameListEntry,
     isOpen: Boolean,
     onDismiss: () -> Unit,
-    onSave: (GameListEntry) -> Unit
+    onSave: (GameListEntry) -> Unit,
+    onRemove: ((GameListEntry) -> Unit)? = null,
+    isInLibrary: Boolean = true,
+    onDismissWithUnsavedChanges: ((GameListEntry) -> Unit)? = null // Callback when dismissed with unsaved changes
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
@@ -63,6 +72,9 @@ fun GameRatingSheet(
     var isClassificationExpanded by remember { mutableStateOf(true) }
     var isPlaytimeExpanded by remember { mutableStateOf(true) }
     var isSlideToRateExpanded by remember { mutableStateOf(true) }
+    
+    // Track if removal is in progress to prevent auto-save on dismiss
+    var isRemovalInProgress by remember { mutableStateOf(false) }
 
     // Initialize state from game entry
     var aspectsList by remember(game) { 
@@ -78,14 +90,7 @@ fun GameRatingSheet(
     var selectedAspects by remember(game) { mutableStateOf(game.aspects.toSet()) }
     var selectedClassification by remember(game) { mutableStateOf(game.status) }
     var selectedPlaytime by remember(game) { 
-        mutableStateOf(
-            when {
-                game.hoursPlayed >= 50 -> "50h+"
-                game.hoursPlayed >= 20 -> "20h"
-                game.hoursPlayed >= 10 -> "10h"
-                else -> null
-            }
-        ) 
+        mutableStateOf<Int?>(if (game.hoursPlayed > 0) game.hoursPlayed else null)
     }
     var sliderValue by remember(game) { mutableFloatStateOf(game.rating ?: 0f) }
 
@@ -96,15 +101,19 @@ fun GameRatingSheet(
             aspectsList = aspectsList + newAspects
         }
     }
+    
+    // Track if there are unsaved changes
+    val hasUnsavedChanges = remember(selectedAspects, selectedClassification, selectedPlaytime, sliderValue) {
+        val currentHours = selectedPlaytime ?: 0
+        selectedAspects != game.aspects.toSet() ||
+        selectedClassification != game.status ||
+        currentHours != game.hoursPlayed ||
+        sliderValue != (game.rating ?: 0f)
+    }
 
     // Function to save current state
     val saveCurrentState = {
-        val hours = when(selectedPlaytime) {
-            "50h+" -> 50
-            "20h" -> 20
-            "10h" -> 10
-            else -> 0
-        }
+        val hours = selectedPlaytime ?: 0
 
         val updatedGame = game.copy(
             aspects = selectedAspects.toList(),
@@ -126,8 +135,27 @@ fun GameRatingSheet(
     if (isOpen) {
         ModalBottomSheet(
             onDismissRequest = {
-                saveCurrentState()
-                onDismiss()
+                // Skip auto-save if removal is in progress
+                if (isRemovalInProgress) {
+                    onDismiss()
+                    return@ModalBottomSheet
+                }
+                
+                if (hasUnsavedChanges && onDismissWithUnsavedChanges != null) {
+                    // Build the unsaved game entry for potential recovery
+                    val unsavedGame = game.copy(
+                        aspects = selectedAspects.toList(),
+                        status = selectedClassification,
+                        hoursPlayed = selectedPlaytime ?: 0,
+                        rating = if (sliderValue > 0f) sliderValue else null,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    onDismissWithUnsavedChanges(unsavedGame)
+                    onDismiss()
+                } else {
+                    saveCurrentState()
+                    onDismiss()
+                }
             },
             sheetState = sheetState,
             containerColor = Color(0xFF0A1929),
@@ -148,55 +176,57 @@ fun GameRatingSheet(
                     onClose = onDismiss
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Hide Playtime and Aspects sections for "Want to Play" games
+                if (selectedClassification != GameStatus.WANT) {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                GameBestAspectsSection(
-                    isExpanded = isBestAspectsExpanded,
-                    onToggleExpanded = { isBestAspectsExpanded = !isBestAspectsExpanded },
-                    aspectsList = aspectsList,
-                    selectedAspects = selectedAspects,
-                    onAspectToggle = { aspect ->
-                        selectedAspects = if (selectedAspects.contains(aspect)) {
-                            selectedAspects - aspect
-                        } else {
-                            selectedAspects + aspect
+                    GameBestAspectsSection(
+                        isExpanded = isBestAspectsExpanded,
+                        onToggleExpanded = { isBestAspectsExpanded = !isBestAspectsExpanded },
+                        aspectsList = aspectsList,
+                        selectedAspects = selectedAspects,
+                        onAspectToggle = { aspect ->
+                            selectedAspects = if (selectedAspects.contains(aspect)) {
+                                selectedAspects - aspect
+                            } else {
+                                selectedAspects + aspect
+                            }
+                        },
+                        onAspectEdit = { oldAspect, newAspect ->
+                            aspectsList = aspectsList.map { if (it == oldAspect) newAspect else it }
+                            if (selectedAspects.contains(oldAspect)) {
+                                selectedAspects = selectedAspects - oldAspect + newAspect
+                            }
+                        },
+                        onAspectDelete = { aspect ->
+                            aspectsList = aspectsList - aspect
+                            selectedAspects = selectedAspects - aspect
+                        },
+                        onAspectAdd = { newAspect ->
+                            if (!aspectsList.contains(newAspect)) {
+                                aspectsList = aspectsList + newAspect
+                            }
                         }
-                    },
-                    onAspectEdit = { oldAspect, newAspect ->
-                        aspectsList = aspectsList.map { if (it == oldAspect) newAspect else it }
-                        if (selectedAspects.contains(oldAspect)) {
-                            selectedAspects = selectedAspects - oldAspect + newAspect
-                        }
-                    },
-                    onAspectDelete = { aspect ->
-                        aspectsList = aspectsList - aspect
-                        selectedAspects = selectedAspects - aspect
-                    },
-                    onAspectAdd = { newAspect ->
-                        if (!aspectsList.contains(newAspect)) {
-                            aspectsList = aspectsList + newAspect
-                        }
-                    }
-                )
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    PlaytimeSection(
+                        isExpanded = isPlaytimeExpanded,
+                        onToggleExpanded = { isPlaytimeExpanded = !isPlaytimeExpanded },
+                        selectedPlaytime = selectedPlaytime,
+                        onPlaytimeSelect = { selectedPlaytime = it }
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                // Classification section (right above rating)
                 ClassificationSection(
                     isExpanded = isClassificationExpanded,
                     onToggleExpanded = { isClassificationExpanded = !isClassificationExpanded },
                     selectedClassification = selectedClassification,
                     onClassificationSelect = { selectedClassification = it }
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                PlaytimeSection(
-                    isExpanded = isPlaytimeExpanded,
-                    onToggleExpanded = { isPlaytimeExpanded = !isPlaytimeExpanded },
-                    selectedPlaytime = selectedPlaytime,
-                    onPlaytimeSelect = {
-                        selectedPlaytime = if (it.isEmpty()) null else it
-                    }
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -210,21 +240,54 @@ fun GameRatingSheet(
                 
                 Spacer(modifier = Modifier.height(24.dp))
 
-
-                Button(
-                    onClick = {
-                        saveCurrentState()
-                        onDismiss()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ButtonPrimary
-                    )){
-                    Text("Save Changes", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Remove button (only if game is in library and onRemove is provided)
+                    if (isInLibrary && onRemove != null) {
+                        OutlinedButton(
+                            onClick = { 
+                                isRemovalInProgress = true
+                                onRemove(game)
+                                onDismiss()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFFE57373)
+                            ),
+                            border = BorderStroke(1.dp, Color(0xFFE57373))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Remove", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    
+                    // Save button
+                    Button(
+                        onClick = {
+                            saveCurrentState()
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ButtonPrimary
+                        )
+                    ) {
+                        Text("Save", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }

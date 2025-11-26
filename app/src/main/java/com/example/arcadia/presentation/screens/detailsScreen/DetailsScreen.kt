@@ -28,6 +28,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.example.arcadia.presentation.components.AddGameSnackbar
 import com.example.arcadia.presentation.components.TopNotification
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.detailsScreen.components.ErrorState
@@ -93,6 +95,10 @@ fun DetailsScreen(
     }
 
     val uiState = viewModel.uiState
+    val gamesInLibrary by viewModel.gamesInLibrary.collectAsState()
+    val undoState by viewModel.undoState.collectAsState()
+    
+    val isInLibrary = gameId in gamesInLibrary
 
     Box(
         modifier = Modifier
@@ -150,7 +156,7 @@ fun DetailsScreen(
                         ) {
                             GameDetailsContent(
                                 game = game,
-                                isInLibrary = uiState.isInLibrary,
+                                isInLibrary = isInLibrary,
                                 gameEntry = uiState.tempGameEntry,
                                 addToLibraryState = uiState.addToLibraryState,
                                 onAddToLibrary = { viewModel.onAddToLibraryClick() },
@@ -208,16 +214,15 @@ fun DetailsScreen(
             else -> {}
         }
         
-        // Top Notification for success/error feedback
+        // Top Notification for success/error feedback - starts from very top
         TopNotification(
             visible = uiState.addToLibraryState is AddToLibraryState.Success,
             message = (uiState.addToLibraryState as? AddToLibraryState.Success)?.message ?: "",
             isSuccess = true,
             onDismiss = { /* Auto-dismiss handled by ViewModel */ },
+            useSystemBarsPadding = false,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(top = 60.dp) // Push below toolbar
                 .zIndex(3f)
         )
         
@@ -229,8 +234,57 @@ fun DetailsScreen(
                 onDismiss = { viewModel.dismissRatingSheet() },
                 onSave = { updatedEntry ->
                     viewModel.saveGameEntry(updatedEntry)
+                },
+                onRemove = if (isInLibrary) { game ->
+                    viewModel.removeGameFromLibrary(game)
+                } else null,
+                isInLibrary = isInLibrary,
+                onDismissWithUnsavedChanges = { unsavedGame ->
+                    viewModel.showUnsavedChangesSnackbar(unsavedGame)
                 }
             )
         }
+        
+        // Unsaved changes snackbar
+        if (uiState.showUnsavedChangesSnackbar) {
+            androidx.compose.material3.Snackbar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
+                containerColor = Color(0xFF1E2A47),
+                contentColor = Color(0xFFDCDCDC),
+                action = {
+                    androidx.compose.material3.TextButton(onClick = { viewModel.saveUnsavedChanges() }) {
+                        Text(
+                            text = "SAVE",
+                            color = ButtonPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                dismissAction = {
+                    androidx.compose.material3.IconButton(onClick = { viewModel.dismissUnsavedChangesSnackbar() }) {
+                        Text(
+                            text = "✕",
+                            color = Color(0xFFDCDCDC),
+                            fontSize = 18.sp
+                        )
+                    }
+                }
+            ) {
+                Text("Changes discarded")
+            }
+        }
+        
+        // Undo removal snackbar
+        AddGameSnackbar(
+            visible = undoState.showSnackbar,
+            gameName = undoState.item?.name ?: "Game",
+            onUndo = { viewModel.undoRemoval() },
+            onDismiss = { viewModel.dismissRemovalSnackbar() },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+        )
     }
 }

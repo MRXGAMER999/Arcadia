@@ -155,7 +155,7 @@ fun GameBestAspectsSection(
                                 label = {
                                     Text(
                                         aspect,
-                                        fontSize = 13.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         modifier = Modifier.animateContentSize()
                                     )
@@ -175,7 +175,7 @@ fun GameBestAspectsSection(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
                                             modifier = Modifier
-                                                .size(17.dp)
+                                                .size(15.dp)
                                                 .scale(checkScale)
                                         )
                                     }
@@ -207,12 +207,12 @@ fun GameBestAspectsSection(
                     // Add new aspect chip
                     AssistChip(
                         onClick = { showAddDialog = true },
-                        label = { Text("Add", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+                        label = { Text("Add", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Add aspect",
-                                modifier = Modifier.size(17.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                         },
                         colors = AssistChipDefaults.assistChipColors(
@@ -359,7 +359,7 @@ fun ClassificationSection(
                             label = {
                                 Text(
                                     status.displayName,
-                                    fontSize = 13.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     modifier = Modifier.animateContentSize()
                                 )
@@ -377,7 +377,7 @@ fun ClassificationSection(
                                     painter = painterResource(id = getStatusIcon(status)),
                                     contentDescription = null,
                                     modifier = Modifier
-                                        .size(17.dp)
+                                        .size(15.dp)
                                         .scale(iconScale)
                                 )
                             },
@@ -403,9 +403,14 @@ fun ClassificationSection(
 fun PlaytimeSection(
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
-    selectedPlaytime: String?,
-    onPlaytimeSelect: (String) -> Unit
+    selectedPlaytime: Int?,
+    onPlaytimeSelect: (Int?) -> Unit
 ) {
+    var showAddDialog by remember { mutableStateOf(false) }
+    
+    // Preset options
+    val presetOptions = listOf(5, 10, 20, 30, 40, 50)
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -448,10 +453,10 @@ fun PlaytimeSection(
                         .fillMaxWidth()
                         .padding(horizontal = 2.dp)
                 ) {
-                    val playtimeOptions = listOf("10h", "20h", "50h+")
-
-                    playtimeOptions.forEach { option ->
-                        val isSelected = selectedPlaytime == option
+                    // Preset chips
+                    presetOptions.forEach { hours ->
+                        val isSelected = selectedPlaytime == hours
+                        val label = if (hours >= 50) "${hours}h+" else "${hours}h"
 
                         // Subtle animation for playtime chips to prevent overflow
                         val playtimeScale by animateFloatAsState(
@@ -460,30 +465,24 @@ fun PlaytimeSection(
                                 dampingRatio = 0.6f,
                                 stiffness = 400f
                             ),
-                            label = "PlaytimeScale_$option"
+                            label = "PlaytimeScale_$hours"
                         )
 
                         FilterChip(
                             selected = isSelected,
                             onClick = {
-                                // Toggle deselection - clicking the same chip deselects it
-                                if (isSelected) {
-                                    onPlaytimeSelect("")  // Deselect by passing empty string
-                                } else {
-                                    onPlaytimeSelect(option)
-                                }
+                                onPlaytimeSelect(if (isSelected) null else hours)
                             },
                             label = {
                                 Text(
-                                    option,
-                                    fontSize = 13.sp,
+                                    label,
+                                    fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     modifier = Modifier.animateContentSize()
                                 )
                             },
                             leadingIcon = if (isSelected) {
                                 {
-                                    // Subtle check icon animation
                                     val checkScale by animateFloatAsState(
                                         targetValue = 1.0f,
                                         animationSpec = spring(
@@ -496,7 +495,7 @@ fun PlaytimeSection(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
                                         modifier = Modifier
-                                            .size(17.dp)
+                                            .size(15.dp)
                                             .scale(checkScale)
                                     )
                                 }
@@ -512,9 +511,67 @@ fun PlaytimeSection(
                             modifier = Modifier.scale(playtimeScale)
                         )
                     }
+                    
+                    // Custom playtime chip (if custom value selected, show it)
+                    if (selectedPlaytime != null && selectedPlaytime !in presetOptions) {
+                        FilterChip(
+                            selected = true,
+                            onClick = { onPlaytimeSelect(null) }, // Deselect
+                            label = { 
+                                Text(
+                                    "${selectedPlaytime}h", 
+                                    fontSize = 11.sp, 
+                                    fontWeight = FontWeight.Bold
+                                ) 
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = ButtonPrimary,
+                                selectedLabelColor = Color.White,
+                                iconColor = Color.White
+                            ),
+                            border = null
+                        )
+                    }
+                    
+                    // Add custom chip
+                    AssistChip(
+                        onClick = { showAddDialog = true },
+                        label = { Text("Custom", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add custom playtime",
+                                modifier = Modifier.size(15.dp)
+                            )
+                        },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = Color(0xFF2D3E5F),
+                            labelColor = TextSecondary,
+                            leadingIconContentColor = TextSecondary
+                        ),
+                        border = null
+                    )
                 }
             }
         }
+    }
+    
+    // Custom playtime dialog
+    if (showAddDialog) {
+        AddPlaytimeDialog(
+            onDismiss = { showAddDialog = false },
+            onAdd = { hours ->
+                onPlaytimeSelect(hours)
+                showAddDialog = false
+            }
+        )
     }
 }
 
@@ -581,7 +638,7 @@ fun SlideToRateSection(
             )
         ) {
             Column {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
                     // Smooth scale animation
@@ -621,7 +678,7 @@ fun SlideToRateSection(
                         // Apply scale and rotation to outer layer to prevent compound scaling during transition
                         Box(
                             modifier = Modifier
-                                .size(140.dp)
+                                .size(90.dp)
                                 .graphicsLayer {
                                     clip = false
                                     scaleX = scale
@@ -666,14 +723,14 @@ fun SlideToRateSection(
                                     painter = painterResource(id = iconRes),
                                     contentDescription = "Rating icon",
                                     modifier = Modifier
-                                        .size(64.dp)
+                                        .size(52.dp)
                                         .graphicsLayer { clip = false },
                                     tint = animatedIconColor
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         // Rating Text with gradient and animation
                         BasicText(
@@ -681,7 +738,7 @@ fun SlideToRateSection(
                             style = MaterialTheme.typography.titleLarge.copy(
                                 brush = getRatingGradient(sliderValue),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 26.sp
+                                fontSize = 22.sp
                             ),
                             modifier = Modifier.scale(scale)
                         )
@@ -706,7 +763,7 @@ fun SlideToRateSection(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Animated slider colors
                 val animatedThumbColor by androidx.compose.animation.animateColorAsState(

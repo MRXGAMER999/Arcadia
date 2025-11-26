@@ -30,11 +30,14 @@ android {
             }
             val rawgApiKey = localProperties.getProperty("RAWG_API_KEY", "")
             val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY", "")
+            val groqApiKey = localProperties.getProperty("GROQ_API_KEY", "")
             buildConfigField("String", "RAWG_API_KEY", "\"$rawgApiKey\"")
             buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
+            buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
         } else {
             buildConfigField("String", "RAWG_API_KEY", "\"\"")
             buildConfigField("String", "GEMINI_API_KEY", "\"\"")
+            buildConfigField("String", "GROQ_API_KEY", "\"\"")
         }
     }
 

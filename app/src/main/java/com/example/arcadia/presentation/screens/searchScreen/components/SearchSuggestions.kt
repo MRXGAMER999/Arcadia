@@ -4,8 +4,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -42,6 +46,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -133,11 +140,14 @@ private fun RecentSearchesSection(
     onItemRemove: (String) -> Unit,
     onClearAll: () -> Unit
 ) {
+    var isExpanded by remember { mutableStateOf(false) } // Collapsed by default
+    
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Header
+        // Header with expand/collapse toggle
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded }
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -153,33 +163,62 @@ private fun RecentSearchesSection(
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "Recent Searches",
+                    text = "Recent Searches (${history.size})",
                     color = TextSecondary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
             
-            TextButton(onClick = onClearAll) {
-                Text(
-                    text = "Clear",
-                    color = ButtonPrimary,
-                    fontSize = 14.sp
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                TextButton(onClick = onClearAll) {
+                    Text(
+                        text = "Clear",
+                        color = ButtonPrimary,
+                        fontSize = 14.sp
+                    )
+                }
+                
+                // Expand/collapse icon with rotation animation
+                val rotation by animateFloatAsState(
+                    targetValue = if (isExpanded) 180f else 0f,
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    label = "ExpandRotation"
+                )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = TextSecondary.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer { rotationZ = rotation }
                 )
             }
         }
         
-        // History items
-        Column(
-            modifier = Modifier.padding(horizontal = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        // Collapsible content with fixed max height
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+            exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(200))
         ) {
-            history.forEach { query ->
-                HistoryItem(
-                    query = query,
-                    onClick = { onItemClick(query) },
-                    onRemove = { onItemRemove(query) }
-                )
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 200.dp) // Fixed max height
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                history.forEach { query ->
+                    HistoryItem(
+                        query = query,
+                        onClick = { onItemClick(query) },
+                        onRemove = { onItemRemove(query) }
+                    )
+                }
             }
         }
         

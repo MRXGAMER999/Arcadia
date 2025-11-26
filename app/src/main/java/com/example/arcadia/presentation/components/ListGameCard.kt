@@ -253,7 +253,8 @@ fun ListGameCard(
                     // Date Display (conditional based on settings)
                     val dateText = formatDates(
                         releaseDate = if (showReleaseDate) game.releaseDate else null,
-                        addedAt = if (showDateAdded) game.addedAt else null
+                        addedAt = if (showDateAdded) game.addedAt else null,
+                        updatedAt = if (showDateAdded) game.updatedAt else null
                     )
                     if (dateText.isNotEmpty()) {
                         Text(
@@ -334,10 +335,14 @@ private fun getRatingDescription(rating: Float): String {
 }
 
 /**
- * Format release date and date added to library
+ * Format release date and date added/updated to library
  * Returns empty string if neither date should be shown
  */
-private fun formatDates(releaseDate: String?, addedAt: Long?): String {
+private fun formatDates(
+    releaseDate: String?, 
+    addedAt: Long?,
+    updatedAt: Long? = null
+): String {
     val parts = mutableListOf<String>()
 
     // Format release date if provided
@@ -348,7 +353,7 @@ private fun formatDates(releaseDate: String?, addedAt: Long?): String {
                 val inputFormat = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US)
                 val outputFormat = java.text.SimpleDateFormat("MMM dd, yyyy", Locale.US)
                 val date = inputFormat.parse(releaseDate)
-                if (date != null) outputFormat.format(date) else releaseDate
+                if (date != null) "Released: ${outputFormat.format(date)}" else releaseDate
             } catch (e: Exception) {
                 releaseDate // Return as-is if parsing fails
             }
@@ -358,12 +363,15 @@ private fun formatDates(releaseDate: String?, addedAt: Long?): String {
         parts.add(releaseDateStr)
     }
     
-    // Format added date if provided
-    if (addedAt != null && addedAt > 0) {
+    // Show "Updated" if game was modified after being added, otherwise show "Added"
+    if (updatedAt != null && updatedAt > 0 && addedAt != null && updatedAt > addedAt) {
+        val date = java.util.Date(updatedAt)
+        val format = java.text.SimpleDateFormat("MMM dd, yyyy", Locale.US)
+        parts.add("Updated: ${format.format(date)}")
+    } else if (addedAt != null && addedAt > 0) {
         val date = java.util.Date(addedAt)
         val format = java.text.SimpleDateFormat("MMM dd, yyyy", Locale.US)
-        val addedAtStr = format.format(date)
-        parts.add(addedAtStr)
+        parts.add("Added: ${format.format(date)}")
     }
 
     return parts.joinToString(" | ")

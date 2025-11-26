@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.TextSecondary
 
@@ -192,6 +193,93 @@ fun DeleteConfirmationDialog(
                 Text(
                     text = "Delete",
                     color = MaterialTheme.colorScheme.error
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Cancel",
+                    color = TextSecondary.copy(alpha = 0.7f)
+                )
+            }
+        },
+        containerColor = Color(0xFF0A1929),
+        textContentColor = TextSecondary
+    )
+}
+
+@Composable
+fun AddPlaytimeDialog(
+    onDismiss: () -> Unit,
+    onAdd: (Int) -> Unit
+) {
+    var text by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { 
+            Text(
+                text = "Enter Playtime",
+                color = TextSecondary
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { newValue ->
+                    // Only allow digits
+                    if (newValue.all { c -> c.isDigit() }) {
+                        text = newValue
+                        isError = false
+                    }
+                },
+                label = { Text("Hours played") },
+                suffix = { Text("h") },
+                singleLine = true,
+                isError = isError,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        val hours = text.toIntOrNull()
+                        if (hours != null && hours > 0) {
+                            onAdd(hours)
+                        } else {
+                            isError = true
+                        }
+                    }
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = ButtonPrimary,
+                    unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                    focusedLabelColor = ButtonPrimary,
+                    unfocusedLabelColor = TextSecondary.copy(alpha = 0.6f),
+                    cursorColor = ButtonPrimary,
+                    focusedTextColor = TextSecondary,
+                    unfocusedTextColor = TextSecondary,
+                    errorBorderColor = MaterialTheme.colorScheme.error
+                )
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val hours = text.toIntOrNull()
+                    if (hours != null && hours > 0) {
+                        onAdd(hours)
+                    } else {
+                        isError = true
+                    }
+                }
+            ) {
+                Text(
+                    text = "Add",
+                    color = ButtonPrimary
                 )
             }
         },
