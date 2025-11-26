@@ -36,6 +36,19 @@ interface AIRepository {
         forceRefresh: Boolean = false
     ): Result<AIGameSuggestions>
 
+    /**
+     * Ask AI to suggest games based on the user's existing library.
+     *
+     * @param games List of games in the user's library
+     * @param count Number of games to suggest
+     * @return Result containing AI game suggestions or an error
+     */
+    suspend fun getLibraryBasedRecommendations(
+        games: List<GameListEntry>,
+        count: Int = 10,
+        forceRefresh: Boolean = false
+    ): Result<AIGameSuggestions>
+
     // ==================== Profile Analysis ====================
 
     /**

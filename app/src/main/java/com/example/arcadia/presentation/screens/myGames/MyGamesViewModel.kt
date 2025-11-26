@@ -36,7 +36,7 @@ data class MyGamesScreenState(
 )
 
 class MyGamesViewModel(
-    private val gameListRepository: GameListRepository,
+    gameListRepository: GameListRepository,
     private val preferencesManager: com.example.arcadia.util.PreferencesManager
 ) : UndoableViewModel(gameListRepository) {
     

@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
  * - Snackbar notifications
  */
 abstract class LibraryAwareViewModel(
-    private val gameListRepository: GameListRepository
+    protected val gameListRepository: GameListRepository
 ) : BaseViewModel() {
 
     // Library state
