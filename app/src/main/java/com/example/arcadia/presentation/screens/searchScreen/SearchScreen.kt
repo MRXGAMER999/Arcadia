@@ -228,7 +228,7 @@ fun SearchScreen(
             onReopen = { viewModel.reopenAddGameWithUnsavedChanges() },
             onSave = { viewModel.saveUnsavedAddGameChanges() },
             onDismiss = { viewModel.dismissUnsavedAddGameChanges() },
-            modifier = Modifier.padding(bottom = 80.dp)
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
     

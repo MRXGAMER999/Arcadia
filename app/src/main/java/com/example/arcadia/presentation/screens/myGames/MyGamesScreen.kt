@@ -511,7 +511,8 @@ fun MyGamesScreen(
                 visible = screenState.showUnsavedChangesSnackbar,
                 onReopen = { viewModel.reopenWithUnsavedChanges() },
                 onSave = { viewModel.saveUnsavedChanges() },
-                onDismiss = { viewModel.dismissUnsavedChangesSnackbar() }
+                onDismiss = { viewModel.dismissUnsavedChangesSnackbar() },
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
         
