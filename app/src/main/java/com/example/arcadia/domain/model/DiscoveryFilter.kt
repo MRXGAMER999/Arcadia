@@ -76,7 +76,8 @@ data class DiscoveryFilterState(
         get() = selectedDevelopers.values.sumOf { it.size.coerceAtLeast(1) }
                 
     val activeFilterCount: Int
-        get() = (if (selectedDevelopers.isNotEmpty()) 1 else 0) + 
+        get() = (if (sortType == DiscoverySortType.AI_RECOMMENDATION) 1 else 0) +
+                (if (selectedDevelopers.isNotEmpty()) 1 else 0) + 
                 selectedGenres.size + 
                 (if (releaseTimeframe != ReleaseTimeframe.ALL) 1 else 0)
     

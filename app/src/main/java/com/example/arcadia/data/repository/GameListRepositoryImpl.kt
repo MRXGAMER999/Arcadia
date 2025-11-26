@@ -14,6 +14,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -128,10 +129,19 @@ class GameListRepositoryImpl : GameListRepository {
                 Log.d(TAG, "Game list listener removed")
             }
             
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in getGameList: ${e.message}", e)
+        } catch (e: CancellationException) {
+            // Normal flow control - don't log as error
+            Log.d(TAG, "getGameList flow cancelled")
             listenerRegistration?.remove()
-            send(RequestState.Error("Error fetching games: ${e.message}"))
+            throw e
+        } catch (e: Exception) {
+            // Check for AbortFlowException (from .first() operators)
+            if (e.toString().contains("AbortFlowException")) {
+                Log.d(TAG, "getGameList flow aborted (expected)")
+            } else {
+                Log.e(TAG, "Error in getGameList: ${e.message}", e)
+            }
+            listenerRegistration?.remove()
             close()
         }
     }
@@ -177,10 +187,17 @@ class GameListRepositoryImpl : GameListRepository {
                 Log.d(TAG, "Game list by status listener removed")
             }
             
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in getGameListByStatus: ${e.message}", e)
+        } catch (e: CancellationException) {
+            Log.d(TAG, "getGameListByStatus flow cancelled")
             listenerRegistration?.remove()
-            send(RequestState.Error("Error fetching games: ${e.message}"))
+            throw e
+        } catch (e: Exception) {
+            if (e.toString().contains("AbortFlowException")) {
+                Log.d(TAG, "getGameListByStatus flow aborted (expected)")
+            } else {
+                Log.e(TAG, "Error in getGameListByStatus: ${e.message}", e)
+            }
+            listenerRegistration?.remove()
             close()
         }
     }
@@ -226,10 +243,17 @@ class GameListRepositoryImpl : GameListRepository {
                 Log.d(TAG, "Game list by genre listener removed")
             }
             
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in getGameListByGenre: ${e.message}", e)
+        } catch (e: CancellationException) {
+            Log.d(TAG, "getGameListByGenre flow cancelled")
             listenerRegistration?.remove()
-            send(RequestState.Error("Error fetching games: ${e.message}"))
+            throw e
+        } catch (e: Exception) {
+            if (e.toString().contains("AbortFlowException")) {
+                Log.d(TAG, "getGameListByGenre flow aborted (expected)")
+            } else {
+                Log.e(TAG, "Error in getGameListByGenre: ${e.message}", e)
+            }
+            listenerRegistration?.remove()
             close()
         }
     }
@@ -278,10 +302,17 @@ class GameListRepositoryImpl : GameListRepository {
                 Log.d(TAG, "Game entry listener removed")
             }
             
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in getGameEntry: ${e.message}", e)
+        } catch (e: CancellationException) {
+            Log.d(TAG, "getGameEntry flow cancelled")
             listenerRegistration?.remove()
-            send(RequestState.Error("Error fetching game: ${e.message}"))
+            throw e
+        } catch (e: Exception) {
+            if (e.toString().contains("AbortFlowException")) {
+                Log.d(TAG, "getGameEntry flow aborted (expected)")
+            } else {
+                Log.e(TAG, "Error in getGameEntry: ${e.message}", e)
+            }
+            listenerRegistration?.remove()
             close()
         }
     }

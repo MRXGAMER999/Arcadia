@@ -24,6 +24,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -58,12 +59,13 @@ class HomeViewModel(
         private const val FILTER_DEBOUNCE_MS = 150L
         private const val DEVELOPER_SEARCH_DEBOUNCE_MS = 300L
         
-        // Pagination constants
-        private const val DEFAULT_PAGE_SIZE = 10
-        private const val RECOMMENDATION_PAGE_SIZE = 40
-        private const val MIN_RECOMMENDATIONS_COUNT = 25
-        private const val AI_RECOMMENDATION_COUNT = 50
-        private const val AI_LOAD_MORE_COUNT = 20
+        // Pagination constants - OPTIMIZED for faster initial load
+        private const val INITIAL_PAGE_SIZE = 6     // Smaller initial load for faster first paint
+        private const val DEFAULT_PAGE_SIZE = 10    // Standard page size after initial load
+        private const val RECOMMENDATION_PAGE_SIZE = 30  // Reduced from 40 for faster loading
+        private const val MIN_RECOMMENDATIONS_COUNT = 20 // Reduced from 25
+        private const val AI_RECOMMENDATION_COUNT = 40   // Reduced from 50
+        private const val AI_LOAD_MORE_COUNT = 15        // Reduced from 20
         
         // API constants
         private const val DEFAULT_RECOMMENDATION_TAGS = "singleplayer,multiplayer"
@@ -109,16 +111,52 @@ class HomeViewModel(
         loadInitialData()
     }
     
+    /**
+     * Load initial data with parallel fetching for faster startup.
+     * Uses smaller page sizes for initial load to get data on screen faster.
+     */
     private fun loadInitialData() {
-        loadPopularGames()
-        loadUpcomingGames()
-        loadNewReleases()
-        
-        // If discovery filters are active, apply them instead of loading default recommendations
-        if (discoveryFilterState.hasActiveFilters) {
-            applyDiscoveryFilters()
-        } else {
-            loadRecommendedGames()
+        // Launch all initial loads in parallel for faster startup
+        launchWithKey("initial_data_load") {
+            // Load horizontal sections with smaller initial page size
+            loadPopularGames(INITIAL_PAGE_SIZE)
+            loadUpcomingGames(INITIAL_PAGE_SIZE)
+            loadNewReleases(INITIAL_PAGE_SIZE)
+            
+            // Load recommendations (or apply filters) separately
+            if (discoveryFilterState.hasActiveFilters) {
+                applyDiscoveryFilters()
+            } else {
+                loadRecommendedGames()
+            }
+            
+            // After initial fast load, prefetch more data in background
+            prefetchAdditionalData()
+        }
+    }
+    
+    /**
+     * Prefetch additional data in background after initial load completes.
+     * This loads more items for each section without blocking the UI.
+     */
+    private fun prefetchAdditionalData() {
+        launchWithKey("prefetch_data") {
+            // Small delay to let UI render first
+            delay(500)
+            
+            // Prefetch full page sizes in background using parallel coroutines
+            coroutineScope {
+                launch { 
+                    gameRepository.getPopularGames(1, DEFAULT_PAGE_SIZE).collect { /* prefetch */ }
+                }
+                launch { 
+                    gameRepository.getUpcomingGames(1, DEFAULT_PAGE_SIZE).collect { /* prefetch */ }
+                }
+                launch { 
+                    gameRepository.getNewReleases(1, DEFAULT_PAGE_SIZE).collect { /* prefetch */ }
+                }
+            }
+            android.util.Log.d(TAG, "Background prefetch completed")
         }
     }
     
@@ -140,11 +178,14 @@ class HomeViewModel(
         preferencesManager.saveDiscoveryDevelopers(discoveryFilterState.selectedDevelopers)
     }
     
+    /**
+     * Reload all data with full page sizes. Called on manual refresh.
+     */
     fun loadAllData() {
-        // Reload one-shot data (no duplicate flows)
-        loadPopularGames()
-        loadUpcomingGames()
-        loadNewReleases()
+        // Reload one-shot data with full page sizes (no duplicate flows)
+        loadPopularGames(DEFAULT_PAGE_SIZE)
+        loadUpcomingGames(DEFAULT_PAGE_SIZE)
+        loadNewReleases(DEFAULT_PAGE_SIZE)
         
         // If discovery filters are active, apply them instead of loading default recommendations
         if (discoveryFilterState.hasActiveFilters) {
@@ -185,29 +226,48 @@ class HomeViewModel(
         }
     }
     
-    private fun loadPopularGames() {
+    /**
+     * Load popular games with configurable page size.
+     * Uses smaller page size for initial load, larger for refresh.
+     */
+    private fun loadPopularGames(pageSize: Int = DEFAULT_PAGE_SIZE) {
         launchWithKey("popular_games") {
-            gameRepository.getPopularGames(page = 1, pageSize = DEFAULT_PAGE_SIZE).collect { state ->
+            gameRepository.getPopularGames(page = 1, pageSize = pageSize).collect { state ->
                 screenState = screenState.copy(popularGames = state)
             }
         }
     }
     
-    private fun loadUpcomingGames() {
+    /**
+     * Load upcoming games with configurable page size.
+     * Uses smaller page size for initial load, larger for refresh.
+     */
+    private fun loadUpcomingGames(pageSize: Int = DEFAULT_PAGE_SIZE) {
         launchWithKey("upcoming_games") {
             // Load most anticipated upcoming games (ordered by added count)
             val today = LocalDate.now()
             val oneYearFromNow = today.plusYears(1)
-            val dateRange = "${today.format(DateTimeFormatter.ISO_DATE)},${oneYearFromNow.format(DateTimeFormatter.ISO_DATE)}"
             
             gameRepository.getFilteredGames(
                 startDate = today.format(DateTimeFormatter.ISO_DATE),
                 endDate = oneYearFromNow.format(DateTimeFormatter.ISO_DATE),
                 ordering = "-added", // Most added = most anticipated
                 page = 1,
-                pageSize = DEFAULT_PAGE_SIZE
+                pageSize = pageSize
             ).collect { state ->
                 screenState = screenState.copy(upcomingGames = state)
+            }
+        }
+    }
+    
+    /**
+     * Load new releases with configurable page size.
+     * Uses smaller page size for initial load, larger for refresh.
+     */
+    private fun loadNewReleases(pageSize: Int = DEFAULT_PAGE_SIZE) {
+        launchWithKey("new_releases") {
+            gameRepository.getNewReleases(page = 1, pageSize = pageSize).collect { state ->
+                screenState = screenState.copy(newReleases = state)
             }
         }
     }
@@ -270,6 +330,9 @@ class HomeViewModel(
                     }
                     isLoadingMoreRecommendations = false
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                android.util.Log.d(TAG, "loadMoreRecommendations cancelled")
+                isLoadingMoreRecommendations = false
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Error loading more recommendations", e)
                 isLoadingMoreRecommendations = false
@@ -310,14 +373,6 @@ class HomeViewModel(
         
         // Auto-backfill if filtered results are too few
         ensureMinimumRecommendations()
-    }
-    
-    private fun loadNewReleases() {
-        launchWithKey("new_releases") {
-            gameRepository.getNewReleases(page = 1, pageSize = DEFAULT_PAGE_SIZE).collect { state ->
-                screenState = screenState.copy(newReleases = state)
-            }
-        }
     }
 
     fun retry() {
@@ -361,8 +416,8 @@ class HomeViewModel(
                 // Load more discovery games (works with or without filters)
                 fetchMoreDiscoveryGames()
                 
-                // Give a small delay for the refresh indicator to be visible
-                delay(800)
+                // Brief delay for visual feedback
+                delay(300)
             } finally {
                 screenState = screenState.copy(isRefreshing = false)
             }
@@ -388,6 +443,8 @@ class HomeViewModel(
                     applyRecommendationFilter()
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            android.util.Log.d(TAG, "fetchMoreRecommendedGames cancelled")
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Error fetching more recommendations on refresh", e)
         }
@@ -440,6 +497,8 @@ class HomeViewModel(
                     )
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            android.util.Log.d(TAG, "fetchMoreDiscoveryGames cancelled")
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Error fetching more discovery games on refresh", e)
         }
@@ -975,6 +1034,8 @@ class HomeViewModel(
                         )
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                android.util.Log.d(TAG, "loadMoreDiscoveryResults cancelled")
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Error loading more discovery results", e)
             } finally {
@@ -1067,6 +1128,9 @@ class HomeViewModel(
                             else -> emptyList()
                         }
                     }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                android.util.Log.d(TAG, "Library fetch for AI recommendations cancelled")
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Error fetching library for AI recommendations", e)
                 emptyList()
@@ -1156,6 +1220,9 @@ class HomeViewModel(
                     }
                 }
             )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            android.util.Log.d(TAG, "fetchAIRecommendations cancelled")
+            // Don't update state for cancellation
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Error fetching AI recommendations", e)
             val error = RequestState.Error("An error occurred: ${e.message}")

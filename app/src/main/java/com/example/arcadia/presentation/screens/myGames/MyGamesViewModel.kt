@@ -235,8 +235,12 @@ class MyGamesViewModel(
     }
     
     fun removeGameWithUndo(game: GameListEntry) {
+        // Get the most up-to-date version of the game from allGames to preserve any recent changes
+        // (e.g., rating updates that might not have been reflected in the UI yet)
+        val currentGame = screenState.allGames.find { it.id == game.id } ?: game
+        
         removeGameWithUndo(
-            game = game,
+            game = currentGame,
             onOptimisticRemove = { removedGame ->
                 val updatedAllGames = screenState.allGames.filter { it.id != removedGame.id }
                 screenState = screenState.copy(allGames = updatedAllGames)
