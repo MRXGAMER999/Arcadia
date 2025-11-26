@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -121,7 +122,8 @@ fun MyGameCard(
                         .align(Alignment.TopEnd)
                         .offset(x = (-6).dp, y = 6.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xFF1E2A47).copy(alpha = 0.9f))
+                        .background(Color(0xFF1E2A47).copy(alpha = 0.8f))
+                        .wrapContentSize()
                         .padding(horizontal = 5.dp, vertical = 3.dp)
                 ) {
                     Row(
