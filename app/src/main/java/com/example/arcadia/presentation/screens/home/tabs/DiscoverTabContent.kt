@@ -3,6 +3,7 @@ package com.example.arcadia.presentation.screens.home.tabs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,6 +43,12 @@ import com.example.arcadia.presentation.screens.home.tabs.components.ErrorSectio
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.util.RequestState
+
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.example.arcadia.ui.theme.TextSecondary
 
 /**
  * Discover tab content displaying New Releases and Recommended games with filters.
@@ -187,8 +194,8 @@ fun DiscoverTabContent(
                                 items = data,
                                 key = { _, game -> game.id }
                             ) { index, game ->
-                                // Load more when reaching 70% of the list
-                                if (index >= (data.size * 0.7).toInt()) {
+                                // Load more when reaching 40% of the list
+                                if (index >= (data.size * 0.4).toInt()) {
                                     LaunchedEffect(Unit) {
                                         if (viewModel.isDiscoveryFilterActive()) {
                                             viewModel.loadMoreDiscoveryResults()
@@ -207,6 +214,34 @@ fun DiscoverTabContent(
                                     },
                                     modifier = Modifier.animateItem()
                                 )
+                            }
+                            
+                            // Loading indicator at the bottom
+                            if (screenState.isLoadingMore) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            LoadingIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                color = ButtonPrimary
+                                            )
+                                            Text(
+                                                text = "Loading games based on your library...",
+                                                color = TextSecondary.copy(alpha = 0.7f),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
