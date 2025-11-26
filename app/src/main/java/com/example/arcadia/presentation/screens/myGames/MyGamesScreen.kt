@@ -85,6 +85,7 @@ import com.example.arcadia.util.RequestState
 import org.koin.androidx.compose.koinViewModel
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.lazy.items as lazyItems
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -211,9 +212,9 @@ fun MyGamesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
-                    start = paddingValues.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-                    end = paddingValues.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-                    bottom = paddingValues.calculateBottomPadding()
+                    top = paddingValues.calculateTopPadding(),
+                    start = paddingValues.calculateLeftPadding(LayoutDirection.Ltr),
+                    end = paddingValues.calculateRightPadding(LayoutDirection.Ltr)
                 )
                 .background(Color.Transparent)
         ) {
