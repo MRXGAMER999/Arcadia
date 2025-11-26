@@ -252,7 +252,8 @@ fun DetailsScreen(
             visible = uiState.showUnsavedChangesSnackbar,
             onReopen = { viewModel.reopenWithUnsavedChanges() },
             onSave = { viewModel.saveUnsavedChanges() },
-            onDismiss = { viewModel.dismissUnsavedChangesSnackbar() }
+            onDismiss = { viewModel.dismissUnsavedChangesSnackbar() },
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
         
         // Undo removal snackbar
