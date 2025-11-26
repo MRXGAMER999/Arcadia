@@ -51,7 +51,7 @@ fun GameListEntry.toDto(): GameListEntryDto {
 /**
  * Convert Game to GameListEntry (for initial add)
  */
-fun Game.toGameListEntry(status: GameStatus = GameStatus.WANT): GameListEntry {
+fun Game.toGameListEntry(status: GameStatus = GameStatus.FINISHED): GameListEntry {
     val currentTime = System.currentTimeMillis()
     return GameListEntry(
         rawgId = id,

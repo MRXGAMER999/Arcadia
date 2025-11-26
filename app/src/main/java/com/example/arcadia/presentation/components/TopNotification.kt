@@ -32,7 +32,8 @@ fun TopNotification(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     durationMillis: Long = 2000L,
-    color: Color = if (isSuccess) Color(0xFF4CAF50) else Color(0xFFE53935)
+    color: Color = if (isSuccess) Color(0xFF4CAF50) else Color(0xFFE53935),
+    useSystemBarsPadding: Boolean = true
 ) {
     LaunchedEffect(visible) {
         if (visible) {
@@ -51,8 +52,8 @@ fun TopNotification(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(color)
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .systemBarsPadding(),
+                .then(if (useSystemBarsPadding) Modifier.systemBarsPadding() else Modifier)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

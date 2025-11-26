@@ -50,6 +50,8 @@ import java.util.Locale
 fun MyGameCard(
     game: GameListEntry,
     modifier: Modifier = Modifier,
+    showDateAdded: Boolean = true,
+    showReleaseDate: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {}
 ) {
@@ -157,18 +159,60 @@ fun MyGameCard(
                 overflow = TextOverflow.Ellipsis
             )
             
-            Text(
-                text = formatDate(game.addedAt),
-                color = Color(0xFF9CA3AF),
-                fontSize = 12.sp,
-                modifier = Modifier.padding(top = 2.dp)
+            // Display appropriate date based on settings
+            val dateText = formatDateDisplay(
+                releaseDate = if (showReleaseDate) game.releaseDate else null,
+                addedAt = if (showDateAdded) game.addedAt else null,
+                updatedAt = if (showDateAdded) game.updatedAt else null
             )
+            if (dateText.isNotEmpty()) {
+                Text(
+                    text = dateText,
+                    color = Color(0xFF9CA3AF),
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
 
-private fun formatDate(timestamp: Long): String {
-    val date = Date(timestamp)
-    val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-    return formatter.format(date)
+/**
+ * Format date display for grid view
+ * Shows release date OR added/updated date based on settings
+ */
+private fun formatDateDisplay(
+    releaseDate: String?,
+    addedAt: Long?,
+    updatedAt: Long?
+): String {
+    // Prefer release date if requested
+    if (releaseDate != null && releaseDate.isNotEmpty()) {
+        return try {
+            val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val outputFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+            val date = inputFormat.parse(releaseDate)
+            if (date != null) outputFormat.format(date) else releaseDate
+        } catch (e: Exception) {
+            releaseDate
+        }
+    }
+    
+    // Show "Updated" if game was modified after being added
+    if (updatedAt != null && updatedAt > 0 && addedAt != null && updatedAt > addedAt) {
+        val date = Date(updatedAt)
+        val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+        return "Updated: ${formatter.format(date)}"
+    }
+    
+    // Show added date
+    if (addedAt != null && addedAt > 0) {
+        val date = Date(addedAt)
+        val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+        return formatter.format(date)
+    }
+    
+    return ""
 }

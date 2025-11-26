@@ -3,13 +3,14 @@ package com.example.arcadia.presentation.screens.home
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.arcadia.data.repository.StudioExpansionRepository
+import com.example.arcadia.domain.repository.AIRepository
+import com.example.arcadia.presentation.base.LibraryAwareViewModel
 import com.example.arcadia.domain.model.DiscoveryFilterState
 import com.example.arcadia.domain.model.DiscoverySortOrder
 import com.example.arcadia.domain.model.DiscoverySortType
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.model.ReleaseTimeframe
 import com.example.arcadia.domain.model.StudioFilterState
@@ -26,32 +27,24 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 
-sealed class AddToLibraryState {
-    data object Idle : AddToLibraryState()
-    data class Loading(val gameId: Int) : AddToLibraryState()
-    data class Success(val message: String, val gameId: Int) : AddToLibraryState()
-    data class Error(val message: String, val gameId: Int) : AddToLibraryState()
-}
-
 data class HomeScreenState(
     val popularGames: RequestState<List<Game>> = RequestState.Idle,
     val upcomingGames: RequestState<List<Game>> = RequestState.Idle,
     val recommendedGames: RequestState<List<Game>> = RequestState.Idle,
     val newReleases: RequestState<List<Game>> = RequestState.Idle,
-    val gamesInLibrary: Set<Int> = emptySet(), // Track rawgIds of games in library (now merged into gameListIds logic)
-    val animatingGameIds: Set<Int> = emptySet(), // Games currently animating out
-    val addToLibraryState: AddToLibraryState = AddToLibraryState.Idle,
-    val gameToAddWithStatus: Game? = null, // Game pending status selection
-    val isRefreshing: Boolean = false // Pull-to-refresh state
+    // gamesInLibrary is now in LibraryAwareViewModel
+    // gameToAddWithStatus is now in LibraryAwareViewModel
+    val isRefreshing: Boolean = false, // Pull-to-refresh state
+    // Snackbar state is now in LibraryAwareViewModel
 )
 
 class HomeViewModel(
     private val gameRepository: GameRepository,
-    private val gameListRepository: GameListRepository,
-    private val studioExpansionRepository: StudioExpansionRepository,
+    gameListRepository: GameListRepository, // No private needed
+    private val aiRepository: AIRepository,
     private val preferencesManager: PreferencesManager,
     @Suppress("unused") private val parallelGameFilter: ParallelGameFilter // Kept for potential future local filtering
-) : ViewModel() {
+) : LibraryAwareViewModel(gameListRepository) {
     
     companion object {
         private const val TAG = "HomeViewModel"
@@ -100,22 +93,11 @@ class HomeViewModel(
     private var discoveryFilterPage = 1
     private var isLoadingMoreDiscovery = false
 
-    // Job management to prevent duplicate flows
-    private var popularGamesJob: Job? = null
-    private var upcomingGamesJob: Job? = null
-    private var recommendedGamesJob: Job? = null
-    private var newReleasesJob: Job? = null
-    private var gameListJob: Job? = null
-    private var filterJob: Job? = null
-
-    // Thread-safe set to track games currently being added (prevents duplicate additions)
-    private val gamesBeingAdded: MutableSet<Int> = ConcurrentHashMap.newKeySet()
-
     init {
         // Load saved discovery filter preferences
         loadSavedDiscoveryPreferences()
         // Start real-time flows only once
-        loadGameListIds()
+        // Library tracking is automatic!
         // Load initial data - but skip recommendations if filters are active
         loadInitialData()
     }
@@ -165,22 +147,13 @@ class HomeViewModel(
         }
     }
     
-    private fun loadGameListIds() {
-        gameListJob?.cancel()
-        gameListJob = viewModelScope.launch {
-            gameListRepository.getGameList().collect { state ->
-                if (state is RequestState.Success) {
-                    val gameIds = state.data.map { it.rawgId }.toSet()
-                    screenState = screenState.copy(gamesInLibrary = gameIds)
-                    // Reapply appropriate filter when game list changes (local filtering only)
-                    if (discoveryFilterState.hasActiveFilters) {
-                        // Re-filter cached discovery results locally
-                        refilterDiscoveryResults()
-                    } else {
-                        applyRecommendationFilter()
-                    }
-                }
-            }
+    override fun onLibraryUpdated(games: List<GameListEntry>) {
+        // Reapply appropriate filter when game list changes (local filtering only)
+        if (discoveryFilterState.hasActiveFilters) {
+            // Re-filter cached discovery results locally
+            refilterDiscoveryResults()
+        } else {
+            applyRecommendationFilter()
         }
     }
     
@@ -195,7 +168,7 @@ class HomeViewModel(
             return
         }
         
-        val filtered = lastDiscoveryResults.filter { it.id !in screenState.gamesInLibrary }
+        val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }
         android.util.Log.d(TAG, "Refiltered discovery: ${lastDiscoveryResults.size} -> ${filtered.size} games")
         screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
         
@@ -206,8 +179,7 @@ class HomeViewModel(
     }
     
     private fun loadPopularGames() {
-        popularGamesJob?.cancel()
-        popularGamesJob = viewModelScope.launch {
+        launchWithKey("popular_games") {
             gameRepository.getPopularGames(page = 1, pageSize = DEFAULT_PAGE_SIZE).collect { state ->
                 screenState = screenState.copy(popularGames = state)
             }
@@ -215,20 +187,29 @@ class HomeViewModel(
     }
     
     private fun loadUpcomingGames() {
-        upcomingGamesJob?.cancel()
-        upcomingGamesJob = viewModelScope.launch {
-            gameRepository.getUpcomingGames(page = 1, pageSize = DEFAULT_PAGE_SIZE).collect { state ->
+        launchWithKey("upcoming_games") {
+            // Load most anticipated upcoming games (ordered by added count)
+            val today = LocalDate.now()
+            val oneYearFromNow = today.plusYears(1)
+            val dateRange = "${today.format(DateTimeFormatter.ISO_DATE)},${oneYearFromNow.format(DateTimeFormatter.ISO_DATE)}"
+            
+            gameRepository.getFilteredGames(
+                startDate = today.format(DateTimeFormatter.ISO_DATE),
+                endDate = oneYearFromNow.format(DateTimeFormatter.ISO_DATE),
+                ordering = "-added", // Most added = most anticipated
+                page = 1,
+                pageSize = DEFAULT_PAGE_SIZE
+            ).collect { state ->
                 screenState = screenState.copy(upcomingGames = state)
             }
         }
     }
     
     private fun loadRecommendedGames() {
-        recommendedGamesJob?.cancel()
-        recommendedGamesJob = viewModelScope.launch {
+        launchWithKey("recommended_games") {
             gameRepository.getRecommendedGames(
-                tags = DEFAULT_RECOMMENDATION_TAGS, 
-                page = 1, 
+                tags = DEFAULT_RECOMMENDATION_TAGS,
+                page = 1,
                 pageSize = RECOMMENDATION_PAGE_SIZE
             ).collect { state ->
                 when (state) {
@@ -256,7 +237,7 @@ class HomeViewModel(
     }
     
     private fun ensureMinimumRecommendations(minCount: Int = MIN_RECOMMENDATIONS_COUNT) {
-        viewModelScope.launch {
+        launchWithKey("ensure_min_recommendations") {
             val current = screenState.recommendedGames
             if (current is RequestState.Success && current.data.size < minCount && !isLoadingMoreRecommendations) {
                 loadMoreRecommendations()
@@ -267,13 +248,13 @@ class HomeViewModel(
     fun loadMoreRecommendations() {
         if (isLoadingMoreRecommendations) return
         
-        viewModelScope.launch {
+        launchWithKey("load_more_recommendations") {
             isLoadingMoreRecommendations = true
             try {
                 recommendationPage++
                 gameRepository.getRecommendedGames(
-                    tags = DEFAULT_RECOMMENDATION_TAGS, 
-                    page = recommendationPage, 
+                    tags = DEFAULT_RECOMMENDATION_TAGS,
+                    page = recommendationPage,
                     pageSize = RECOMMENDATION_PAGE_SIZE
                 ).collect { state ->
                     if (state is RequestState.Success) {
@@ -303,8 +284,8 @@ class HomeViewModel(
             return
         }
 
-        // Exclude games in library but keep games that are currently animating out
-        val excludeIds = screenState.gamesInLibrary - screenState.animatingGameIds
+        // Exclude games in library
+        val excludeIds = gamesInLibrary.value
 
         // Always filter with the latest data to include newly loaded games
         val filtered = lastRecommended.filter { it.id !in excludeIds }
@@ -325,8 +306,7 @@ class HomeViewModel(
     }
     
     private fun loadNewReleases() {
-        newReleasesJob?.cancel()
-        newReleasesJob = viewModelScope.launch {
+        launchWithKey("new_releases") {
             gameRepository.getNewReleases(page = 1, pageSize = DEFAULT_PAGE_SIZE).collect { state ->
                 screenState = screenState.copy(newReleases = state)
             }
@@ -342,7 +322,7 @@ class HomeViewModel(
      * Loads more recommended games and refreshes horizontal sections.
      */
     fun refreshHome() {
-        viewModelScope.launch {
+        launchWithKey("refresh_home") {
             screenState = screenState.copy(isRefreshing = true)
             
             try {
@@ -367,7 +347,7 @@ class HomeViewModel(
      * Loads more discovery games based on current filters.
      */
     fun refreshDiscover() {
-        viewModelScope.launch {
+        launchWithKey("refresh_discover") {
             screenState = screenState.copy(isRefreshing = true)
             
             try {
@@ -441,7 +421,7 @@ class HomeViewModel(
                 if (state is RequestState.Success && state.data.isNotEmpty()) {
                     android.util.Log.d(TAG, "Refresh: Got ${state.data.size} new discovery games")
                     lastDiscoveryResults = lastDiscoveryResults + state.data
-                    val filtered = lastDiscoveryResults.filter { it.id !in screenState.gamesInLibrary }
+                    val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }
                     screenState = screenState.copy(
                         recommendedGames = RequestState.Success(filtered)
                     )
@@ -452,136 +432,10 @@ class HomeViewModel(
         }
     }
     
-    fun isGameInLibrary(gameId: Int): Boolean {
-        return screenState.gamesInLibrary.contains(gameId)
-    }
-    
-    /**
-     * Shows the status picker sheet for a game before adding to library.
-     */
-    fun addGameToLibrary(game: Game) {
-        // Check if game is already in library first
-        if (isGameInLibrary(game.id)) {
-            viewModelScope.launch {
-                screenState = screenState.copy(
-                    addToLibraryState = AddToLibraryState.Error(
-                        message = "${game.name} is already in your library",
-                        gameId = game.id
-                    )
-                )
-                delay(DUPLICATE_CHECK_DELAY_MS)
-                screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-            }
-            return
-        }
-        
-        // Show the status picker sheet
-        screenState = screenState.copy(gameToAddWithStatus = game)
-    }
-    
-    /**
-     * Dismisses the status picker sheet without adding the game.
-     */
-    fun dismissStatusPicker() {
-        screenState = screenState.copy(gameToAddWithStatus = null)
-    }
-    
-    /**
-     * Adds the game to library with the selected status.
-     */
-    fun addGameWithStatus(game: Game, status: GameStatus) {
-        // Dismiss the sheet immediately
-        screenState = screenState.copy(gameToAddWithStatus = null)
-        
-        viewModelScope.launch {
-            // Thread-safe check: add returns false if already present
-            if (!gamesBeingAdded.add(game.id)) {
-                android.util.Log.d(TAG, "Game ${game.id} is already being added, skipping")
-                return@launch
-            }
-
-            try {
-                // Set loading state
-                screenState = screenState.copy(
-                    addToLibraryState = AddToLibraryState.Loading(gameId = game.id),
-                    animatingGameIds = screenState.animatingGameIds + game.id
-                )
-
-                try {
-                    // Add to library with the selected status
-                    when (val result = gameListRepository.addGameToList(game, status)) {
-                        is RequestState.Success -> {
-                            screenState = screenState.copy(
-                                addToLibraryState = AddToLibraryState.Success(
-                                    message = "${game.name} added to library!",
-                                    gameId = game.id
-                                )
-                            )
-
-                            // Wait for animation to complete
-                            delay(ANIMATION_DURATION_MS)
-
-                            // Remove from animating set to allow filtering
-                            screenState = screenState.copy(
-                                animatingGameIds = screenState.animatingGameIds - game.id
-                            )
-
-                            // Reapply filter to remove the game from the list
-                            applyRecommendationFilter()
-
-                            // Auto-reset success state after showing notification
-                            delay(NOTIFICATION_DISPLAY_MS)
-                            screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                        }
-                        is RequestState.Error -> {
-                            screenState = screenState.copy(
-                                addToLibraryState = AddToLibraryState.Error(
-                                    message = result.message,
-                                    gameId = game.id
-                                ),
-                                animatingGameIds = screenState.animatingGameIds - game.id
-                            )
-                            delay(ERROR_RESET_DELAY_MS)
-                            screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                        }
-                        else -> {
-                            screenState = screenState.copy(
-                                addToLibraryState = AddToLibraryState.Error(
-                                    message = "Unexpected error occurred",
-                                    gameId = game.id
-                                ),
-                                animatingGameIds = screenState.animatingGameIds - game.id
-                            )
-                            delay(ERROR_RESET_DELAY_MS)
-                            screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                        }
-                    }
-                } catch (e: Exception) {
-                    screenState = screenState.copy(
-                        addToLibraryState = AddToLibraryState.Error(
-                            message = e.localizedMessage ?: "An error occurred",
-                            gameId = game.id
-                        ),
-                        animatingGameIds = screenState.animatingGameIds - game.id
-                    )
-                    delay(ERROR_RESET_DELAY_MS)
-                    screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-                }
-            } finally {
-                // Thread-safe removal from tracking set
-                gamesBeingAdded.remove(game.id)
-            }
-        }
-    }
-
-    fun resetAddToLibraryState() {
-        screenState = screenState.copy(addToLibraryState = AddToLibraryState.Idle)
-    }
-
     // ==================== Studio Filter Methods ====================
 
     // Separate job for fetching games after filter is set
-    private var studioGamesJob: Job? = null
+    // private var studioGamesJob: Job? = null // Removed in favor of launchWithKey
 
     /**
      * Set studio filter with debouncing and optimistic UI.
@@ -596,13 +450,13 @@ class HomeViewModel(
         )
 
         // Cancel previous filter job
-        filterJob?.cancel()
-        filterJob = viewModelScope.launch {
-            delay(FILTER_DEBOUNCE_MS) // Debounce rapid changes
-
+        launchWithDebounce(
+            key = "studio_filter_setup",
+            delay = FILTER_DEBOUNCE_MS
+        ) {
             try {
                 // Get expanded studios for UI display
-                val expandedStudios = studioExpansionRepository.getExpandedStudios(studioName)
+                val expandedStudios = aiRepository.getExpandedStudios(studioName)
 
                 studioFilterState = studioFilterState.copy(
                     expandedStudios = expandedStudios,
@@ -634,8 +488,7 @@ class HomeViewModel(
      * Uses the filterType to determine whether to query developers, publishers, or both.
      */
     private fun fetchGamesForStudioFilter(parentStudio: String) {
-        studioGamesJob?.cancel()
-        studioGamesJob = viewModelScope.launch {
+        launchWithKey("studio_games_fetch") {
             screenState = screenState.copy(recommendedGames = RequestState.Loading)
             
             // Reset pagination state
@@ -648,7 +501,7 @@ class HomeViewModel(
             
             try {
                 // Get slugs for API filtering
-                val slugs = studioExpansionRepository.getStudioSlugs(parentStudio)
+                val slugs = aiRepository.getStudioSlugs(parentStudio)
                 studioFilterSlugs = slugs
                 
                 // Check if we have valid slugs
@@ -658,7 +511,7 @@ class HomeViewModel(
                         recommendedGames = RequestState.Success(emptyList())
                     )
                     studioFilterState = studioFilterState.copy(hasMorePages = false)
-                    return@launch
+                    return@launchWithKey
                 }
                 
                 android.util.Log.d("HomeViewModel", "Fetching games for studios: $slugs (type: ${studioFilterState.filterType})")
@@ -682,7 +535,7 @@ class HomeViewModel(
                 ).collect { state ->
                     when (state) {
                         is RequestState.Success -> {
-                            val filtered = state.data.filter { it.id !in screenState.gamesInLibrary }
+                            val filtered = state.data.filter { !isGameInLibrary(it.id) }
                             studioFilteredGames.addAll(filtered)
                             android.util.Log.d("HomeViewModel", "Studio filter: ${state.data.size} games, ${filtered.size} after library filter")
                             screenState = screenState.copy(
@@ -726,7 +579,7 @@ class HomeViewModel(
         
         val parentStudio = studioFilterState.selectedParentStudio ?: return
         
-        viewModelScope.launch {
+        launchWithKey("load_more_studio_games") {
             studioFilterState = studioFilterState.copy(isLoadingMore = true)
             
             try {
@@ -754,7 +607,7 @@ class HomeViewModel(
                             // Filter out games already in library and already in list
                             val existingIds = studioFilteredGames.map { it.id }.toSet()
                             val newGames = state.data.filter { 
-                                it.id !in screenState.gamesInLibrary && it.id !in existingIds 
+                                !isGameInLibrary(it.id) && it.id !in existingIds 
                             }
                             
                             studioFilteredGames.addAll(newGames)
@@ -832,8 +685,8 @@ class HomeViewModel(
      */
     fun clearStudioFilter() {
         // Cancel any ongoing filter jobs
-        filterJob?.cancel()
-        studioGamesJob?.cancel()
+        cancelJob("studio_filter_setup")
+        cancelJob("studio_games_fetch")
         
         studioFilterState = StudioFilterState()
         applyRecommendationFilter() // Restore unfiltered recommendations
@@ -848,8 +701,8 @@ class HomeViewModel(
 
     // ==================== Discovery Filter Methods ====================
 
-    private var discoveryFilterJob: Job? = null
-    private var developerSearchJob: Job? = null
+    // private var discoveryFilterJob: Job? = null // Removed in favor of launchWithKey
+    // private var developerSearchJob: Job? = null // Removed in favor of launchWithKey
 
     /**
      * Show the discovery filter dialog.
@@ -874,23 +727,54 @@ class HomeViewModel(
 
     /**
      * Search for developers based on query.
+     * Uses instant local suggestions first, then enriches with AI results.
      */
     fun searchDevelopers(query: String) {
-        developerSearchJob?.cancel()
-        developerSearchJob = viewModelScope.launch {
+        // Cancel any previous search job
+        cancelJob("developer_search")
+        
+        if (query.length < 2) {
+            discoveryFilterState = discoveryFilterState.copy(
+                searchResults = emptyList(),
+                expandedStudios = emptySet(),
+                isLoadingDevelopers = false
+            )
+            return
+        }
+        
+        // Immediately show local suggestions (no delay, synchronous)
+        val localSuggestions = aiRepository.getLocalStudioSuggestions(query, 5)
+        if (localSuggestions.isNotEmpty()) {
+            discoveryFilterState = discoveryFilterState.copy(
+                searchResults = localSuggestions.map { it.name },
+                expandedStudios = localSuggestions.map { it.name }.toSet(),
+                isLoadingDevelopers = true // Still loading AI results
+            )
+        }
+        
+        launchWithDebounce(
+            key = "developer_search",
+            delay = DEVELOPER_SEARCH_DEBOUNCE_MS
+        ) {
             discoveryFilterState = discoveryFilterState.copy(isLoadingDevelopers = true)
-            delay(DEVELOPER_SEARCH_DEBOUNCE_MS) // Debounce
             
             try {
-                // Get expanded studios/developers for the query
-                val developers = studioExpansionRepository.getExpandedStudios(query)
+                // Search for studios with AI enhancement
+                val searchResult = aiRepository.searchStudios(
+                    query = query,
+                    includePublishers = true,
+                    includeDevelopers = true,
+                    limit = 10
+                )
+                
                 discoveryFilterState = discoveryFilterState.copy(
-                    searchResults = developers.toList(),
-                    expandedStudios = developers,
+                    searchResults = searchResult.matches.map { it.name },
+                    expandedStudios = searchResult.matches.map { it.name }.toSet(),
                     isLoadingDevelopers = false
                 )
             } catch (e: Exception) {
                 android.util.Log.e("HomeViewModel", "Developer search failed", e)
+                // Keep any local results we already have
                 discoveryFilterState = discoveryFilterState.copy(
                     isLoadingDevelopers = false,
                     error = e.message
@@ -904,10 +788,10 @@ class HomeViewModel(
      * When a parent studio is selected (e.g., "Epic Games"), all sub-studios are included.
      */
     fun selectDeveloperWithStudios(developer: String) {
-        viewModelScope.launch {
+        launchWithKey("select_developer") {
             try {
                 // Get sub-studios for the selected developer
-                val subStudios = studioExpansionRepository.getExpandedStudios(developer)
+                val subStudios = aiRepository.getExpandedStudios(developer)
                 
                 val currentSelected = discoveryFilterState.selectedDevelopers.toMutableMap()
                 currentSelected[developer] = subStudios - developer // Exclude the parent itself from sub-studios
@@ -952,8 +836,7 @@ class HomeViewModel(
             return
         }
 
-        discoveryFilterJob?.cancel()
-        discoveryFilterJob = viewModelScope.launch {
+        launchWithKey("discovery_filter") {
             screenState = screenState.copy(recommendedGames = RequestState.Loading)
 
             try {
@@ -998,7 +881,7 @@ class HomeViewModel(
                         is RequestState.Success -> {
                             // Cache unfiltered results
                             lastDiscoveryResults = state.data
-                            val filtered = state.data.filter { it.id !in screenState.gamesInLibrary }
+                            val filtered = state.data.filter { !isGameInLibrary(it.id) }
                             android.util.Log.d("HomeViewModel", "Discovery filter: ${state.data.size} games, ${filtered.size} after library filter")
                             screenState = screenState.copy(
                                 recommendedGames = RequestState.Success(filtered)
@@ -1028,10 +911,10 @@ class HomeViewModel(
     /**
      * Load more discovery results when the list is getting short.
      */
-    private fun loadMoreDiscoveryResults() {
+    fun loadMoreDiscoveryResults() {
         if (isLoadingMoreDiscovery || !discoveryFilterState.hasActiveFilters) return
         
-        viewModelScope.launch {
+        launchWithKey("load_more_discovery") {
             isLoadingMoreDiscovery = true
             try {
                 discoveryFilterPage++
@@ -1061,7 +944,7 @@ class HomeViewModel(
                     if (state is RequestState.Success && state.data.isNotEmpty()) {
                         // Add new results to cache
                         lastDiscoveryResults = lastDiscoveryResults + state.data
-                        val filtered = lastDiscoveryResults.filter { it.id !in screenState.gamesInLibrary }
+                        val filtered = lastDiscoveryResults.filter { it.id !in gamesInLibrary.value }
                         android.util.Log.d(TAG, "Loaded more discovery: +${state.data.size} games, total filtered: ${filtered.size}")
                         screenState = screenState.copy(
                             recommendedGames = RequestState.Success(filtered)
@@ -1081,8 +964,8 @@ class HomeViewModel(
      */
     fun clearDiscoveryFilters() {
         // Cancel any ongoing filter jobs first
-        discoveryFilterJob?.cancel()
-        developerSearchJob?.cancel()
+        cancelJob("discovery_filter")
+        cancelJob("developer_search")
         
         discoveryFilterState = DiscoveryFilterState()
         clearStudioFilter()
@@ -1145,3 +1028,4 @@ class HomeViewModel(
         }
     }
 }
+

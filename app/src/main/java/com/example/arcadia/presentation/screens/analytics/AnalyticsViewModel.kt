@@ -3,14 +3,17 @@ package com.example.arcadia.presentation.screens.analytics
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.arcadia.domain.model.AIError
+import com.example.arcadia.presentation.base.BaseViewModel
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
+import com.example.arcadia.domain.model.ai.GameInsights
 import com.example.arcadia.domain.repository.GameListRepository
-import com.example.arcadia.domain.repository.GeminiRepository
+import com.example.arcadia.domain.repository.AIRepository
 import com.example.arcadia.domain.repository.SortOrder
 import com.example.arcadia.util.RequestState
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -28,9 +31,13 @@ data class AnalyticsState(
     val genreRatingAnalysis: List<GenreRatingStats> = emptyList(),
     val gamesAddedByYear: List<Pair<String, Int>> = emptyList(),
     val recentTrend: String = "",
-    val aiInsights: GeminiRepository.GameInsights? = null,
+    val aiInsights: GameInsights? = null,
     val isLoadingInsights: Boolean = false,
-    val insightsError: String? = null
+    val insightsError: String? = null,
+    val isInsightsErrorRetryable: Boolean = false,
+    // Streaming support
+    val streamingText: String? = null,
+    val isStreaming: Boolean = false
 )
 
 data class GenreRatingStats(
@@ -50,25 +57,25 @@ enum class GamingPersonality(val title: String, val description: String) {
 
 class AnalyticsViewModel(
     private val gameListRepository: GameListRepository,
-    private val geminiRepository: GeminiRepository
-) : ViewModel() {
+    private val aiRepository: AIRepository
+) : BaseViewModel() {
 
     var state by mutableStateOf(AnalyticsState())
         private set
-
+    
     init {
         loadAnalytics()
     }
 
     private fun loadAnalytics() {
-        viewModelScope.launch {
+        launchWithKey("load_analytics") {
             state = state.copy(isLoading = true)
             // Fetch all games
             gameListRepository.getGameList(SortOrder.TITLE_A_Z).collect { result ->
                 if (result is RequestState.Success) {
                     calculateStats(result.data)
-                    // Load AI insights after basic stats are calculated
-                    loadAIInsights(result.data)
+                    // Load AI insights with streaming after basic stats are calculated
+                    loadAIInsightsStreaming(result.data)
                 } else if (result is RequestState.Error) {
                     state = state.copy(isLoading = false)
                 }
@@ -76,6 +83,54 @@ class AnalyticsViewModel(
         }
     }
 
+    /**
+     * Load AI insights using streaming for better UX.
+     * Shows partial results as they are generated.
+     */
+    fun loadAIInsightsStreaming(games: List<GameListEntry>) {
+        if (games.isEmpty()) {
+            state = state.copy(
+                isLoadingInsights = false,
+                insightsError = null,
+                isStreaming = false
+            )
+            return
+        }
+        
+        launchWithKey("ai_insights") {
+            state = state.copy(
+                isLoadingInsights = true, 
+                insightsError = null,
+                isStreaming = true,
+                streamingText = null
+            )
+
+            aiRepository.analyzeGamingProfileStreaming(games).collect { streamingInsights ->
+                if (streamingInsights.isComplete) {
+                    // Streaming complete
+                    state = state.copy(
+                        aiInsights = streamingInsights.parsedInsights,
+                        isLoadingInsights = false,
+                        isStreaming = false,
+                        streamingText = null,
+                        insightsError = if (streamingInsights.parsedInsights == null && 
+                                           streamingInsights.partialText.startsWith("Error:")) {
+                            streamingInsights.partialText.removePrefix("Error: ")
+                        } else null
+                    )
+                } else {
+                    // Update with partial text for live preview
+                    state = state.copy(
+                        streamingText = streamingInsights.partialText
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Legacy non-streaming method - kept for fallback
+     */
     fun loadAIInsights(games: List<GameListEntry>) {
         if (games.isEmpty()) {
             state = state.copy(
@@ -85,31 +140,34 @@ class AnalyticsViewModel(
             return
         }
 
-        viewModelScope.launch {
+        launchWithKey("ai_insights") {
             state = state.copy(isLoadingInsights = true, insightsError = null)
 
-            val result = geminiRepository.analyzeGamingProfile(games)
+            val result = aiRepository.analyzeGamingProfile(games)
 
             result.onSuccess { insights ->
                 state = state.copy(
                     aiInsights = insights,
                     isLoadingInsights = false,
-                    insightsError = null
+                    insightsError = null,
+                    isInsightsErrorRetryable = false
                 )
             }.onFailure { error ->
+                val aiError = if (error is AIError) error else AIError.from(error)
                 state = state.copy(
                     isLoadingInsights = false,
-                    insightsError = error.message ?: "Failed to generate insights"
+                    insightsError = aiError.message ?: "Failed to generate insights",
+                    isInsightsErrorRetryable = with(AIError.Companion) { aiError.isRetryable() }
                 )
             }
         }
     }
 
     fun retryLoadInsights() {
-        viewModelScope.launch {
+        launchWithKey("retry_insights") {
             gameListRepository.getGameList(SortOrder.TITLE_A_Z).collect { result ->
                 if (result is RequestState.Success) {
-                    loadAIInsights(result.data)
+                    loadAIInsightsStreaming(result.data)
                 }
             }
         }

@@ -37,6 +37,9 @@ class PreferencesManager(context: Context) {
         // Search history keys
         private const val KEY_SEARCH_HISTORY = "search_history"
         private const val MAX_SEARCH_HISTORY = 10
+        
+        // Pending deletions key
+        private const val KEY_PENDING_DELETIONS = "pending_deletions"
     }
     
     fun setOnBoardingCompleted(completed: Boolean) {
@@ -278,5 +281,75 @@ class PreferencesManager(context: Context) {
     fun clearSearchHistory() {
         preferences.edit { remove(KEY_SEARCH_HISTORY) }
     }
+    
+    // ==================== Pending Deletions ====================
+    
+    /**
+     * Save a pending deletion to survive app restarts.
+     * Stores the game ID and timestamp when deletion was initiated.
+     */
+    fun savePendingDeletion(gameId: String, gameData: String, timestamp: Long) {
+        val deletions = getPendingDeletions().toMutableMap()
+        deletions[gameId] = Pair(gameData, timestamp)
+        
+        val jsonObject = JSONObject()
+        deletions.forEach { (id, data) ->
+            val deleteInfo = JSONObject().apply {
+                put("data", data.first)
+                put("timestamp", data.second)
+            }
+            jsonObject.put(id, deleteInfo)
+        }
+        
+        preferences.edit { putString(KEY_PENDING_DELETIONS, jsonObject.toString()) }
+    }
+    
+    /**
+     * Get all pending deletions.
+     * Returns map of gameId to Pair(gameData, timestamp)
+     */
+    fun getPendingDeletions(): Map<String, Pair<String, Long>> {
+        val json = preferences.getString(KEY_PENDING_DELETIONS, null) ?: return emptyMap()
+        return try {
+            val jsonObject = JSONObject(json)
+            val deletions = mutableMapOf<String, Pair<String, Long>>()
+            jsonObject.keys().forEach { key ->
+                val deleteInfo = jsonObject.getJSONObject(key)
+                val data = deleteInfo.getString("data")
+                val timestamp = deleteInfo.getLong("timestamp")
+                deletions[key] = Pair(data, timestamp)
+            }
+            deletions
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+    
+    /**
+     * Remove a pending deletion (when completed or cancelled).
+     */
+    fun removePendingDeletion(gameId: String) {
+        val deletions = getPendingDeletions().toMutableMap()
+        deletions.remove(gameId)
+        
+        val jsonObject = JSONObject()
+        deletions.forEach { (id, data) ->
+            val deleteInfo = JSONObject().apply {
+                put("data", data.first)
+                put("timestamp", data.second)
+            }
+            jsonObject.put(id, deleteInfo)
+        }
+        
+        preferences.edit { putString(KEY_PENDING_DELETIONS, jsonObject.toString()) }
+    }
+    
+    /**
+     * Clear all pending deletions.
+     */
+    fun clearPendingDeletions() {
+        preferences.edit { remove(KEY_PENDING_DELETIONS) }
+    }
 }
+
 

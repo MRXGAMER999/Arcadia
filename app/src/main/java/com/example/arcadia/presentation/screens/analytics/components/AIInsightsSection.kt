@@ -42,7 +42,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.R
-import com.example.arcadia.domain.repository.GeminiRepository
+import com.example.arcadia.domain.model.ai.GameInsights
 import com.example.arcadia.presentation.screens.analytics.AnalyticsState
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.TextSecondary
@@ -109,6 +109,9 @@ fun AIInsightsSection(state: AnalyticsState) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when {
+                    state.isStreaming && state.streamingText != null -> {
+                        StreamingInsightsState(streamingText = state.streamingText)
+                    }
                     state.isLoadingInsights -> {
                         LoadingInsightsState()
                     }
@@ -122,6 +125,73 @@ fun AIInsightsSection(state: AnalyticsState) {
                         EmptyInsightsState()
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Shows streaming text as it's being generated
+ */
+@Composable
+fun StreamingInsightsState(streamingText: String) {
+    val infiniteTransition = rememberInfiniteTransition(label = "streaming")
+    val alpha = infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "cursorAlpha"
+    )
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 12.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = ButtonPrimary,
+                strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Generating insights...",
+                color = ButtonPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF2A3A5A).copy(alpha = 0.5f)
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = buildAnnotatedString {
+                        append(streamingText)
+                        // Blinking cursor effect
+                        withStyle(SpanStyle(color = ButtonPrimary.copy(alpha = alpha.value))) {
+                            append("▊")
+                        }
+                    },
+                    color = TextSecondary.copy(alpha = 0.85f),
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp
+                )
             }
         }
     }
@@ -244,7 +314,7 @@ fun ErrorInsightsState(error: String) {
 }
 
 @Composable
-fun AIInsightsContent(insights: GeminiRepository.GameInsights) {
+fun AIInsightsContent(insights: GameInsights) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)

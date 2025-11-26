@@ -3,9 +3,9 @@ package com.example.arcadia.presentation.screens.home
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.arcadia.data.repository.StudioExpansionRepository
+import com.example.arcadia.domain.repository.AIRepository
+import com.example.arcadia.presentation.base.BaseViewModel
 import com.example.arcadia.domain.model.DiscoveryFilterState
 import com.example.arcadia.domain.model.DiscoverySortOrder
 import com.example.arcadia.domain.model.DiscoverySortType
@@ -42,9 +42,9 @@ data class DiscoveryState(
  */
 class DiscoveryViewModel(
     private val gameRepository: GameRepository,
-    private val studioExpansionRepository: StudioExpansionRepository,
+    private val aiRepository: AIRepository,
     private val preferencesManager: PreferencesManager
-) : ViewModel() {
+) : BaseViewModel() {
 
     companion object {
         private const val TAG = "DiscoveryViewModel"
@@ -81,12 +81,6 @@ class DiscoveryViewModel(
     // Cache for studio filter
     private var studioFilteredGames: MutableList<Game> = mutableListOf()
     private var studioFilterSlugs: String = ""
-
-    // Job management
-    private var discoveryFilterJob: Job? = null
-    private var developerSearchJob: Job? = null
-    private var filterJob: Job? = null
-    private var studioGamesJob: Job? = null
 
     init {
         loadSavedDiscoveryPreferences()
@@ -153,22 +147,56 @@ class DiscoveryViewModel(
 
     /**
      * Search for developers based on query.
+     * Uses instant local suggestions first, then enriches with AI results.
      */
     fun searchDevelopers(query: String) {
-        developerSearchJob?.cancel()
-        developerSearchJob = viewModelScope.launch {
+        // Cancel any previous search job
+        cancelJob("developer_search")
+        
+        // Immediately show local suggestions (no delay, synchronous)
+        if (query.length >= 2) {
+            val localSuggestions = aiRepository.getLocalStudioSuggestions(query, 5)
+            if (localSuggestions.isNotEmpty()) {
+                discoveryFilterState = discoveryFilterState.copy(
+                    searchResults = localSuggestions.map { it.name },
+                    expandedStudios = localSuggestions.map { it.name }.toSet(),
+                    isLoadingDevelopers = true // Still loading AI results
+                )
+            }
+        }
+        
+        if (query.length < 2) {
+            discoveryFilterState = discoveryFilterState.copy(
+                searchResults = emptyList(),
+                expandedStudios = emptySet(),
+                isLoadingDevelopers = false
+            )
+            return
+        }
+        
+        launchWithDebounce(
+            key = "developer_search",
+            delay = DEVELOPER_SEARCH_DEBOUNCE_MS
+        ) {
             discoveryFilterState = discoveryFilterState.copy(isLoadingDevelopers = true)
-            delay(DEVELOPER_SEARCH_DEBOUNCE_MS)
 
             try {
-                val developers = studioExpansionRepository.getExpandedStudios(query)
+                // Search for studios with AI enhancement
+                val searchResult = aiRepository.searchStudios(
+                    query = query,
+                    includePublishers = true,
+                    includeDevelopers = true,
+                    limit = 10
+                )
+                
                 discoveryFilterState = discoveryFilterState.copy(
-                    searchResults = developers.toList(),
-                    expandedStudios = developers,
+                    searchResults = searchResult.matches.map { it.name },
+                    expandedStudios = searchResult.matches.map { it.name }.toSet(),
                     isLoadingDevelopers = false
                 )
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Developer search failed", e)
+                // Keep any local results we already have
                 discoveryFilterState = discoveryFilterState.copy(
                     isLoadingDevelopers = false,
                     error = e.message
@@ -181,9 +209,9 @@ class DiscoveryViewModel(
      * Select a developer with its associated sub-studios.
      */
     fun selectDeveloperWithStudios(developer: String) {
-        viewModelScope.launch {
+        launchWithKey("select_developer") {
             try {
-                val subStudios = studioExpansionRepository.getExpandedStudios(developer)
+                val subStudios = aiRepository.getExpandedStudios(developer)
                 val currentSelected = discoveryFilterState.selectedDevelopers.toMutableMap()
                 currentSelected[developer] = subStudios - developer
 
@@ -225,8 +253,7 @@ class DiscoveryViewModel(
             return
         }
 
-        discoveryFilterJob?.cancel()
-        discoveryFilterJob = viewModelScope.launch {
+        launchWithKey("discovery_filter") {
             _discoveryState.value = _discoveryState.value.copy(games = RequestState.Loading)
             onComplete?.invoke(RequestState.Loading)
 
@@ -313,7 +340,7 @@ class DiscoveryViewModel(
     fun loadMoreDiscoveryResults() {
         if (isLoadingMoreDiscovery || !discoveryFilterState.hasActiveFilters) return
 
-        viewModelScope.launch {
+        launchWithKey("load_more_discovery") {
             isLoadingMoreDiscovery = true
             try {
                 discoveryFilterPage++
@@ -401,8 +428,8 @@ class DiscoveryViewModel(
      * Clear all discovery filters.
      */
     fun clearDiscoveryFilters() {
-        discoveryFilterJob?.cancel()
-        developerSearchJob?.cancel()
+        cancelJob("discovery_filter")
+        cancelJob("developer_search")
 
         discoveryFilterState = DiscoveryFilterState()
         clearStudioFilter()
@@ -432,12 +459,12 @@ class DiscoveryViewModel(
             error = null
         )
 
-        filterJob?.cancel()
-        filterJob = viewModelScope.launch {
-            delay(FILTER_DEBOUNCE_MS)
-
+        launchWithDebounce(
+            key = "studio_filter",
+            delay = FILTER_DEBOUNCE_MS
+        ) {
             try {
-                val expandedStudios = studioExpansionRepository.getExpandedStudios(studioName)
+                val expandedStudios = aiRepository.getExpandedStudios(studioName)
 
                 studioFilterState = studioFilterState.copy(
                     expandedStudios = expandedStudios,
@@ -459,8 +486,7 @@ class DiscoveryViewModel(
     }
 
     private fun fetchGamesForStudioFilter(parentStudio: String) {
-        studioGamesJob?.cancel()
-        studioGamesJob = viewModelScope.launch {
+        launchWithKey("studio_games_fetch") {
             _discoveryState.value = _discoveryState.value.copy(games = RequestState.Loading)
 
             studioFilteredGames.clear()
@@ -471,14 +497,14 @@ class DiscoveryViewModel(
             )
 
             try {
-                val slugs = studioExpansionRepository.getStudioSlugs(parentStudio)
+                val slugs = aiRepository.getStudioSlugs(parentStudio)
                 studioFilterSlugs = slugs
 
                 if (slugs.isBlank()) {
                     android.util.Log.w(TAG, "No slugs found for: $parentStudio")
                     _discoveryState.value = _discoveryState.value.copy(games = RequestState.Success(emptyList()))
                     studioFilterState = studioFilterState.copy(hasMorePages = false)
-                    return@launch
+                    return@launchWithKey
                 }
 
                 val developerSlugs = when (studioFilterState.filterType) {
@@ -531,7 +557,7 @@ class DiscoveryViewModel(
             return
         }
 
-        viewModelScope.launch {
+        launchWithKey("load_more_studio_games") {
             studioFilterState = studioFilterState.copy(isLoadingMore = true)
 
             try {
@@ -606,8 +632,8 @@ class DiscoveryViewModel(
     }
 
     fun clearStudioFilter() {
-        filterJob?.cancel()
-        studioGamesJob?.cancel()
+        cancelJob("studio_filter")
+        cancelJob("studio_games_fetch")
         studioFilterState = StudioFilterState()
         studioFilteredGames.clear()
     }

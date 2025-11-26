@@ -4,9 +4,9 @@ import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.Gamer
+import com.example.arcadia.presentation.base.BaseViewModel
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.Job
@@ -40,7 +40,7 @@ data class EditProfileLocalState(
 
 class EditProfileViewModel(
     private val gamerRepository: GamerRepository
-): ViewModel() {
+): BaseViewModel() {
     
     var screenReady: RequestState<Unit> by mutableStateOf(RequestState.Loading)
         private set
@@ -93,14 +93,11 @@ class EditProfileViewModel(
                 validateUsername().isEmpty() &&
                 validateDescription().isEmpty()
     
-    private var dataLoadJob: Job? = null
-    
     init {
         loadGamerData()
     }
     
     fun reloadData() {
-        dataLoadJob?.cancel()
         loadGamerData()
     }
     
@@ -108,7 +105,7 @@ class EditProfileViewModel(
         screenReady = RequestState.Loading
         screenState = EditProfileScreenState()
         
-        dataLoadJob = viewModelScope.launch {
+        launchWithKey("load_gamer_data") {
             gamerRepository.readCustomerFlow().collectLatest { data ->
                 if (data.isSuccess()) {
                     val fetchedGamer = data.getSuccessData()
@@ -176,7 +173,7 @@ class EditProfileViewModel(
         onError: (String) -> Unit
     ) {
         isUploadingImage = true
-        viewModelScope.launch {
+        launchWithKey("upload_image") {
             gamerRepository.uploadProfileImage(
                 imageUri = imageUri,
                 onSuccess = { downloadUrl ->
@@ -198,7 +195,7 @@ class EditProfileViewModel(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        viewModelScope.launch {
+        launchWithKey("save_profile") {
             gamerRepository.updateGamer(
                 gamer = Gamer(
                     id = screenState.id,

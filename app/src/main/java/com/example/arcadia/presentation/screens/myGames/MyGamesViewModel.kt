@@ -3,9 +3,11 @@ package com.example.arcadia.presentation.screens.myGames
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.GameListEntry
+import com.example.arcadia.presentation.base.UndoableViewModel
+import com.example.arcadia.presentation.base.SortCriterion
+import com.example.arcadia.util.FilterHelper
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.SortOrder
@@ -23,24 +25,30 @@ data class MyGamesScreenState(
     val selectedGameToEdit: GameListEntry? = null,
     val showSuccessNotification: Boolean = false,
     val notificationMessage: String = "",
-    val deletedGame: GameListEntry? = null,
-    val showUndoSnackbar: Boolean = false,
+    // Undo state is now in UndoableViewModel
     val showQuickRateDialog: Boolean = false,
     val gameToQuickRate: GameListEntry? = null,
     val showQuickSettingsDialog: Boolean = false,
-    val quickSettingsState: QuickSettingsState = QuickSettingsState()
+    val quickSettingsState: QuickSettingsState = QuickSettingsState(),
+    // Unsaved changes snackbar
+    val showUnsavedChangesSnackbar: Boolean = false,
+    val unsavedChangesGame: GameListEntry? = null,
 )
 
 class MyGamesViewModel(
     private val gameListRepository: GameListRepository,
     private val preferencesManager: com.example.arcadia.util.PreferencesManager
-) : ViewModel() {
+) : UndoableViewModel(gameListRepository) {
+    
+    companion object {
+        private const val NOTIFICATION_DURATION_MS = 2000L
+        private const val UNDO_DELAY_MS = 5000L
+    }
     
     var screenState by mutableStateOf(MyGamesScreenState())
         private set
     
-    private var gamesJob: Job? = null
-    private val pendingDeletions = mutableMapOf<String, Job>()
+    // private var gamesJob: Job? = null // Removed in favor of launchWithKey
 
     init {
         // Load saved filter preferences
@@ -57,83 +65,33 @@ class MyGamesViewModel(
         loadGames()
     }
     
-    /**
-     * Filters games based on current Quick Settings state.
-     * Uses AND logic: games must match ALL selected filters.
-     */
-    private fun filterGames(games: List<GameListEntry> = screenState.allGames): List<GameListEntry> {
-        val filters = screenState.quickSettingsState
-
-        // Early return if no filters applied
-        if (filters.selectedGenres.isEmpty() && filters.selectedStatuses.isEmpty()) {
-            return games
-        }
-        
-        return games.filter { game ->
-            matchesGenreFilter(game, filters.selectedGenres) &&
-            matchesStatusFilter(game, filters.selectedStatuses)
-        }
-    }
-
-    private fun matchesGenreFilter(game: GameListEntry, selectedGenres: Set<String>): Boolean {
-        if (selectedGenres.isEmpty()) return true
-
-        // Game must have at least one of the selected genres (case-insensitive)
-        return game.genres.any { gameGenre ->
-            selectedGenres.any { it.equals(gameGenre, ignoreCase = true) }
-        }
-    }
-
-    private fun matchesStatusFilter(game: GameListEntry, selectedStatuses: Set<GameStatus>): Boolean {
-        if (selectedStatuses.isEmpty()) return true
-        return game.status in selectedStatuses
-    }
-
-    /**
-     * Sorts games based on the provided sort order.
-     * Handles null values appropriately for each sort type.
-     * For ratings: unrated games always appear at the bottom.
-     */
-    private fun sortGames(games: List<GameListEntry>, sortOrder: SortOrder): List<GameListEntry> {
+    private fun mapToSortCriterion(sortOrder: SortOrder): SortCriterion {
         return when (sortOrder) {
-            SortOrder.TITLE_A_Z -> games.sortedBy { it.name.lowercase() }
-            SortOrder.TITLE_Z_A -> games.sortedByDescending { it.name.lowercase() }
-            SortOrder.NEWEST_FIRST -> games.sortedByDescending { it.addedAt }
-            SortOrder.OLDEST_FIRST -> games.sortedBy { it.addedAt }
-            SortOrder.RATING_HIGH -> {
-                // Separate rated and unrated games
-                val (rated, unrated) = games.partition { it.rating != null }
-                // Sort rated games by rating (highest first), then append unrated games
-                rated.sortedByDescending { it.rating!! } + unrated
-            }
-            SortOrder.RATING_LOW -> {
-                // Separate rated and unrated games
-                val (rated, unrated) = games.partition { it.rating != null }
-                // Sort rated games by rating (lowest first), then append unrated games
-                rated.sortedBy { it.rating!! } + unrated
-            }
-            SortOrder.RELEASE_NEW -> games.sortedWith(
-                compareByDescending(nullsLast()) { it.releaseDate }
-            )
-            SortOrder.RELEASE_OLD -> games.sortedWith(
-                compareBy(nullsLast()) { it.releaseDate }
-            )
+            SortOrder.TITLE_A_Z -> SortCriterion.Title
+            SortOrder.TITLE_Z_A -> SortCriterion.TitleDesc
+            SortOrder.NEWEST_FIRST -> SortCriterion.DateAddedDesc
+            SortOrder.OLDEST_FIRST -> SortCriterion.DateAdded
+            SortOrder.RATING_HIGH -> SortCriterion.RatingDesc
+            SortOrder.RATING_LOW -> SortCriterion.Rating
+            SortOrder.RELEASE_NEW -> SortCriterion.ReleaseDateDesc
+            SortOrder.RELEASE_OLD -> SortCriterion.ReleaseDate
         }
     }
     
     fun getAvailableGenres(): List<String> {
-        return screenState.allGames
-            .flatMap { it.genres }
-            .distinct()
-            .sorted()
+        return FilterHelper.extractGenres(screenState.allGames)
     }
     
     fun getAvailableStatuses(): List<GameStatus> {
-        return GameStatus.entries.toList()
+        return FilterHelper.getAllStatuses()
     }
     
     fun getFilteredGamesCount(): Int {
-        val filteredGames = filterGames(screenState.allGames)
+        val filteredGames = FilterHelper.applyFilters(
+            games = screenState.allGames,
+            selectedGenres = screenState.quickSettingsState.selectedGenres,
+            selectedStatuses = screenState.quickSettingsState.selectedStatuses
+        )
         return filteredGames.size
     }
     
@@ -209,8 +167,12 @@ class MyGamesViewModel(
      * Also persists filter preferences.
      */
     private fun applyCurrentFilters() {
-        val filteredGames = filterGames(screenState.allGames)
-        val sortedGames = sortGames(filteredGames, screenState.sortOrder)
+        val filteredGames = FilterHelper.applyFilters(
+            games = screenState.allGames,
+            selectedGenres = screenState.quickSettingsState.selectedGenres,
+            selectedStatuses = screenState.quickSettingsState.selectedStatuses
+        )
+        val sortedGames = FilterHelper.sortGames(filteredGames, mapToSortCriterion(screenState.sortOrder))
         screenState = screenState.copy(games = RequestState.Success(sortedGames))
         
         // Persist filter preferences
@@ -243,8 +205,7 @@ class MyGamesViewModel(
     }
     
     private fun loadGames() {
-        gamesJob?.cancel()
-        gamesJob = viewModelScope.launch {
+        launchWithKey("load_games") {
             val sortOrder = screenState.sortOrder
 
             // Fetch all games without genre filtering (client-side filtering will be applied)
@@ -259,9 +220,7 @@ class MyGamesViewModel(
                             // Apply client-side filtering with current state (not captured)
                             // This ensures we always use the latest filter settings even when
                             // Firestore updates trigger the snapshot listener
-                            val filteredGames = filterGames(allGames)
-                            val sortedGames = sortGames(filteredGames, sortOrder)
-                            screenState = screenState.copy(games = RequestState.Success(sortedGames))
+                            applyCurrentFilters()
                         }
                         is RequestState.Error -> {
                             // Keep existing allGames and filter state
@@ -279,56 +238,124 @@ class MyGamesViewModel(
     }
     
     fun removeGameWithUndo(game: GameListEntry) {
-        // Execute any existing pending deletion for this game immediately
-        pendingDeletions[game.id]?.cancel()
-
-        screenState = screenState.copy(
-            deletedGame = game,
-            showUndoSnackbar = true
-        )
-        
-        // Start 5-second countdown before actual deletion
-        val job = viewModelScope.launch {
-            delay(5000) // 5 seconds to undo
-            // Actually delete from Firebase
-            gameListRepository.removeGameFromList(game.id)
-            pendingDeletions.remove(game.id)
-
-            // Only clear UI state if this is still the displayed deleted game
-            if (screenState.deletedGame?.id == game.id) {
-                screenState = screenState.copy(
-                    deletedGame = null,
-                    showUndoSnackbar = false
+        removeGameWithUndo(
+            game = game,
+            onOptimisticRemove = { removedGame ->
+                val updatedAllGames = screenState.allGames.filter { it.id != removedGame.id }
+                screenState = screenState.copy(allGames = updatedAllGames)
+                applyCurrentFilters()
+            },
+            onActualRemove = {
+                // Success - already removed from UI
+            },
+            onError = { restoredGame, error ->
+                // Restore on error
+                val restoredAllGames = screenState.allGames + restoredGame
+                
+                showTemporaryNotification(
+                    setNotification = {
+                        screenState = screenState.copy(
+                            allGames = restoredAllGames,
+                            showSuccessNotification = true,
+                            notificationMessage = "Failed to remove: $error"
+                        )
+                        applyCurrentFilters()
+                    },
+                    clearNotification = {
+                        screenState = screenState.copy(showSuccessNotification = false)
+                    },
+                    duration = NOTIFICATION_DURATION_MS
                 )
             }
-        }
-        pendingDeletions[game.id] = job
+        )
     }
     
     fun undoDeletion() {
-        val deletedGame = screenState.deletedGame
-        if (deletedGame != null) {
-            // Cancel the pending deletion
-            pendingDeletions[deletedGame.id]?.cancel()
-            pendingDeletions.remove(deletedGame.id)
-
-            viewModelScope.launch {
-                // Re-add the game using addGameListEntry
-                gameListRepository.addGameListEntry(deletedGame)
-                screenState = screenState.copy(
-                    deletedGame = null,
-                    showUndoSnackbar = false,
-                    showSuccessNotification = true,
-                    notificationMessage = "Game restored"
-                )
-                delay(2000)
-                screenState = screenState.copy(showSuccessNotification = false)
-            }
+        undoRemoval { restoredGame ->
+            val restoredAllGames = screenState.allGames + restoredGame
+            
+            showTemporaryNotification(
+                setNotification = {
+                    screenState = screenState.copy(
+                        allGames = restoredAllGames,
+                        showSuccessNotification = true,
+                        notificationMessage = "Game restored"
+                    )
+                    applyCurrentFilters()
+                },
+                clearNotification = {
+                    screenState = screenState.copy(showSuccessNotification = false)
+                },
+                duration = NOTIFICATION_DURATION_MS
+            )
         }
     }
     
     fun dismissUndoSnackbar() {
-        screenState = screenState.copy(showUndoSnackbar = false)
+        dismissUndoSnackbar(
+            onActualRemove = {
+                // Success
+            },
+            onError = { restoredGame, error ->
+                // Restore on error
+                val restoredAllGames = screenState.allGames + restoredGame
+                
+                showTemporaryNotification(
+                    setNotification = {
+                        screenState = screenState.copy(
+                            allGames = restoredAllGames,
+                            showSuccessNotification = true,
+                            notificationMessage = "Failed to remove: $error"
+                        )
+                        applyCurrentFilters()
+                    },
+                    clearNotification = {
+                        screenState = screenState.copy(showSuccessNotification = false)
+                    },
+                    duration = NOTIFICATION_DURATION_MS
+                )
+            }
+        )
+    }
+    
+    /**
+     * Show snackbar when user dismisses rating sheet with unsaved changes
+     */
+    fun showUnsavedChangesSnackbar(unsavedGame: GameListEntry) {
+        showTemporaryNotification(
+            setNotification = {
+                screenState = screenState.copy(
+                    showUnsavedChangesSnackbar = true,
+                    unsavedChangesGame = unsavedGame
+                )
+            },
+            clearNotification = {
+                if (screenState.showUnsavedChangesSnackbar) {
+                    dismissUnsavedChangesSnackbar()
+                }
+            },
+            duration = UNDO_DELAY_MS
+        )
+    }
+    
+    /**
+     * Save the unsaved changes when user taps "Save" on the snackbar
+     */
+    fun saveUnsavedChanges() {
+        screenState.unsavedChangesGame?.let { game ->
+            updateGameEntry(game)
+        }
+        dismissUnsavedChangesSnackbar()
+    }
+    
+    /**
+     * Dismiss the unsaved changes snackbar
+     */
+    fun dismissUnsavedChangesSnackbar() {
+        screenState = screenState.copy(
+            showUnsavedChangesSnackbar = false,
+            unsavedChangesGame = null
+        )
     }
     
     fun selectGameToEdit(game: GameListEntry?) {
@@ -336,26 +363,30 @@ class MyGamesViewModel(
     }
 
     fun updateGameEntry(entry: GameListEntry) {
-        viewModelScope.launch {
+        launchWithKey("update_game_entry") {
             when (val result = gameListRepository.updateGameEntry(entry)) {
                 is RequestState.Success -> {
                     // Update the allGames list with the new entry
                     val updatedAllGames = screenState.allGames.map { game ->
                         if (game.id == entry.id) entry else game
                     }
-                    screenState = screenState.copy(
-                        allGames = updatedAllGames,
-                        selectedGameToEdit = null,
-                        showSuccessNotification = true,
-                        notificationMessage = "Game updated successfully"
+                    
+                    showTemporaryNotification(
+                        setNotification = {
+                            screenState = screenState.copy(
+                                allGames = updatedAllGames,
+                                selectedGameToEdit = null,
+                                showSuccessNotification = true,
+                                notificationMessage = "Game updated successfully"
+                            )
+                            // Re-apply filters with the updated game data
+                            applyCurrentFilters()
+                        },
+                        clearNotification = {
+                            screenState = screenState.copy(showSuccessNotification = false)
+                        },
+                        duration = NOTIFICATION_DURATION_MS
                     )
-
-                    // Re-apply filters with the updated game data
-                    applyCurrentFilters()
-
-                    // Auto dismiss notification handled by UI or we can reset state after delay
-                    delay(2000)
-                    screenState = screenState.copy(showSuccessNotification = false)
                 }
                 is RequestState.Error -> {
                     // Handle error (maybe show snackbar)
@@ -450,5 +481,21 @@ class MyGamesViewModel(
             com.example.arcadia.presentation.components.SortType.DATE ->
                 if (isAscending) SortOrder.RELEASE_OLD else SortOrder.RELEASE_NEW
         }
+    }
+    
+    /**
+     * Check if a game is pending deletion (to prevent race conditions).
+     */
+    fun isGamePendingDeletion(gameId: String): Boolean {
+        return undoState.value.item?.id == gameId
+    }
+    
+    /**
+     * Cleanup when ViewModel is cleared to prevent memory leaks.
+     */
+    override fun onCleared() {
+        super.onCleared()
+        // Cancel games loading job
+        // gamesJob?.cancel() // Handled by BaseViewModel
     }
 }

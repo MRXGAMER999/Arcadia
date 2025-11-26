@@ -23,7 +23,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -37,6 +39,8 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +54,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.arcadia.data.remote.mapper.toGameListEntry
+import com.example.arcadia.presentation.components.AddGameSnackbar
+import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.components.TopNotification
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchField
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchResultCard
@@ -70,6 +77,10 @@ fun SearchScreen(
     viewModel: SearchViewModel = org.koin.androidx.compose.koinViewModel()
 ) {
     val state = viewModel.screenState
+    val gamesInLibrary by viewModel.gamesInLibrary.collectAsState()
+    val snackbarState by viewModel.snackbarState.collectAsState()
+    val gameToAddWithStatus by viewModel.gameToAddWithStatus.collectAsState()
+    
     var showNotification by remember { mutableStateOf(false) }
     var notificationMessage by remember { mutableStateOf("") }
     var isSuccess by remember { mutableStateOf(false) }
@@ -175,13 +186,15 @@ fun SearchScreen(
                         } else {
                             SearchResultsList(
                                 games = games,
+                                gamesInLibrary = gamesInLibrary,
                                 viewModel = viewModel,
                                 onGameClick = onGameClick,
                                 onNotification = { message, success ->
                                     notificationMessage = message
                                     isSuccess = success
                                     showNotification = true
-                                }
+                                },
+                                isAIMode = state.isAIMode
                             )
                         }
                     }
@@ -195,6 +208,45 @@ fun SearchScreen(
             isSuccess = isSuccess,
             onDismiss = { showNotification = false },
             modifier = Modifier.align(Alignment.TopCenter)
+        )
+        
+        // Snackbar with undo for game additions (positioned above bottom bar)
+        AddGameSnackbar(
+            visible = snackbarState.show,
+            gameName = snackbarState.gameName,
+            onUndo = { viewModel.undoAddGame() },
+            onDismiss = { viewModel.dismissSnackbar() },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp)
+        )
+    }
+    
+    // Game Rating Sheet for adding games
+    gameToAddWithStatus?.let { game ->
+        GameRatingSheet(
+            game = game.toGameListEntry(),
+            isOpen = true,
+            onDismiss = { viewModel.dismissStatusPicker() },
+            onSave = { entry ->
+                viewModel.addGameWithStatus(
+                    game = game,
+                    status = entry.status,
+                    onSuccess = {
+                        notificationMessage = "${game.name} added to My Games"
+                        isSuccess = true
+                        showNotification = true
+                    },
+                    onError = { error ->
+                        notificationMessage = error
+                        isSuccess = false
+                        showNotification = true
+                    }
+                )
+            },
+            onRemove = null,
+            isInLibrary = false,
+            onDismissWithUnsavedChanges = null
         )
     }
 }
@@ -800,17 +852,21 @@ private fun NoResultsState(isAIMode: Boolean) {
 @Composable
 private fun SearchResultsList(
     games: List<com.example.arcadia.domain.model.Game>,
+    gamesInLibrary: Set<Int>,
     viewModel: SearchViewModel,
     onGameClick: (Int) -> Unit,
-    onNotification: (String, Boolean) -> Unit
+    onNotification: (String, Boolean) -> Unit,
+    isAIMode: Boolean = false
 ) {
     LazyColumn(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp) // Ensure no centering
     ) {
         items(games) { game ->
             SearchResultCard(
                 game = game,
-                isAdded = viewModel.isGameInLibrary(game.id),
+                isAdded = game.id in gamesInLibrary,
                 onClick = { onGameClick(game.id) },
                 onToggle = {
                     viewModel.toggleGameInLibrary(
@@ -830,6 +886,34 @@ private fun SearchResultsList(
                 thickness = 0.6.dp,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
             )
+        }
+        
+        // Load More button for AI search
+        if (isAIMode && games.isNotEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    OutlinedButton(
+                        onClick = { viewModel.loadMoreAIResults() },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = ButtonPrimary
+                        ),
+                        border = BorderStroke(1.dp, ButtonPrimary)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Load More AI Suggestions")
+                    }
+                }
+            }
         }
     }
 }

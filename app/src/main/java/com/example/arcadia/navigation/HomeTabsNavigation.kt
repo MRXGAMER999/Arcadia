@@ -42,7 +42,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -52,8 +54,9 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.example.arcadia.data.remote.mapper.toGameListEntry
 import com.example.arcadia.presentation.components.DiscoveryFilterDialog
-import com.example.arcadia.presentation.components.QuickStatusSheet
+import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.home.HomeViewModel
 import com.example.arcadia.presentation.screens.home.components.GameListItem
 import com.example.arcadia.presentation.screens.home.components.LargeGameCard
@@ -95,46 +98,46 @@ fun HomeTabsNavContent(
     // Animated content with slide and fade transitions
     AnimatedContent(
         targetState = selectedIndex,
-        modifier = modifier,
-			transitionSpec = tabTransitionSpec(),
+        modifier = modifier.fillMaxSize(),
+        transitionSpec = tabTransitionSpec(),
         label = "tab_transition"
     ) { targetIndex ->
-			val backStack = when (targetIndex) {
-				0 -> homeBackStack
-				1 -> discoverBackStack
-				2 -> libraryBackStack
-				else -> homeBackStack
-			}
+        val backStack = when (targetIndex) {
+            0 -> homeBackStack
+            1 -> discoverBackStack
+            2 -> libraryBackStack
+            else -> homeBackStack
+        }
 
-			NavDisplay(
-				modifier = Modifier.fillMaxSize(),
-				backStack = backStack,
-				entryProvider = { key ->
-					when (key) {
-						is HomeTab -> NavEntry(key) {
-							HomeTabRoot(
-								onGameClick = onGameClick,
-								snackbarHostState = snackbarHostState,
-								viewModel = viewModel
-							)
-						}
-						is DiscoverTab -> NavEntry(key) {
-							DiscoverTabRoot(
-								onGameClick = onGameClick,
-								snackbarHostState = snackbarHostState,
-								viewModel = viewModel
-							)
-						}
-						is LibraryTab -> NavEntry(key) {
-							LibraryTabRoot(
-								onGameClick = onGameClick,
-								onNavigateToAnalytics = onNavigateToAnalytics
-							)
-						}
-						else -> error("Unknown key for Home tabs backstack: $key")
-					}
-				}
-			)
+        NavDisplay(
+            modifier = Modifier.fillMaxSize(),
+            backStack = backStack,
+            entryProvider = { key ->
+                when (key) {
+                    is HomeTab -> NavEntry(key) {
+                        HomeTabRoot(
+                            onGameClick = onGameClick,
+                            snackbarHostState = snackbarHostState,
+                            viewModel = viewModel
+                        )
+                    }
+                    is DiscoverTab -> NavEntry(key) {
+                        DiscoverTabRoot(
+                            onGameClick = onGameClick,
+                            snackbarHostState = snackbarHostState,
+                            viewModel = viewModel
+                        )
+                    }
+                    is LibraryTab -> NavEntry(key) {
+                        LibraryTabRoot(
+                            onGameClick = onGameClick,
+                            onNavigateToAnalytics = onNavigateToAnalytics
+                        )
+                    }
+                    else -> error("Unknown key for Home tabs backstack: $key")
+                }
+            }
+        )
     }
 }
 
@@ -163,6 +166,7 @@ private fun HomeTabRoot(
     viewModel: HomeViewModel
 ) {
     val screenState = viewModel.screenState
+    val gameToAddWithStatus by viewModel.gameToAddWithStatus.collectAsState()
     val pullToRefreshState = rememberPullToRefreshState()
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -303,7 +307,7 @@ private fun HomeTabRoot(
                             isInLibrary = viewModel.isGameInLibrary(game.id),
                             onClick = { onGameClick(game.id) },
                             onAddToLibrary = {
-                                viewModel.addGameToLibrary(game)
+                                viewModel.showStatusPicker(game)
                             },
                             modifier = Modifier.animateItem()
                         )
@@ -322,15 +326,18 @@ private fun HomeTabRoot(
         }
         }
         
-        // Quick Status Sheet for adding games (Home Tab)
-        screenState.gameToAddWithStatus?.let { game ->
-            QuickStatusSheet(
-                game = game,
+        // Game Rating Sheet for adding games (Home Tab)
+        gameToAddWithStatus?.let { game ->
+            GameRatingSheet(
+                game = game.toGameListEntry(),
                 isOpen = true,
                 onDismiss = { viewModel.dismissStatusPicker() },
-                onStatusSelected = { status ->
-                    viewModel.addGameWithStatus(game, status)
-                }
+                onSave = { entry ->
+                    viewModel.addGameWithStatus(game, entry.status)
+                },
+                onRemove = null,
+                isInLibrary = false,
+                onDismissWithUnsavedChanges = null
             )
         }
     }
@@ -346,6 +353,7 @@ private fun DiscoverTabRoot(
     val screenState = viewModel.screenState
     val discoveryFilterState = viewModel.discoveryFilterState
     val showFilterDialog = viewModel.showDiscoveryFilterDialog
+    val gameToAddWithStatus by viewModel.gameToAddWithStatus.collectAsState()
     val pullToRefreshState = rememberPullToRefreshState()
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -449,12 +457,23 @@ private fun DiscoverTabRoot(
                             items = state.data,
                             key = { _, game -> game.id }
                         ) { index, game ->
+                            // Load more when reaching 70% of the list
+                            if (index >= (state.data.size * 0.7).toInt()) {
+                                LaunchedEffect(Unit) {
+                                    if (viewModel.isDiscoveryFilterActive()) {
+                                        viewModel.loadMoreDiscoveryResults()
+                                    } else {
+                                        viewModel.loadMoreRecommendations()
+                                    }
+                                }
+                            }
+
                             GameListItem(
                                 game = game,
                                 isInLibrary = viewModel.isGameInLibrary(game.id),
                                 onClick = { onGameClick(game.id) },
                                 onAddToLibrary = {
-                                    viewModel.addGameToLibrary(game)
+                                    viewModel.showStatusPicker(game)
                                 },
                                 modifier = Modifier.animateItem()
                             )
@@ -489,15 +508,18 @@ private fun DiscoverTabRoot(
             )
         }
         
-        // Quick Status Sheet for adding games (Discover Tab)
-        screenState.gameToAddWithStatus?.let { game ->
-            QuickStatusSheet(
-                game = game,
+        // Game Rating Sheet for adding games (Discover Tab)
+        gameToAddWithStatus?.let { game ->
+            GameRatingSheet(
+                game = game.toGameListEntry(),
                 isOpen = true,
                 onDismiss = { viewModel.dismissStatusPicker() },
-                onStatusSelected = { status ->
-                    viewModel.addGameWithStatus(game, status)
-                }
+                onSave = { entry ->
+                    viewModel.addGameWithStatus(game, entry.status)
+                },
+                onRemove = null,
+                isInLibrary = false,
+                onDismissWithUnsavedChanges = null
             )
         }
     }

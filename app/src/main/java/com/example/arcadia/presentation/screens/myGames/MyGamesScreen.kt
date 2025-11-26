@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,7 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +48,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,13 +64,16 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.LaunchedEffect
+import com.example.arcadia.presentation.base.UndoableViewModel
 import com.example.arcadia.presentation.components.LibraryEmptyState
 import com.example.arcadia.presentation.components.ListGameCard
 import com.example.arcadia.presentation.components.MediaLayout
 import com.example.arcadia.presentation.components.QuickRateDialog
 import com.example.arcadia.presentation.components.QuickSettingsDialog
+import com.example.arcadia.presentation.components.SwipeToDeleteItem
 import com.example.arcadia.presentation.components.TopNotification
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.myGames.components.GameStatsCard
@@ -87,12 +97,14 @@ fun MyGamesScreen(
 ) {
     val viewModel: MyGamesViewModel = koinViewModel()
     val screenState = viewModel.screenState
+    val undoState by viewModel.undoState.collectAsState()
     var showStats by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val hapticFeedback = LocalHapticFeedback.current
     
     // Show undo snackbar
-    LaunchedEffect(screenState.showUndoSnackbar) {
-        if (screenState.showUndoSnackbar) {
+    LaunchedEffect(undoState.showSnackbar) {
+        if (undoState.showSnackbar) {
             snackbarHostState.showSnackbar("")
         }
     }
@@ -100,23 +112,51 @@ fun MyGamesScreen(
     Scaffold(
         containerColor = Surface,
         snackbarHost = {
-            if (screenState.showUndoSnackbar) {
-                SnackbarHost(hostState = snackbarHostState) {
+            SnackbarHost(hostState = snackbarHostState) {
+                // Undo deletion snackbar
+                if (undoState.showSnackbar) {
                     Snackbar(
                         modifier = Modifier.padding(16.dp),
                         containerColor = Color(0xFF1E2A47),
                         contentColor = TextSecondary,
                         action = {
-                            TextButton(onClick = { viewModel.undoDeletion() }) {
-                                Text(
-                                    text = "UNDO",
-                                    color = ButtonPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Circular progress indicator showing time remaining
+                                Box(contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(
+                                        progress = { undoState.timeRemaining },
+                                        modifier = Modifier.size(24.dp),
+                                        color = ButtonPrimary,
+                                        strokeWidth = 2.dp,
+                                        trackColor = Color.White.copy(alpha = 0.2f)
+                                    )
+                                    Text(
+                                        text = "${(undoState.timeRemaining * (UndoableViewModel.UNDO_TIMEOUT_MS / 1000)).toInt()}",
+                                        color = ButtonPrimary,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                TextButton(onClick = { 
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.undoDeletion() 
+                                }) {
+                                    Text(
+                                        text = "UNDO",
+                                        color = ButtonPrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         },
                         dismissAction = {
-                            IconButton(onClick = { viewModel.dismissUndoSnackbar() }) {
+                            IconButton(onClick = { 
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.dismissUndoSnackbar() 
+                            }) {
                                 Text(
                                     text = "✕",
                                     color = TextSecondary,
@@ -125,7 +165,7 @@ fun MyGamesScreen(
                             }
                         }
                     ) {
-                        Text("${screenState.deletedGame?.name} removed")
+                        Text("${undoState.item?.name} removed")
                     }
                 }
             }
@@ -176,45 +216,102 @@ fun MyGamesScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Filter Chips
-                // Quick Settings and Stats Toggle
+                // Quick Settings, Stats Toggle, and Full Analysis - Compact row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(
-                        onClick = { viewModel.showQuickSettingsDialog() }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Quick Settings",
-                            tint = ButtonPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        val activeFilterCount = screenState.quickSettingsState.selectedGenres.size + 
-                                               screenState.quickSettingsState.selectedStatuses.size
-                        Text(
-                            text = if (activeFilterCount > 0) "Quick Settings ($activeFilterCount)" else "Quick Settings",
-                            color = ButtonPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
+                    val activeFilterCount = screenState.quickSettingsState.selectedGenres.size + 
+                                           screenState.quickSettingsState.selectedStatuses.size
                     
-                    TextButton(
-                        onClick = { showStats = !showStats }
-                    ) {
-                        Text(
-                            text = if (showStats) "Hide Stats" else "Show Stats",
-                            color = ButtonPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+                    // Filters chip
+                    FilterChip(
+                        selected = activeFilterCount > 0,
+                        onClick = { viewModel.showQuickSettingsDialog() },
+                        label = { 
+                            Text(
+                                text = if (activeFilterCount > 0) "Filters ($activeFilterCount)" else "Filters",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color(0xFF1E2A47),
+                            labelColor = TextSecondary,
+                            iconColor = TextSecondary,
+                            selectedContainerColor = ButtonPrimary.copy(alpha = 0.2f),
+                            selectedLabelColor = ButtonPrimary,
+                            selectedLeadingIconColor = ButtonPrimary
+                        ),
+                        border = null
+                    )
+                    
+                    // Stats chip
+                    FilterChip(
+                        selected = showStats,
+                        onClick = { showStats = !showStats },
+                        label = { 
+                            Text(
+                                text = "Stats",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.BarChart,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color(0xFF1E2A47),
+                            labelColor = TextSecondary,
+                            iconColor = TextSecondary,
+                            selectedContainerColor = ButtonPrimary.copy(alpha = 0.2f),
+                            selectedLabelColor = ButtonPrimary,
+                            selectedLeadingIconColor = ButtonPrimary
+                        ),
+                        border = null
+                    )
+                    
+                    Spacer(modifier = Modifier.weight(1f))
+                    
+                    // Full Analysis button - More prominent
+                    FilterChip(
+                        selected = false,
+                        onClick = onNavigateToAnalytics,
+                        label = { 
+                            Text(
+                                text = "Analysis",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Analytics,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = ButtonPrimary,
+                            labelColor = Color.White,
+                            iconColor = Color.White
+                        ),
+                        border = null
+                    )
                 }
                 
                 // Games Grid
@@ -231,7 +328,12 @@ fun MyGamesScreen(
                     }
                     
                     is RequestState.Success -> {
-                        if (state.data.isEmpty()) {
+                        // Filter out games that are being removed for optimistic UI updates
+                        val visibleGames = state.data.filter { game ->
+                            game.id != undoState.item?.id
+                        }
+                        
+                        if (visibleGames.isEmpty()) {
                             val hasActiveFilters = screenState.quickSettingsState.selectedGenres.isNotEmpty() || 
                                                   screenState.quickSettingsState.selectedStatuses.isNotEmpty()
                             if (hasActiveFilters) {
@@ -304,7 +406,7 @@ fun MyGamesScreen(
                                                 exit = shrinkVertically() + fadeOut()
                                             ) {
                                                 GameStatsCard(
-                                                    games = state.data,
+                                                    games = visibleGames,
                                                     onSeeMoreClick = onNavigateToAnalytics
                                                 )
                                             }
@@ -312,17 +414,24 @@ fun MyGamesScreen(
                                         
                                         // Games List items
                                         lazyItems(
-                                            items = state.data,
+                                            items = visibleGames,
                                             key = { game -> game.id }
                                         ) { game ->
-                                            ListGameCard(
-                                                game = game,
-                                                showDateAdded = screenState.quickSettingsState.showDateAdded,
-                                                showReleaseDate = screenState.quickSettingsState.showReleaseDate,
-                                                onClick = { onGameClick(game.rawgId) },
-                                                onLongClick = { viewModel.selectGameToEdit(game) },
+                                            SwipeToDeleteItem(
+                                                onDelete = { 
+                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.removeGameWithUndo(game) 
+                                                },
                                                 modifier = Modifier.animateItem()
-                                            )
+                                            ) {
+                                                ListGameCard(
+                                                    game = game,
+                                                    showDateAdded = screenState.quickSettingsState.showDateAdded,
+                                                    showReleaseDate = screenState.quickSettingsState.showReleaseDate,
+                                                    onClick = { onGameClick(game.rawgId) },
+                                                    onLongClick = { viewModel.selectGameToEdit(game) }
+                                                )
+                                            }
                                         }
                                     }
                                 } else {
@@ -344,7 +453,7 @@ fun MyGamesScreen(
                                                 exit = shrinkVertically() + fadeOut()
                                             ) {
                                                 GameStatsCard(
-                                                    games = state.data,
+                                                    games = visibleGames,
                                                     onSeeMoreClick = onNavigateToAnalytics
                                                 )
                                             }
@@ -352,11 +461,13 @@ fun MyGamesScreen(
                                         
                                         // Games Grid items
                                         items(
-                                            items = state.data,
+                                            items = visibleGames,
                                             key = { game -> game.id }
                                         ) { game ->
                                             MyGameCard(
                                                 game = game,
+                                                showDateAdded = screenState.quickSettingsState.showDateAdded,
+                                                showReleaseDate = screenState.quickSettingsState.showReleaseDate,
                                                 onClick = { onGameClick(game.rawgId) },
                                                 onLongClick = { viewModel.selectGameToEdit(game) },
                                                 modifier = Modifier.animateItem()
@@ -388,6 +499,37 @@ fun MyGamesScreen(
                 onDismiss = { viewModel.dismissNotification() },
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+            
+            // Unsaved changes snackbar - direct overlay
+            if (screenState.showUnsavedChangesSnackbar) {
+                Snackbar(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    containerColor = Color(0xFF1E2A47),
+                    contentColor = TextSecondary,
+                    action = {
+                        TextButton(onClick = { viewModel.saveUnsavedChanges() }) {
+                            Text(
+                                text = "SAVE",
+                                color = ButtonPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    dismissAction = {
+                        IconButton(onClick = { viewModel.dismissUnsavedChangesSnackbar() }) {
+                            Text(
+                                text = "✕",
+                                color = TextSecondary,
+                                fontSize = 18.sp
+                            )
+                        }
+                    }
+                ) {
+                    Text("Changes discarded")
+                }
+            }
         }
         
         // Game Rating/Edit Sheet
@@ -398,6 +540,14 @@ fun MyGamesScreen(
                 onDismiss = { viewModel.selectGameToEdit(null) },
                 onSave = { updatedGame -> 
                     viewModel.updateGameEntry(updatedGame)
+                },
+                onRemove = { game ->
+                    viewModel.removeGameWithUndo(game)
+                },
+                isInLibrary = true,
+                onDismissWithUnsavedChanges = { unsavedGame ->
+                    // Show snackbar with option to save changes
+                    viewModel.showUnsavedChangesSnackbar(unsavedGame)
                 }
             )
         }
