@@ -147,8 +147,12 @@ class DetailsScreenViewModel(
     }
 
     fun removeGameFromLibrary(game: GameListEntry) {
+        // Use the most up-to-date version from tempGameEntry to preserve any recent changes
+        // (e.g., rating updates that might not have been reflected yet)
+        val currentGame = uiState.tempGameEntry ?: game
+        
         removeGameWithUndo(
-            game = game,
+            game = currentGame,
             onOptimisticRemove = { 
                 uiState = uiState.copy(tempGameEntry = null)
             },

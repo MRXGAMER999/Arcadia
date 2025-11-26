@@ -28,8 +28,17 @@ val repositoryModule = module {
     /** Repository for gamer/user data */
     single<GamerRepository> { GamerRepositoryImpl() }
     
-    /** Repository for game data from RAWG API */
-    single<GameRepository> { GameRepositoryImpl(get()) }
+    /** 
+     * Repository for game data from RAWG API
+     * Now includes caching and request deduplication for faster performance
+     */
+    single<GameRepository> { 
+        GameRepositoryImpl(
+            apiService = get(),
+            cacheManager = get(),
+            deduplicator = get()
+        ) 
+    }
     
     /** Repository for user's game list (Firebase) */
     single<GameListRepository> { GameListRepositoryImpl() }
