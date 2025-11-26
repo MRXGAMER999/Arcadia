@@ -25,7 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.presentation.screens.analytics.AnalyticsState
-import com.example.arcadia.presentation.screens.analytics.GamingPersonality
+import com.example.arcadia.domain.usecase.GamingPersonality
 import com.example.arcadia.ui.theme.TextSecondary
 
 /**

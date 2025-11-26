@@ -3,6 +3,8 @@ package com.example.arcadia.presentation.base
 import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.repository.GameListRepository
+import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
+import com.example.arcadia.domain.usecase.RemoveGameFromLibraryUseCase
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,6 +13,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Base ViewModel for screens that support undo operations for game removal.
+ * Uses RemoveGameFromLibraryUseCase for proper business logic encapsulation.
  * Provides common functionality for:
  * - Optimistic UI updates
  * - Undo countdown with visual progress
@@ -18,8 +21,10 @@ import kotlinx.coroutines.launch
  * - Error handling with rollback
  */
 abstract class UndoableViewModel(
-    gameListRepository: GameListRepository
-) : LibraryAwareViewModel(gameListRepository) {
+    gameListRepository: GameListRepository,
+    addGameToLibraryUseCase: AddGameToLibraryUseCase,
+    private val removeGameFromLibraryUseCase: RemoveGameFromLibraryUseCase
+) : LibraryAwareViewModel(gameListRepository, addGameToLibraryUseCase) {
 
     // Undo state
     data class UndoState<T>(
@@ -79,14 +84,14 @@ abstract class UndoableViewModel(
     }
 
     /**
-     * Executes the actual removal from Firebase.
+     * Executes the actual removal from Firebase using RemoveGameFromLibraryUseCase.
      */
     private suspend fun executeRemoval(
         game: GameListEntry,
         onSuccess: (GameListEntry) -> Unit,
         onError: (GameListEntry, String) -> Unit
     ) {
-        when (val result = gameListRepository.removeGameFromList(game.id)) {
+        when (val result = removeGameFromLibraryUseCase(game)) {
             is RequestState.Success -> {
                 _undoState.value = UndoState()
                 onSuccess(game)

@@ -3,7 +3,6 @@ package com.example.arcadia.presentation.screens.home
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.repository.AIRepository
 import com.example.arcadia.presentation.base.LibraryAwareViewModel
 import com.example.arcadia.domain.model.DiscoveryFilterState
@@ -11,25 +10,22 @@ import com.example.arcadia.domain.model.DiscoverySortOrder
 import com.example.arcadia.domain.model.DiscoverySortType
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.domain.model.GameListEntry
-import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.model.ReleaseTimeframe
 import com.example.arcadia.domain.model.StudioFilterState
 import com.example.arcadia.domain.model.StudioFilterType
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
+import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
 import com.example.arcadia.domain.usecase.ParallelGameFilter // Kept for DI, may be used for future local filtering
 import com.example.arcadia.util.PreferencesManager
 import com.example.arcadia.util.RequestState
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.ConcurrentHashMap
 
 data class HomeScreenState(
     val popularGames: RequestState<List<Game>> = RequestState.Idle,
@@ -44,11 +40,12 @@ data class HomeScreenState(
 
 class HomeViewModel(
     private val gameRepository: GameRepository,
-    gameListRepository: GameListRepository, // No private needed
+    gameListRepository: GameListRepository,
     private val aiRepository: AIRepository,
     private val preferencesManager: PreferencesManager,
+    addGameToLibraryUseCase: AddGameToLibraryUseCase,
     @Suppress("unused") private val parallelGameFilter: ParallelGameFilter // Kept for potential future local filtering
-) : LibraryAwareViewModel(gameListRepository) {
+) : LibraryAwareViewModel(gameListRepository, addGameToLibraryUseCase) {
     
     companion object {
         private const val TAG = "HomeViewModel"
