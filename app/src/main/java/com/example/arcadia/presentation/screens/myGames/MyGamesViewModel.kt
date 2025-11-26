@@ -3,20 +3,17 @@ package com.example.arcadia.presentation.screens.myGames
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.presentation.base.UndoableViewModel
-import com.example.arcadia.presentation.base.SortCriterion
-import com.example.arcadia.util.FilterHelper
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.SortOrder
-import com.example.arcadia.presentation.components.MediaLayout
+import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
+import com.example.arcadia.domain.usecase.FilterGamesUseCase
+import com.example.arcadia.domain.usecase.RemoveGameFromLibraryUseCase
+import com.example.arcadia.domain.usecase.SortGamesUseCase
 import com.example.arcadia.presentation.components.QuickSettingsState
 import com.example.arcadia.util.RequestState
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 data class MyGamesScreenState(
     val games: RequestState<List<GameListEntry>> = RequestState.Idle,
@@ -35,10 +32,19 @@ data class MyGamesScreenState(
     val unsavedChangesGame: GameListEntry? = null,
 )
 
+/**
+ * ViewModel for My Games screen.
+ * Uses FilterGamesUseCase, SortGamesUseCase, and RemoveGameFromLibraryUseCase 
+ * to avoid duplicating business logic.
+ */
 class MyGamesViewModel(
     gameListRepository: GameListRepository,
-    private val preferencesManager: com.example.arcadia.util.PreferencesManager
-) : UndoableViewModel(gameListRepository) {
+    private val preferencesManager: com.example.arcadia.util.PreferencesManager,
+    addGameToLibraryUseCase: AddGameToLibraryUseCase,
+    removeGameFromLibraryUseCase: RemoveGameFromLibraryUseCase,
+    private val filterGamesUseCase: FilterGamesUseCase,
+    private val sortGamesUseCase: SortGamesUseCase
+) : UndoableViewModel(gameListRepository, addGameToLibraryUseCase, removeGameFromLibraryUseCase) {
     
     companion object {
         private const val NOTIFICATION_DURATION_MS = 2000L
@@ -65,32 +71,22 @@ class MyGamesViewModel(
         loadGames()
     }
     
-    private fun mapToSortCriterion(sortOrder: SortOrder): SortCriterion {
-        return when (sortOrder) {
-            SortOrder.TITLE_A_Z -> SortCriterion.Title
-            SortOrder.TITLE_Z_A -> SortCriterion.TitleDesc
-            SortOrder.NEWEST_FIRST -> SortCriterion.DateAddedDesc
-            SortOrder.OLDEST_FIRST -> SortCriterion.DateAdded
-            SortOrder.RATING_HIGH -> SortCriterion.RatingDesc
-            SortOrder.RATING_LOW -> SortCriterion.Rating
-            SortOrder.RELEASE_NEW -> SortCriterion.ReleaseDateDesc
-            SortOrder.RELEASE_OLD -> SortCriterion.ReleaseDate
-        }
-    }
-    
     fun getAvailableGenres(): List<String> {
-        return FilterHelper.extractGenres(screenState.allGames)
+        return screenState.allGames
+            .flatMap { it.genres }
+            .distinct()
+            .sorted()
     }
     
     fun getAvailableStatuses(): List<GameStatus> {
-        return FilterHelper.getAllStatuses()
+        return GameStatus.entries.toList()
     }
     
     fun getFilteredGamesCount(): Int {
-        val filteredGames = FilterHelper.applyFilters(
+        val filteredGames = filterGamesUseCase(
             games = screenState.allGames,
-            selectedGenres = screenState.quickSettingsState.selectedGenres,
-            selectedStatuses = screenState.quickSettingsState.selectedStatuses
+            genres = screenState.quickSettingsState.selectedGenres,
+            statuses = screenState.quickSettingsState.selectedStatuses
         )
         return filteredGames.size
     }
@@ -164,15 +160,16 @@ class MyGamesViewModel(
     
     /**
      * Applies current filter and sort settings to allGames and updates the displayed list.
+     * Uses FilterGamesUseCase and SortGamesUseCase for business logic.
      * Also persists filter preferences.
      */
     private fun applyCurrentFilters() {
-        val filteredGames = FilterHelper.applyFilters(
+        val filteredGames = filterGamesUseCase(
             games = screenState.allGames,
-            selectedGenres = screenState.quickSettingsState.selectedGenres,
-            selectedStatuses = screenState.quickSettingsState.selectedStatuses
+            genres = screenState.quickSettingsState.selectedGenres,
+            statuses = screenState.quickSettingsState.selectedStatuses
         )
-        val sortedGames = FilterHelper.sortGames(filteredGames, mapToSortCriterion(screenState.sortOrder))
+        val sortedGames = sortGamesUseCase(filteredGames, screenState.sortOrder)
         screenState = screenState.copy(games = RequestState.Success(sortedGames))
         
         // Persist filter preferences

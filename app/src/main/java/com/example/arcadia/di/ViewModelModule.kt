@@ -16,10 +16,15 @@ val viewModelModule = module {
     viewModel { SignInViewModel() }
     viewModel { AuthViewModel(get()) }
     viewModel { EditProfileViewModel(get()) }
-    viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
+    // HomeViewModel: gameRepository, gameListRepository, aiRepository, preferencesManager, addGameToLibraryUseCase, parallelGameFilter
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { DiscoveryViewModel(get(), get(), get(), get()) }
-    viewModel { MyGamesViewModel(get(), get()) }
-    viewModel { DetailsScreenViewModel(get(), get()) }
-    viewModel { SearchViewModel(get(), get(), get(), get()) }
-    viewModel { AnalyticsViewModel(get(), get()) }
+    // MyGamesViewModel: gameListRepository, preferencesManager, addGameToLibraryUseCase, removeGameFromLibraryUseCase, filterGamesUseCase, sortGamesUseCase
+    viewModel { MyGamesViewModel(get(), get(), get(), get(), get(), get()) }
+    // DetailsScreenViewModel: gameRepository, gameListRepository, addGameToLibraryUseCase, removeGameFromLibraryUseCase
+    viewModel { DetailsScreenViewModel(get(), get(), get(), get()) }
+    // SearchViewModel: gameRepository, gameListRepository, preferencesManager, addGameToLibraryUseCase, searchGamesUseCase, getAIGameSuggestionsUseCase, getPopularGamesUseCase
+    viewModel { SearchViewModel(get(), get(), get(), get(), get(), get(), get()) }
+    // AnalyticsViewModel: gameListRepository, aiRepository, calculateGamingStatsUseCase, determineGamingPersonalityUseCase
+    viewModel { AnalyticsViewModel(get(), get(), get(), get()) }
 }

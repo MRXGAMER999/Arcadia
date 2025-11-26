@@ -5,6 +5,7 @@ import com.example.arcadia.domain.model.Game
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
+import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Base ViewModel for screens that need to track which games are in the user's library.
+ * Uses AddGameToLibraryUseCase for adding games to properly encapsulate business logic.
  * Provides common functionality for:
  * - Tracking games in library
  * - Adding games with status selection
@@ -20,7 +22,8 @@ import kotlinx.coroutines.launch
  * - Snackbar notifications
  */
 abstract class LibraryAwareViewModel(
-    protected val gameListRepository: GameListRepository
+    protected val gameListRepository: GameListRepository,
+    private val addGameToLibraryUseCase: AddGameToLibraryUseCase
 ) : BaseViewModel() {
 
     // Library state
@@ -92,6 +95,7 @@ abstract class LibraryAwareViewModel(
 
     /**
      * Add a game to the library with the selected status.
+     * Uses AddGameToLibraryUseCase for proper business logic encapsulation.
      * Shows a snackbar with undo functionality.
      */
     fun addGameWithStatus(
@@ -103,7 +107,7 @@ abstract class LibraryAwareViewModel(
         dismissStatusPicker()
 
         viewModelScope.launch {
-            when (val result = gameListRepository.addGameToList(game, status)) {
+            when (val result = addGameToLibraryUseCase(game, status)) {
                 is RequestState.Success -> {
                     val entryId = result.data
                     _snackbarState.value = SnackbarState(

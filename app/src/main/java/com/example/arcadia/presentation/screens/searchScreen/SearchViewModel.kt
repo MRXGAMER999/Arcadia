@@ -4,22 +4,20 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewModelScope
 import com.example.arcadia.domain.model.AIError
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.domain.model.GameListEntry
-import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
-import com.example.arcadia.domain.repository.AIRepository
+import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
+import com.example.arcadia.domain.usecase.GetAIGameSuggestionsUseCase
+import com.example.arcadia.domain.usecase.GetPopularGamesUseCase
+import com.example.arcadia.domain.usecase.SearchGamesUseCase
 import com.example.arcadia.presentation.base.LibraryAwareViewModel
 import com.example.arcadia.util.PreferencesManager
 import com.example.arcadia.util.RequestState
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 
 data class SearchScreenState(
@@ -39,12 +37,20 @@ data class SearchScreenState(
     val personalizedSuggestions: List<String> = emptyList()
 )
 
+/**
+ * ViewModel for the Search screen.
+ * Uses SearchGamesUseCase, GetAIGameSuggestionsUseCase, and GetPopularGamesUseCase
+ * to properly encapsulate business logic.
+ */
 class SearchViewModel(
     private val gameRepository: GameRepository,
     gameListRepository: GameListRepository,
-    private val aiRepository: AIRepository,
-    private val preferencesManager: PreferencesManager
-) : LibraryAwareViewModel(gameListRepository) {
+    private val preferencesManager: PreferencesManager,
+    addGameToLibraryUseCase: AddGameToLibraryUseCase,
+    private val searchGamesUseCase: SearchGamesUseCase,
+    private val getAIGameSuggestionsUseCase: GetAIGameSuggestionsUseCase,
+    private val getPopularGamesUseCase: GetPopularGamesUseCase
+) : LibraryAwareViewModel(gameListRepository, addGameToLibraryUseCase) {
     
     var screenState by mutableStateOf(SearchScreenState())
         private set
@@ -98,7 +104,7 @@ class SearchViewModel(
     
     private fun loadTrendingGames() {
         launchWithKey("trending_games") {
-            gameRepository.getPopularGames(page = 1, pageSize = 6).collect { state ->
+            getPopularGamesUseCase(page = 1, pageSize = 6).collect { state ->
                 screenState = screenState.copy(trendingGames = state)
             }
         }
@@ -146,7 +152,7 @@ class SearchViewModel(
                 if (newIsAIMode) {
                     performAISearch(currentQuery)
                 } else {
-                    gameRepository.searchGames(currentQuery, page = 1, pageSize = 40).collect { state ->
+                    searchGamesUseCase(currentQuery, page = 1, pageSize = 40).collect { state ->
                         screenState = screenState.copy(results = state)
                     }
                 }
@@ -177,7 +183,7 @@ class SearchViewModel(
             if (screenState.isAIMode) {
                 performAISearch(newQuery)
             } else {
-                gameRepository.searchGames(newQuery, page = 1, pageSize = 40).collect { state ->
+                searchGamesUseCase(newQuery, page = 1, pageSize = 40).collect { state ->
                     screenState = screenState.copy(results = state)
                 }
             }
@@ -198,7 +204,7 @@ class SearchViewModel(
             isFromCache = false
         )
         
-        val suggestionsResult = aiRepository.suggestGames(query, count = 15)
+        val suggestionsResult = getAIGameSuggestionsUseCase(query, count = 15)
         
         suggestionsResult.onFailure { error ->
             val aiError = if (error is AIError) error else AIError.from(error)
@@ -242,7 +248,7 @@ class SearchViewModel(
                 async {
                     try {
                         var foundGame: Game? = null
-                        gameRepository.searchGames(gameName, pageSize = 5).collect { result ->
+                        searchGamesUseCase(gameName, pageSize = 5).collect { result ->
                             if (result is RequestState.Success) {
                                 foundGame = result.data.firstOrNull { game ->
                                     game.name.contains(gameName, ignoreCase = true) ||
@@ -304,8 +310,8 @@ class SearchViewModel(
             try {
                 val excludeNames = allAIResults.take(5).joinToString(", ") { it.name }
                 val modifiedQuery = "$lastAIQuery (different from: $excludeNames)"
-                val moreResult = aiRepository.suggestGames(
-                    userQuery = modifiedQuery,
+                val moreResult = getAIGameSuggestionsUseCase(
+                    query = modifiedQuery,
                     count = 10
                 )
                 
@@ -332,7 +338,7 @@ class SearchViewModel(
                             async {
                                 try {
                                     var foundGame: Game? = null
-                                    gameRepository.searchGames(gameName, pageSize = 5).collect { result ->
+                                    searchGamesUseCase(gameName, pageSize = 5).collect { result ->
                                         if (result is RequestState.Success) {
                                             foundGame = result.data.firstOrNull { game ->
                                                 game.name.contains(gameName, ignoreCase = true) ||

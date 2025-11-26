@@ -10,6 +10,8 @@ import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
+import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
+import com.example.arcadia.domain.usecase.RemoveGameFromLibraryUseCase
 import com.example.arcadia.presentation.base.UndoableViewModel
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.delay
@@ -36,8 +38,10 @@ data class DetailsUiState(
 
 class DetailsScreenViewModel(
     private val gameRepository: GameRepository,
-    gameListRepository: GameListRepository
-) : UndoableViewModel(gameListRepository) {
+    gameListRepository: GameListRepository,
+    addGameToLibraryUseCase: AddGameToLibraryUseCase,
+    removeGameFromLibraryUseCase: RemoveGameFromLibraryUseCase
+) : UndoableViewModel(gameListRepository, addGameToLibraryUseCase, removeGameFromLibraryUseCase) {
 
     companion object {
         private const val UNDO_DELAY_MS = 5000L
