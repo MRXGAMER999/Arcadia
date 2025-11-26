@@ -36,6 +36,7 @@ data class HomeScreenState(
     // gamesInLibrary is now in LibraryAwareViewModel
     // gameToAddWithStatus is now in LibraryAwareViewModel
     val isRefreshing: Boolean = false, // Pull-to-refresh state
+    val isLoadingMore: Boolean = false, // Pagination loading state
     // Snackbar state is now in LibraryAwareViewModel
 )
 
@@ -62,10 +63,10 @@ class HomeViewModel(
         // Pagination constants - OPTIMIZED for faster initial load
         private const val INITIAL_PAGE_SIZE = 6     // Smaller initial load for faster first paint
         private const val DEFAULT_PAGE_SIZE = 10    // Standard page size after initial load
-        private const val RECOMMENDATION_PAGE_SIZE = 30  // Reduced from 40 for faster loading
-        private const val MIN_RECOMMENDATIONS_COUNT = 20 // Reduced from 25
-        private const val AI_RECOMMENDATION_COUNT = 40   // Reduced from 50
-        private const val AI_LOAD_MORE_COUNT = 15        // Reduced from 20
+        private const val RECOMMENDATION_PAGE_SIZE = 15  // Reduced from 30 for faster loading
+        private const val MIN_RECOMMENDATIONS_COUNT = 10 // Reduced from 20
+        private const val AI_RECOMMENDATION_COUNT = 12   // Reduced from 40 for instant load
+        private const val AI_LOAD_MORE_COUNT = 8         // Reduced from 15
         
         // API constants
         private const val DEFAULT_RECOMMENDATION_TAGS = "singleplayer,multiplayer"
@@ -317,6 +318,7 @@ class HomeViewModel(
         
         launchWithKey("load_more_recommendations") {
             isLoadingMoreRecommendations = true
+            screenState = screenState.copy(isLoadingMore = true)
             try {
                 recommendationPage++
                 gameRepository.getRecommendedGames(
@@ -329,13 +331,16 @@ class HomeViewModel(
                         applyRecommendationFilter()
                     }
                     isLoadingMoreRecommendations = false
+                    screenState = screenState.copy(isLoadingMore = false)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 android.util.Log.d(TAG, "loadMoreRecommendations cancelled")
                 isLoadingMoreRecommendations = false
+                screenState = screenState.copy(isLoadingMore = false)
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Error loading more recommendations", e)
                 isLoadingMoreRecommendations = false
+                screenState = screenState.copy(isLoadingMore = false)
             }
         }
     }
@@ -994,6 +999,7 @@ class HomeViewModel(
         
         launchWithKey("load_more_discovery") {
             isLoadingMoreDiscovery = true
+            screenState = screenState.copy(isLoadingMore = true)
             try {
                 if (discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION) {
                     fetchAIRecommendations(isLoadMore = true)
@@ -1040,6 +1046,7 @@ class HomeViewModel(
                 android.util.Log.e(TAG, "Error loading more discovery results", e)
             } finally {
                 isLoadingMoreDiscovery = false
+                screenState = screenState.copy(isLoadingMore = false)
             }
         }
     }
@@ -1181,7 +1188,13 @@ class HomeViewModel(
 
                     if (newSuggestions.isEmpty() && isLoadMore) {
                         // No new games found, stop pagination
+                        screenState = screenState.copy(isLoadingMore = false)
                         return@fold
+                    }
+
+                    // Initialize state for progressive loading if not loading more
+                    if (!isLoadMore) {
+                        screenState = screenState.copy(recommendedGames = RequestState.Success(emptyList()))
                     }
 
                     // 4. Fetch Game objects in PARALLEL for much faster loading
@@ -1205,7 +1218,10 @@ class HomeViewModel(
                     // Filter out library games
                     val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }
                     
-                    screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
+                    screenState = screenState.copy(
+                        recommendedGames = RequestState.Success(filtered),
+                        isLoadingMore = false
+                    )
                     
                     if (isLoadMore && games.isNotEmpty()) {
                         discoveryFilterPage++
@@ -1217,17 +1233,22 @@ class HomeViewModel(
                     val error = RequestState.Error(e.message ?: "Failed to get AI recommendations")
                     if (!isLoadMore) {
                         screenState = screenState.copy(recommendedGames = error)
+                    } else {
+                        screenState = screenState.copy(isLoadingMore = false)
                     }
                 }
             )
         } catch (e: kotlinx.coroutines.CancellationException) {
             android.util.Log.d(TAG, "fetchAIRecommendations cancelled")
             // Don't update state for cancellation
+            if (isLoadMore) screenState = screenState.copy(isLoadingMore = false)
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Error fetching AI recommendations", e)
             val error = RequestState.Error("An error occurred: ${e.message}")
             if (!isLoadMore) {
                 screenState = screenState.copy(recommendedGames = error)
+            } else {
+                screenState = screenState.copy(isLoadingMore = false)
             }
         }
     }
@@ -1235,21 +1256,24 @@ class HomeViewModel(
     /**
      * Fetch multiple games in parallel for faster loading.
      * Uses coroutineScope to launch parallel requests and waits for all to complete.
+     * Optimized to update state progressively for better perceived performance.
      */
     private suspend fun fetchGamesInParallel(
         gameNames: List<String>,
         existingIds: Set<Int>
     ): List<Game> = coroutineScope {
         val seenIds = java.util.Collections.synchronizedSet(existingIds.toMutableSet())
+        val allGames = java.util.Collections.synchronizedList(mutableListOf<Game>())
         
-        // Launch all search requests in parallel (limit to 10 concurrent for faster loading)
-        val chunks = gameNames.chunked(10)
-        val allGames = mutableListOf<Game>()
+        // Use a smaller batch size for progressive updates
+        val batchSize = 4
+        val chunks = gameNames.chunked(batchSize)
         
         for (chunk in chunks) {
             val deferredResults = chunk.map { gameName ->
                 async {
                     try {
+                        // Use a smaller page size for search to be faster
                         val searchResult = gameRepository.searchGames(gameName, page = 1, pageSize = 1)
                             .first { it is RequestState.Success || it is RequestState.Error }
                         if (searchResult is RequestState.Success && searchResult.data.isNotEmpty()) {
@@ -1264,14 +1288,29 @@ class HomeViewModel(
                 }
             }
             
-            // Wait for this chunk to complete and add results
+            // Wait for this small batch to complete
             val chunkResults = deferredResults.awaitAll()
-            chunkResults.filterNotNull().forEach { game ->
+            val newGames = chunkResults.filterNotNull().filter { game ->
                 synchronized(seenIds) {
                     if (game.id !in seenIds) {
-                        allGames.add(game)
                         seenIds.add(game.id)
+                        true
+                    } else {
+                        false
                     }
+                }
+            }
+            
+            allGames.addAll(newGames)
+            
+            // Progressive update: If we have results, update the UI immediately
+            // This makes the loading feel much faster as items pop in
+            if (newGames.isNotEmpty()) {
+                val currentList = (screenState.recommendedGames as? RequestState.Success)?.data ?: emptyList()
+                val updatedList = (currentList + newGames).distinctBy { it.id }
+                // Only update if we are already in Success state (to avoid flashing Loading state)
+                if (screenState.recommendedGames is RequestState.Success) {
+                    screenState = screenState.copy(recommendedGames = RequestState.Success(updatedList))
                 }
             }
         }
