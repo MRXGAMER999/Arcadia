@@ -36,7 +36,7 @@ data class DetailsUiState(
 
 class DetailsScreenViewModel(
     private val gameRepository: GameRepository,
-    private val gameListRepository: GameListRepository
+    gameListRepository: GameListRepository
 ) : UndoableViewModel(gameListRepository) {
 
     companion object {

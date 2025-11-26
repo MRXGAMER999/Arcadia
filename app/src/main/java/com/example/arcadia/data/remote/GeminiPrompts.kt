@@ -87,4 +87,42 @@ Respond ONLY with this exact JSON:
 No markdown. No extra commentary. JSON only.
 """.trimIndent()
 
+    /**
+     * Generates an optimized prompt for library-based game recommendations.
+     *
+     * @param libraryGames List of games in the user's library (name and genres)
+     * @param count Number of games to suggest
+     * @return Complete prompt string
+     */
+    fun libraryBasedRecommendationPrompt(libraryGames: String, count: Int): String {
+        val newerCount = (count * 0.7).toInt().coerceAtLeast(1)
+        val olderCount = count - newerCount
+        return """
+Role: Expert Video Game Curator.
+Task: Suggest $count NEW video games based on the user's library below.
+
+User's Library:
+$libraryGames
+
+CRITICAL REQUIREMENT - Release Date Distribution:
+- $newerCount games (~70%) MUST be from 2020-2025 (recent releases)
+- $olderCount games (~30%) can be classics/older titles (pre-2020)
+
+Analysis Steps (Internal):
+1. Analyze the user's taste based on genres, themes, and complexity of their library.
+2. Identify gaps or adjacent genres they might enjoy.
+3. Select games that are NOT in the library.
+4. For newer games: Prioritize recent releases (2020-2025) with high ratings.
+5. For older games: Select timeless classics or hidden gems they may have missed.
+6. Ensure diversity in genres and gameplay styles.
+
+Output Rules:
+- JSON ONLY. No markdown.
+- "games": Array of exact official English titles (newer games first, then older).
+- "reasoning": A concise explanation of why these specific games were chosen based on their library.
+
+Format:
+{"games": ["Game 1", "Game 2"], "reasoning": "..."}
+    """.trimIndent()
+    }
 }

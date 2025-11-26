@@ -163,9 +163,9 @@ class PreferencesManager(context: Context) {
     fun getDiscoverySortType(): DiscoverySortType {
         val name = preferences.getString(KEY_DISCOVERY_SORT_TYPE, null)
         return try {
-            name?.let { DiscoverySortType.valueOf(it) } ?: DiscoverySortType.POPULARITY
+            name?.let { DiscoverySortType.valueOf(it) } ?: DiscoverySortType.AI_RECOMMENDATION
         } catch (e: IllegalArgumentException) {
-            DiscoverySortType.POPULARITY
+            DiscoverySortType.AI_RECOMMENDATION
         }
     }
     

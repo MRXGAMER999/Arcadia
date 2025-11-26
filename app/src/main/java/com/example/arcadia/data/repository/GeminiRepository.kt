@@ -846,17 +846,127 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
         }
     }
 
+    /**
+     * Get game recommendations based on the user's library.
+     */
+    override suspend fun getLibraryBasedRecommendations(
+        games: List<GameListEntry>,
+        count: Int,
+        forceRefresh: Boolean
+    ): Result<AIGameSuggestions> {
+        val cacheKey = "library_recs_${games.size}_${games.hashCode()}_$count"
+
+        // Check cache first (unless force refresh)
+        if (!forceRefresh) {
+            cacheMutex.withLock {
+                suggestionsCache.get(cacheKey)?.let { entry ->
+                    if (!entry.isExpired()) {
+                        Log.d(TAG, "Cache hit for library recommendations")
+                        return Result.success(entry.suggestions.copy(fromCache = true))
+                    } else {
+                        suggestionsCache.remove(cacheKey)
+                    }
+                }
+            }
+        }
+
+        // Check for in-flight request (deduplication)
+        deduplicationMutex.withLock {
+            inFlightRequests[cacheKey]?.let { deferred ->
+                Log.d(TAG, "Joining existing request for library recommendations")
+                return deferred.await()
+            }
+        }
+
+        // Create new request with deduplication
+        val deferred = CoroutineScope(Dispatchers.IO).async {
+            performLibraryBasedRecommendations(games, count, cacheKey)
+        }
+
+        deduplicationMutex.withLock {
+            inFlightRequests[cacheKey] = deferred
+        }
+
+        return try {
+            deferred.await()
+        } finally {
+            deduplicationMutex.withLock {
+                inFlightRequests.remove(cacheKey)
+            }
+        }
+    }
+
+    private suspend fun performLibraryBasedRecommendations(
+        games: List<GameListEntry>,
+        count: Int,
+        cacheKey: String
+    ): Result<AIGameSuggestions> {
+        return try {
+            // Format library for prompt (use more games for better recommendations)
+            val libraryStr = games.sortedByDescending { it.rating ?: 0f }
+                .take(100)
+                .joinToString("\n") { "${it.name} (${it.genres.joinToString(", ")})" }
+
+            val prompt = GeminiPrompts.libraryBasedRecommendationPrompt(libraryStr, count)
+
+            Log.d(TAG, "Asking Gemini for library recommendations")
+
+            val response = jsonModel.generateContent(prompt)
+            val text = response.text?.trim()
+                ?: return Result.failure(AIError.EmptyResponseError())
+
+            Log.d(TAG, "Gemini response: $text")
+
+            // Clean up response
+            val cleanJson = text
+                .removePrefix("```json")
+                .removePrefix("```")
+                .removeSuffix("```")
+                .trim()
+
+            val parsed = try {
+                json.decodeFromString<AIGameSuggestionsDto>(cleanJson)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse JSON response", e)
+                return Result.failure(AIError.InvalidResponseError(rawResponse = cleanJson))
+            }
+
+            if (parsed.games.isEmpty()) {
+                return Result.failure(AIError.EmptyResponseError(
+                    message = "No recommendations found."
+                ))
+            }
+
+            val suggestions = AIGameSuggestions(
+                games = parsed.games,
+                reasoning = parsed.reasoning,
+                fromCache = false
+            )
+
+            // Cache the result
+            cacheMutex.withLock {
+                suggestionsCache.put(cacheKey, CacheEntry(suggestions))
+            }
+
+            Result.success(suggestions)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting library recommendations", e)
+            Result.failure(AIError.from(e))
+        }
+    }
+    
     companion object {
         private const val TAG = "GeminiRepository"
         
-        /** Cache TTL: 30 minutes (extended from 10 to reduce API calls) */
-        private const val CACHE_TTL_MS = 30 * 60 * 1000L
+        /** Cache TTL: 2 hours (extended to reduce API calls and persist recommendations) */
+        private const val CACHE_TTL_MS = 2 * 60 * 60 * 1000L
         
-        /** Profile analysis cache TTL: 1 hour (profile data changes infrequently) */
-        private const val PROFILE_CACHE_TTL_MS = 60 * 60 * 1000L
+        /** Profile analysis cache TTL: 2 hours (profile data changes infrequently) */
+        private const val PROFILE_CACHE_TTL_MS = 2 * 60 * 60 * 1000L
         
         /** Maximum cache entries */
-        private const val MAX_CACHE_SIZE = 100  // Increased from 50
+        private const val MAX_CACHE_SIZE = 200  // Increased for more caching
     }
 }
 

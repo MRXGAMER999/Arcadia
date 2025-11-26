@@ -4,7 +4,7 @@ package com.example.arcadia.domain.model
  * Represents the sorting type for discovery.
  */
 enum class DiscoverySortType {
-    RELEVANCE,
+    AI_RECOMMENDATION,
     RATING,
     RELEASE_DATE,
     NAME,
@@ -47,8 +47,8 @@ data class DiscoveryFilterState(
     val expandedStudios: Set<String> = emptySet(), // Currently expanded sub-studios for display
     val isLoadingDevelopers: Boolean = false,
     
-    // Sorting - default to popularity
-    val sortType: DiscoverySortType = DiscoverySortType.POPULARITY,
+    // Sorting - default to AI recommendation
+    val sortType: DiscoverySortType = DiscoverySortType.AI_RECOMMENDATION,
     val sortOrder: DiscoverySortOrder = DiscoverySortOrder.DESCENDING,
     
     // Genres
@@ -68,9 +68,9 @@ data class DiscoveryFilterState(
 ) {
     val hasActiveFilters: Boolean
         get() = selectedDevelopers.isNotEmpty() ||
-                sortType != DiscoverySortType.POPULARITY ||
                 selectedGenres.isNotEmpty() ||
-                releaseTimeframe != ReleaseTimeframe.ALL
+                releaseTimeframe != ReleaseTimeframe.ALL ||
+                sortType == DiscoverySortType.AI_RECOMMENDATION
     
     val totalSelectedDevelopersCount: Int
         get() = selectedDevelopers.values.sumOf { it.size.coerceAtLeast(1) }
@@ -78,7 +78,6 @@ data class DiscoveryFilterState(
     val activeFilterCount: Int
         get() = (if (selectedDevelopers.isNotEmpty()) 1 else 0) + 
                 selectedGenres.size + 
-                (if (sortType != DiscoverySortType.POPULARITY) 1 else 0) +
                 (if (releaseTimeframe != ReleaseTimeframe.ALL) 1 else 0)
     
     // Get all developer slugs for API call

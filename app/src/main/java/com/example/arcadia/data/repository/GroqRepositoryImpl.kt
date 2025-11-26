@@ -990,16 +990,118 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
         }
     }
 
+    /**
+     * Ask Groq to suggest games based on the user's existing library.
+     */
+    override suspend fun getLibraryBasedRecommendations(
+        games: List<GameListEntry>,
+        count: Int,
+        forceRefresh: Boolean
+    ): Result<AIGameSuggestions> {
+        if (games.isEmpty()) {
+            return Result.failure(AIError.EmptyResponseError(
+                message = "Add games to your library to get personalized recommendations."
+            ))
+        }
+
+        // Generate cache key based on library content
+        val libraryHash = games.map { it.rawgId }.sorted().hashCode()
+        val cacheKey = "library_recs_${libraryHash}_$count"
+
+        // Check cache
+        if (!forceRefresh) {
+            cacheMutex.withLock {
+                suggestionsCache.get(cacheKey)?.let { entry ->
+                    if (!entry.isExpired()) {
+                        Log.d(TAG, "Cache hit for library recommendations")
+                        return Result.success(entry.suggestions.copy(fromCache = true))
+                    } else {
+                        suggestionsCache.remove(cacheKey)
+                    }
+                }
+            }
+        }
+
+        return try {
+            // Build a concise representation of the library (use more games for better recommendations)
+            val libraryString = games.take(100).joinToString("\n") { 
+                "- ${it.name} (${it.genres.take(2).joinToString(", ")})" 
+            }
+            
+            val prompt = GeminiPrompts.libraryBasedRecommendationPrompt(libraryString, count)
+            
+            Log.d(TAG, "Asking Groq for library-based recommendations...")
+            
+            val request = GroqChatRequest(
+                model = GroqConfig.MODEL_NAME,
+                messages = listOf(
+                    GroqMessage(
+                        role = "system", 
+                        content = "You are a helpful assistant that responds only in valid JSON format. Never include markdown code blocks."
+                    ),
+                    GroqMessage(role = "user", content = prompt)
+                ),
+                temperature = GroqConfig.JsonModel.TEMPERATURE,
+                maxTokens = GroqConfig.JsonModel.MAX_TOKENS,
+                responseFormat = null
+            )
+            
+            val response = groqApiService.chatCompletion(
+                authorization = "Bearer ${GroqConfig.API_KEY}",
+                request = request
+            )
+            
+            val text = response.choices.firstOrNull()?.message?.content?.trim()
+                ?: return Result.failure(AIError.EmptyResponseError())
+            
+            // Clean up response
+            var cleanJson = text
+            if (cleanJson.contains("```")) {
+                val jsonStart = cleanJson.indexOf("{")
+                val jsonEnd = cleanJson.lastIndexOf("}") + 1
+                if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                    cleanJson = cleanJson.substring(jsonStart, jsonEnd)
+                }
+            }
+            cleanJson = cleanJson.trim()
+            
+            val parsed = json.decodeFromString<AIGameSuggestionsDto>(cleanJson)
+            
+            if (parsed.games.isEmpty()) {
+                return Result.failure(AIError.EmptyResponseError(
+                    message = "No recommendations found."
+                ))
+            }
+            
+            val suggestions = AIGameSuggestions(
+                games = parsed.games,
+                reasoning = parsed.reasoning,
+                fromCache = false
+            )
+            
+            // Cache the result
+            cacheMutex.withLock {
+                suggestionsCache.put(cacheKey, CacheEntry(suggestions))
+            }
+            
+            Result.success(suggestions)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting library recommendations", e)
+            Result.failure(AIError.from(e))
+        }
+    }
+
     companion object {
         private const val TAG = "GroqRepository"
         
-        /** Cache TTL: 30 minutes (extended from 10 to reduce API calls) */
-        private const val CACHE_TTL_MS = 30 * 60 * 1000L
+        /** Cache TTL: 2 hours (extended to reduce API calls and persist recommendations) */
+        private const val CACHE_TTL_MS = 2 * 60 * 60 * 1000L
         
-        /** Profile analysis cache TTL: 1 hour (profile data changes infrequently) */
-        private const val PROFILE_CACHE_TTL_MS = 60 * 60 * 1000L
+        /** Profile analysis cache TTL: 2 hours (profile data changes infrequently) */
+        private const val PROFILE_CACHE_TTL_MS = 2 * 60 * 60 * 1000L
         
         /** Maximum cache entries */
-        private const val MAX_CACHE_SIZE = 100  // Increased from 50
+        private const val MAX_CACHE_SIZE = 200  // Increased for more caching
     }
 }

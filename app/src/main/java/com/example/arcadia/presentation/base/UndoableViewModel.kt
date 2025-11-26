@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  * - Error handling with rollback
  */
 abstract class UndoableViewModel(
-    private val gameListRepository: GameListRepository
+    gameListRepository: GameListRepository
 ) : LibraryAwareViewModel(gameListRepository) {
 
     // Undo state

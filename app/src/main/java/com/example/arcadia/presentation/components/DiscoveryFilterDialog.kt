@@ -516,9 +516,9 @@ private fun SortOptions(
     ) {
         SortOption(
             icon = Icons.Default.AutoAwesome,
-            label = "Best",
-            isSelected = selectedType == DiscoverySortType.RELEVANCE,
-            onClick = { onTypeChange(DiscoverySortType.RELEVANCE) }
+            label = "AI",
+            isSelected = selectedType == DiscoverySortType.AI_RECOMMENDATION,
+            onClick = { onTypeChange(DiscoverySortType.AI_RECOMMENDATION) }
         )
         SortOption(
             icon = Icons.Default.Star,
@@ -632,7 +632,7 @@ private fun SortOrderButton(
         DiscoverySortType.RELEASE_DATE -> "Oldest" to "Newest"
         DiscoverySortType.RATING -> "Lowest" to "Highest"
         DiscoverySortType.POPULARITY -> "Least" to "Most"
-        DiscoverySortType.RELEVANCE -> "Low" to "High"
+        DiscoverySortType.AI_RECOMMENDATION -> "Low" to "High"
     }
     
     val leftBackgroundColor by animateColorAsState(

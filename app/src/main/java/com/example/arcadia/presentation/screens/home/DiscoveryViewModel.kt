@@ -13,6 +13,9 @@ import com.example.arcadia.domain.model.Game
 import com.example.arcadia.domain.model.ReleaseTimeframe
 import com.example.arcadia.domain.model.StudioFilterState
 import com.example.arcadia.domain.model.StudioFilterType
+import com.example.arcadia.domain.repository.GameListRepository
+import com.example.arcadia.domain.repository.SortOrder
+import kotlinx.coroutines.flow.first
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.util.PreferencesManager
 import com.example.arcadia.util.RequestState
@@ -43,6 +46,7 @@ data class DiscoveryState(
 class DiscoveryViewModel(
     private val gameRepository: GameRepository,
     private val aiRepository: AIRepository,
+    private val gameListRepository: GameListRepository,
     private val preferencesManager: PreferencesManager
 ) : BaseViewModel() {
 
@@ -84,6 +88,10 @@ class DiscoveryViewModel(
 
     init {
         loadSavedDiscoveryPreferences()
+        // Auto-apply AI recommendations if it's the default
+        if (discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION) {
+            applyDiscoveryFilters()
+        }
     }
 
     /**
@@ -258,6 +266,12 @@ class DiscoveryViewModel(
             onComplete?.invoke(RequestState.Loading)
 
             try {
+                // Handle AI Recommendations separately
+                if (discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION) {
+                    fetchAIRecommendations(isLoadMore = false, onComplete = onComplete)
+                    return@launchWithKey
+                }
+
                 val developerSlugs = if (discoveryFilterState.selectedDevelopers.isNotEmpty()) {
                     discoveryFilterState.getAllDeveloperSlugs()
                 } else null
@@ -343,6 +357,11 @@ class DiscoveryViewModel(
         launchWithKey("load_more_discovery") {
             isLoadingMoreDiscovery = true
             try {
+                if (discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION) {
+                    fetchAIRecommendations(isLoadMore = true)
+                    return@launchWithKey
+                }
+
                 discoveryFilterPage++
 
                 val developerSlugs = if (discoveryFilterState.selectedDevelopers.isNotEmpty()) {
@@ -387,6 +406,12 @@ class DiscoveryViewModel(
      */
     suspend fun refreshDiscoveryGames() {
         try {
+            if (discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION) {
+                // Force refresh to get new recommendations
+                fetchAIRecommendations(isLoadMore = false, forceRefresh = true)
+                return
+            }
+
             discoveryFilterPage++
             android.util.Log.d(TAG, "Refresh: Fetching discovery games page $discoveryFilterPage")
 
@@ -662,11 +687,110 @@ class DiscoveryViewModel(
         val prefix = if (sortOrder == DiscoverySortOrder.ASCENDING) "" else "-"
 
         return when (sortType) {
-            DiscoverySortType.RELEVANCE -> null
+            DiscoverySortType.AI_RECOMMENDATION -> null
             DiscoverySortType.RATING -> "${prefix}rating"
             DiscoverySortType.RELEASE_DATE -> "${prefix}released"
             DiscoverySortType.NAME -> "${prefix}name"
             DiscoverySortType.POPULARITY -> "${prefix}added"
+        }
+    }
+
+    private suspend fun fetchAIRecommendations(
+        isLoadMore: Boolean,
+        forceRefresh: Boolean = false,
+        onComplete: ((RequestState<List<Game>>) -> Unit)? = null
+    ) {
+        try {
+            // 1. Get user's library
+            val libraryState = gameListRepository.getGameList(SortOrder.NEWEST_FIRST).first()
+            if (libraryState !is RequestState.Success || libraryState.data.isEmpty()) {
+                val error = RequestState.Error("Add games to your library to get AI recommendations.")
+                _discoveryState.value = _discoveryState.value.copy(games = error)
+                onComplete?.invoke(error)
+                return
+            }
+
+            // 2. Calculate count based on page
+            val count = if (isLoadMore) (discoveryFilterPage + 1) * 10 else 10
+            
+            // 3. Get recommendations from AI
+            val aiResult = aiRepository.getLibraryBasedRecommendations(
+                games = libraryState.data, 
+                count = count,
+                forceRefresh = forceRefresh
+            )
+            
+            aiResult.fold(
+                onSuccess = { suggestions ->
+                    // 4. Fetch Game objects for suggested names
+                    // We'll search for each game and take the first result
+                    val games = mutableListOf<Game>()
+                    
+                    // Filter out games we already have displayed if loading more
+                    val newSuggestions = if (isLoadMore) {
+                        val existingNames = lastDiscoveryResults.map { it.name.lowercase() }
+                        suggestions.games.filter { it.lowercase() !in existingNames }
+                    } else {
+                        suggestions.games
+                    }
+
+                    if (newSuggestions.isEmpty() && isLoadMore) {
+                        // No new games found, stop pagination
+                        return@fold
+                    }
+
+                    // Fetch games in parallel-ish (sequentially for now to avoid rate limits/complexity)
+                    // Ideally we'd use a bulk fetch endpoint if available
+                    newSuggestions.forEach { gameName ->
+                        try {
+                            val searchResult = gameRepository.searchGames(gameName, page = 1, pageSize = 1).first()
+                            if (searchResult is RequestState.Success && searchResult.data.isNotEmpty()) {
+                                // Verify it's a close match
+                                val match = searchResult.data.first()
+                                // Simple fuzzy check or just trust the search
+                                games.add(match)
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e(TAG, "Failed to fetch game details for: $gameName")
+                        }
+                    }
+
+                    val finalGames = if (isLoadMore) {
+                        lastDiscoveryResults + games
+                    } else {
+                        games
+                    }
+                    
+                    lastDiscoveryResults = finalGames
+                    
+                    // Filter out library games again just in case
+                    val filtered = finalGames.filter { it.id !in gamesInLibrary }
+                    
+                    val resultState = RequestState.Success(filtered)
+                    _discoveryState.value = _discoveryState.value.copy(games = resultState)
+                    onComplete?.invoke(resultState)
+                    
+                    if (isLoadMore && games.isNotEmpty()) {
+                        discoveryFilterPage++
+                    } else if (!isLoadMore) {
+                        discoveryFilterPage = 1
+                    }
+                },
+                onFailure = { e ->
+                    val error = RequestState.Error(e.message ?: "Failed to get AI recommendations")
+                    if (!isLoadMore) {
+                        _discoveryState.value = _discoveryState.value.copy(games = error)
+                        onComplete?.invoke(error)
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Error fetching AI recommendations", e)
+            val error = RequestState.Error("An error occurred: ${e.message}")
+            if (!isLoadMore) {
+                _discoveryState.value = _discoveryState.value.copy(games = error)
+                onComplete?.invoke(error)
+            }
         }
     }
 }
