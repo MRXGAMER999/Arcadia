@@ -55,7 +55,8 @@ fun GameRatingSheet(
     onSave: (GameListEntry) -> Unit,
     onRemove: ((GameListEntry) -> Unit)? = null,
     isInLibrary: Boolean = true,
-    onDismissWithUnsavedChanges: ((GameListEntry) -> Unit)? = null // Callback when dismissed with unsaved changes
+    onDismissWithUnsavedChanges: ((GameListEntry) -> Unit)? = null, // Callback when dismissed with unsaved changes
+    originalEntry: GameListEntry? = null // Original entry for change detection (before any unsaved changes)
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
@@ -75,6 +76,9 @@ fun GameRatingSheet(
     
     // Track if removal is in progress to prevent auto-save on dismiss
     var isRemovalInProgress by remember { mutableStateOf(false) }
+    
+    // Track if save was explicitly clicked (to prevent showing unsaved snackbar)
+    var saveClicked by remember { mutableStateOf(false) }
 
     // Initialize state from game entry
     var aspectsList by remember(game) { 
@@ -93,6 +97,16 @@ fun GameRatingSheet(
         mutableStateOf<Int?>(if (game.hoursPlayed > 0) game.hoursPlayed else null)
     }
     var sliderValue by remember(game) { mutableFloatStateOf(game.rating ?: 0f) }
+    
+    // Store initial values to detect changes
+    // Use originalEntry if provided (for reopening with unsaved changes), otherwise use game
+    // For new games (not in library), any selection is a "change"
+    // For existing games (in library), compare against original values
+    val comparisonEntry = originalEntry ?: game
+    val initialAspects = remember(comparisonEntry) { comparisonEntry.aspects.toSet() }
+    val initialStatus = remember(comparisonEntry) { comparisonEntry.status }
+    val initialHours = remember(comparisonEntry) { comparisonEntry.hoursPlayed }
+    val initialRating = remember(comparisonEntry) { comparisonEntry.rating ?: 0f }
 
     // Ensure custom aspects from the game are in the list
     LaunchedEffect(game.aspects) {
@@ -102,60 +116,58 @@ fun GameRatingSheet(
         }
     }
     
-    // Track if there are unsaved changes
-    val hasUnsavedChanges = remember(selectedAspects, selectedClassification, selectedPlaytime, sliderValue) {
+    // Build current state for comparison and saving
+    fun buildCurrentEntry(): GameListEntry {
+        return game.copy(
+            aspects = selectedAspects.toList(),
+            status = selectedClassification,
+            hoursPlayed = selectedPlaytime ?: 0,
+            rating = if (sliderValue > 0f) sliderValue else null,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+    
+    // Check if there are meaningful changes
+    fun hasChanges(): Boolean {
         val currentHours = selectedPlaytime ?: 0
-        selectedAspects != game.aspects.toSet() ||
-        selectedClassification != game.status ||
-        currentHours != game.hoursPlayed ||
-        sliderValue != (game.rating ?: 0f)
+        return selectedAspects != initialAspects ||
+               selectedClassification != initialStatus ||
+               currentHours != initialHours ||
+               sliderValue != initialRating
     }
 
     // Function to save current state
     val saveCurrentState = {
-        val hours = selectedPlaytime ?: 0
-
-        val updatedGame = game.copy(
-            aspects = selectedAspects.toList(),
-            status = selectedClassification,
-            hoursPlayed = hours,
-            rating = if (sliderValue > 0f) sliderValue else null,
-            updatedAt = System.currentTimeMillis()
-        )
-
-        // Only save if something changed
-        if (updatedGame.aspects != game.aspects ||
-            updatedGame.status != game.status ||
-            updatedGame.hoursPlayed != game.hoursPlayed ||
-            updatedGame.rating != game.rating) {
-            onSave(updatedGame)
-        }
+        val updatedGame = buildCurrentEntry()
+        onSave(updatedGame)
     }
 
     if (isOpen) {
         ModalBottomSheet(
             onDismissRequest = {
-                // Skip auto-save if removal is in progress
-                if (isRemovalInProgress) {
+                // Skip if save was clicked or removal is in progress
+                if (saveClicked || isRemovalInProgress) {
                     onDismiss()
                     return@ModalBottomSheet
                 }
                 
-                if (hasUnsavedChanges && onDismissWithUnsavedChanges != null) {
-                    // Build the unsaved game entry for potential recovery
-                    val unsavedGame = game.copy(
-                        aspects = selectedAspects.toList(),
-                        status = selectedClassification,
-                        hoursPlayed = selectedPlaytime ?: 0,
-                        rating = if (sliderValue > 0f) sliderValue else null,
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    onDismissWithUnsavedChanges(unsavedGame)
+                val currentHasChanges = hasChanges()
+                
+                // For games NOT in library (adding new game), never auto-save on dismiss
+                // Just show unsaved changes snackbar if there are changes
+                if (!isInLibrary) {
+                    if (currentHasChanges && onDismissWithUnsavedChanges != null) {
+                        onDismissWithUnsavedChanges(buildCurrentEntry())
+                    }
                     onDismiss()
-                } else {
-                    saveCurrentState()
-                    onDismiss()
+                    return@ModalBottomSheet
                 }
+                
+                // For games IN library (editing), show unsaved changes snackbar
+                if (currentHasChanges && onDismissWithUnsavedChanges != null) {
+                    onDismissWithUnsavedChanges(buildCurrentEntry())
+                }
+                onDismiss()
             },
             sheetState = sheetState,
             containerColor = Color(0xFF0A1929),
@@ -274,6 +286,7 @@ fun GameRatingSheet(
                     // Save button
                     Button(
                         onClick = {
+                            saveClicked = true
                             saveCurrentState()
                             onDismiss()
                         },

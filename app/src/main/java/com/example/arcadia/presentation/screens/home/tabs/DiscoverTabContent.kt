@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.example.arcadia.data.remote.mapper.toGameListEntry
 import com.example.arcadia.domain.model.DiscoverySortType
 import com.example.arcadia.presentation.components.DiscoveryFilterDialog
+import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.home.HomeViewModel
 import com.example.arcadia.presentation.screens.home.components.GameListItem
@@ -55,10 +57,11 @@ fun DiscoverTabContent(
     val screenState = viewModel.screenState
     val discoveryFilterState = viewModel.discoveryFilterState
     val showFilterDialog = viewModel.showDiscoveryFilterDialog
-    val gameToAddWithStatus by viewModel.gameToAddWithStatus.collectAsState()
+    val addGameSheetState by viewModel.addGameSheetState.collectAsState()
+    val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
     val pullToRefreshState = rememberPullToRefreshState()
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = screenState.isRefreshing,
             onRefresh = { viewModel.refreshDiscover() },
@@ -235,9 +238,15 @@ fun DiscoverTabContent(
         }
         
         // Game Rating Sheet for adding games (Discover Tab)
-        gameToAddWithStatus?.let { game ->
+        if (addGameSheetState.isOpen && addGameSheetState.originalGame != null) {
+            val game = addGameSheetState.originalGame!!
+            // Use unsaved entry if reopening, otherwise create fresh entry
+            val initialEntry = addGameSheetState.unsavedEntry ?: game.toGameListEntry()
+            // Original entry is always from the fresh game (for change detection)
+            val originalEntry = game.toGameListEntry()
+            
             GameRatingSheet(
-                game = game.toGameListEntry(),
+                game = initialEntry,
                 isOpen = true,
                 onDismiss = { viewModel.dismissStatusPicker() },
                 onSave = { entry ->
@@ -254,8 +263,21 @@ fun DiscoverTabContent(
                 },
                 onRemove = null,
                 isInLibrary = false,
-                onDismissWithUnsavedChanges = null
+                onDismissWithUnsavedChanges = { unsavedEntry ->
+                    // Show snackbar with option to reopen or save
+                    viewModel.handleSheetDismissedWithUnsavedChanges(unsavedEntry, game)
+                },
+                originalEntry = originalEntry
             )
         }
+        
+        // Unsaved changes snackbar for add game flow
+        UnsavedChangesSnackbar(
+            visible = unsavedAddGameState.show,
+            onReopen = { viewModel.reopenAddGameWithUnsavedChanges() },
+            onSave = { viewModel.saveUnsavedAddGameChanges() },
+            onDismiss = { viewModel.dismissUnsavedAddGameChanges() },
+            modifier = Modifier.padding(bottom = 64.dp) // Above bottom navigation
+        )
     }
 }
