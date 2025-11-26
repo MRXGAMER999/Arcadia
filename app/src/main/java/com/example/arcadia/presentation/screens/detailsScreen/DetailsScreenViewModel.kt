@@ -31,6 +31,7 @@ data class DetailsUiState(
     val errorMessage: String? = null,
     val showRatingSheet: Boolean = false,
     val tempGameEntry: GameListEntry? = null, // For the rating sheet
+    val originalLibraryEntry: GameListEntry? = null, // Original entry before any changes (for change detection)
     // Unsaved changes snackbar
     val showUnsavedChangesSnackbar: Boolean = false,
     val unsavedChangesGame: GameListEntry? = null
@@ -104,10 +105,18 @@ class DetailsScreenViewModel(
         val gameId = game.id
         
         if (isGameInLibrary(gameId)) {
-            uiState = uiState.copy(showRatingSheet = true)
+            // Opening for edit - set original entry for change detection
+            uiState = uiState.copy(
+                showRatingSheet = true,
+                originalLibraryEntry = uiState.tempGameEntry // Store current state as original
+            )
         } else {
             val newEntry = game.toGameListEntry(status = GameStatus.FINISHED)
-            uiState = uiState.copy(tempGameEntry = newEntry, showRatingSheet = true)
+            uiState = uiState.copy(
+                tempGameEntry = newEntry, 
+                showRatingSheet = true,
+                originalLibraryEntry = newEntry // For new games, original is the default entry
+            )
         }
     }
 
@@ -137,6 +146,15 @@ class DetailsScreenViewModel(
             saveGameEntry(game)
         }
         dismissUnsavedChangesSnackbar()
+    }
+    
+    fun reopenWithUnsavedChanges() {
+        val unsavedGame = uiState.unsavedChangesGame ?: return
+        uiState = uiState.copy(
+            showUnsavedChangesSnackbar = false,
+            tempGameEntry = unsavedGame,
+            showRatingSheet = true
+        )
     }
 
     fun dismissUnsavedChangesSnackbar() {

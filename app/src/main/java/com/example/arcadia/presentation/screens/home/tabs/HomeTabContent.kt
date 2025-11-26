@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.arcadia.data.remote.mapper.toGameListEntry
+import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.home.HomeViewModel
 import com.example.arcadia.presentation.screens.home.components.GameListItem
@@ -49,10 +50,11 @@ fun HomeTabContent(
     snackbarHostState: SnackbarHostState
 ) {
     val screenState = viewModel.screenState
-    val gameToAddWithStatus by viewModel.gameToAddWithStatus.collectAsState()
+    val addGameSheetState by viewModel.addGameSheetState.collectAsState()
+    val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
     val pullToRefreshState = rememberPullToRefreshState()
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = screenState.isRefreshing,
             onRefresh = { viewModel.refreshHome() },
@@ -211,9 +213,15 @@ fun HomeTabContent(
         }
         
         // Game Rating Sheet for adding games (Home Tab)
-        gameToAddWithStatus?.let { game ->
+        if (addGameSheetState.isOpen && addGameSheetState.originalGame != null) {
+            val game = addGameSheetState.originalGame!!
+            // Use unsaved entry if reopening, otherwise create fresh entry
+            val initialEntry = addGameSheetState.unsavedEntry ?: game.toGameListEntry()
+            // Original entry is always from the fresh game (for change detection)
+            val originalEntry = game.toGameListEntry()
+            
             GameRatingSheet(
-                game = game.toGameListEntry(),
+                game = initialEntry,
                 isOpen = true,
                 onDismiss = { viewModel.dismissStatusPicker() },
                 onSave = { entry ->
@@ -230,8 +238,21 @@ fun HomeTabContent(
                 },
                 onRemove = null,
                 isInLibrary = false,
-                onDismissWithUnsavedChanges = null
+                onDismissWithUnsavedChanges = { unsavedEntry ->
+                    // Show snackbar with option to reopen or save
+                    viewModel.handleSheetDismissedWithUnsavedChanges(unsavedEntry, game)
+                },
+                originalEntry = originalEntry
             )
         }
+        
+        // Unsaved changes snackbar for add game flow
+        UnsavedChangesSnackbar(
+            visible = unsavedAddGameState.show,
+            onReopen = { viewModel.reopenAddGameWithUnsavedChanges() },
+            onSave = { viewModel.saveUnsavedAddGameChanges() },
+            onDismiss = { viewModel.dismissUnsavedAddGameChanges() },
+            modifier = Modifier.padding(bottom = 64.dp) // Above bottom navigation
+        )
     }
 }

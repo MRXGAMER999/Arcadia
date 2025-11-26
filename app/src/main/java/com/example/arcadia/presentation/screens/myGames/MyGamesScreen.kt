@@ -75,6 +75,7 @@ import com.example.arcadia.presentation.components.QuickRateDialog
 import com.example.arcadia.presentation.components.QuickSettingsDialog
 import com.example.arcadia.presentation.components.SwipeToDeleteItem
 import com.example.arcadia.presentation.components.TopNotification
+import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.myGames.components.GameStatsCard
 import com.example.arcadia.presentation.screens.myGames.components.MyGameCard
@@ -505,36 +506,13 @@ fun MyGamesScreen(
                 modifier = Modifier.align(Alignment.TopCenter)
             )
             
-            // Unsaved changes snackbar - direct overlay
-            if (screenState.showUnsavedChangesSnackbar) {
-                Snackbar(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp),
-                    containerColor = Color(0xFF1E2A47),
-                    contentColor = TextSecondary,
-                    action = {
-                        TextButton(onClick = { viewModel.saveUnsavedChanges() }) {
-                            Text(
-                                text = "SAVE",
-                                color = ButtonPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    },
-                    dismissAction = {
-                        IconButton(onClick = { viewModel.dismissUnsavedChangesSnackbar() }) {
-                            Text(
-                                text = "✕",
-                                color = TextSecondary,
-                                fontSize = 18.sp
-                            )
-                        }
-                    }
-                ) {
-                    Text("Changes discarded")
-                }
-            }
+            // Unsaved changes snackbar
+            UnsavedChangesSnackbar(
+                visible = screenState.showUnsavedChangesSnackbar,
+                onReopen = { viewModel.reopenWithUnsavedChanges() },
+                onSave = { viewModel.saveUnsavedChanges() },
+                onDismiss = { viewModel.dismissUnsavedChangesSnackbar() }
+            )
         }
         
         // Game Rating/Edit Sheet
@@ -553,7 +531,8 @@ fun MyGamesScreen(
                 onDismissWithUnsavedChanges = { unsavedGame ->
                     // Show snackbar with option to save changes
                     viewModel.showUnsavedChangesSnackbar(unsavedGame)
-                }
+                },
+                originalEntry = screenState.originalGameBeforeEdit
             )
         }
         

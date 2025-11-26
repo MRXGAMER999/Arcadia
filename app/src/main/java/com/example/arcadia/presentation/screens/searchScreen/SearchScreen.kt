@@ -79,7 +79,8 @@ fun SearchScreen(
     val state = viewModel.screenState
     val gamesInLibrary by viewModel.gamesInLibrary.collectAsState()
     val snackbarState by viewModel.snackbarState.collectAsState()
-    val gameToAddWithStatus by viewModel.gameToAddWithStatus.collectAsState()
+    val addGameSheetState by viewModel.addGameSheetState.collectAsState()
+    val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
     
     var showNotification by remember { mutableStateOf(false) }
     var notificationMessage by remember { mutableStateOf("") }
@@ -220,12 +221,27 @@ fun SearchScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 80.dp)
         )
+        
+        // Unsaved changes snackbar for add game flow
+        com.example.arcadia.presentation.components.UnsavedChangesSnackbar(
+            visible = unsavedAddGameState.show,
+            onReopen = { viewModel.reopenAddGameWithUnsavedChanges() },
+            onSave = { viewModel.saveUnsavedAddGameChanges() },
+            onDismiss = { viewModel.dismissUnsavedAddGameChanges() },
+            modifier = Modifier.padding(bottom = 80.dp)
+        )
     }
     
     // Game Rating Sheet for adding games
-    gameToAddWithStatus?.let { game ->
+    if (addGameSheetState.isOpen && addGameSheetState.originalGame != null) {
+        val game = addGameSheetState.originalGame!!
+        // Use unsaved entry if reopening, otherwise create fresh entry
+        val initialEntry = addGameSheetState.unsavedEntry ?: game.toGameListEntry()
+        // Original entry is always from the fresh game (for change detection)
+        val originalEntry = game.toGameListEntry()
+        
         GameRatingSheet(
-            game = game.toGameListEntry(),
+            game = initialEntry,
             isOpen = true,
             onDismiss = { viewModel.dismissStatusPicker() },
             onSave = { entry ->
@@ -254,7 +270,11 @@ fun SearchScreen(
             },
             onRemove = null,
             isInLibrary = false,
-            onDismissWithUnsavedChanges = null
+            onDismissWithUnsavedChanges = { unsavedEntry ->
+                // Show snackbar with option to reopen or save
+                viewModel.handleSheetDismissedWithUnsavedChanges(unsavedEntry, game)
+            },
+            originalEntry = originalEntry
         )
     }
 }

@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.arcadia.presentation.components.AddGameSnackbar
 import com.example.arcadia.presentation.components.TopNotification
+import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.detailsScreen.components.ErrorState
 import com.example.arcadia.presentation.screens.detailsScreen.components.GameDetailsContent
@@ -241,40 +242,18 @@ fun DetailsScreen(
                 isInLibrary = isInLibrary,
                 onDismissWithUnsavedChanges = { unsavedGame ->
                     viewModel.showUnsavedChangesSnackbar(unsavedGame)
-                }
+                },
+                originalEntry = uiState.originalLibraryEntry
             )
         }
         
         // Unsaved changes snackbar
-        if (uiState.showUnsavedChangesSnackbar) {
-            androidx.compose.material3.Snackbar(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp),
-                containerColor = Color(0xFF1E2A47),
-                contentColor = Color(0xFFDCDCDC),
-                action = {
-                    androidx.compose.material3.TextButton(onClick = { viewModel.saveUnsavedChanges() }) {
-                        Text(
-                            text = "SAVE",
-                            color = ButtonPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                },
-                dismissAction = {
-                    androidx.compose.material3.IconButton(onClick = { viewModel.dismissUnsavedChangesSnackbar() }) {
-                        Text(
-                            text = "✕",
-                            color = Color(0xFFDCDCDC),
-                            fontSize = 18.sp
-                        )
-                    }
-                }
-            ) {
-                Text("Changes discarded")
-            }
-        }
+        UnsavedChangesSnackbar(
+            visible = uiState.showUnsavedChangesSnackbar,
+            onReopen = { viewModel.reopenWithUnsavedChanges() },
+            onSave = { viewModel.saveUnsavedChanges() },
+            onDismiss = { viewModel.dismissUnsavedChangesSnackbar() }
+        )
         
         // Undo removal snackbar
         AddGameSnackbar(

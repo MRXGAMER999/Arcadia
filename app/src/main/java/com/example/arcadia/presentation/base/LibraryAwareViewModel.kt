@@ -7,6 +7,7 @@ import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
 import com.example.arcadia.util.RequestState
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
  * - Adding games with status selection
  * - Undo add functionality
  * - Snackbar notifications
+ * - Unsaved changes handling
  */
 abstract class LibraryAwareViewModel(
     protected val gameListRepository: GameListRepository,
@@ -30,7 +32,7 @@ abstract class LibraryAwareViewModel(
     private val _gamesInLibrary = MutableStateFlow<Set<Int>>(emptySet())
     val gamesInLibrary: StateFlow<Set<Int>> = _gamesInLibrary.asStateFlow()
 
-    // Snackbar state
+    // Snackbar state for "Game added" with undo
     data class SnackbarState(
         val show: Boolean = false,
         val gameName: String = "",
@@ -40,9 +42,30 @@ abstract class LibraryAwareViewModel(
     private val _snackbarState = MutableStateFlow(SnackbarState())
     val snackbarState: StateFlow<SnackbarState> = _snackbarState.asStateFlow()
 
-    // Status picker state
-    private val _gameToAddWithStatus = MutableStateFlow<Game?>(null)
-    val gameToAddWithStatus: StateFlow<Game?> = _gameToAddWithStatus.asStateFlow()
+    // Status picker / Add game sheet state
+    // This holds the current game being added AND any unsaved data
+    data class AddGameSheetState(
+        val isOpen: Boolean = false,
+        val originalGame: Game? = null,
+        val unsavedEntry: GameListEntry? = null // Holds unsaved changes when reopening
+    )
+    
+    private val _addGameSheetState = MutableStateFlow(AddGameSheetState())
+    val addGameSheetState: StateFlow<AddGameSheetState> = _addGameSheetState.asStateFlow()
+    
+    // Unsaved changes snackbar state (separate from "game added" snackbar)
+    data class UnsavedChangesState(
+        val show: Boolean = false,
+        val unsavedEntry: GameListEntry? = null,
+        val originalGame: Game? = null
+    )
+    
+    private val _unsavedChangesState = MutableStateFlow(UnsavedChangesState())
+    val unsavedAddGameState: StateFlow<UnsavedChangesState> = _unsavedChangesState.asStateFlow()
+    
+    // Job for auto-dismiss timer
+    private var unsavedChangesTimerJob: Job? = null
+    private var addedGameTimerJob: Job? = null
 
     init {
         observeLibrary()
@@ -77,20 +100,98 @@ abstract class LibraryAwareViewModel(
     }
 
     /**
-     * Show the status picker for adding a game to the library.
+     * Show the add game sheet for a game.
      */
     fun showStatusPicker(game: Game) {
         if (isGameInLibrary(game.id)) {
             return // Already in library
         }
-        _gameToAddWithStatus.value = game
+        // Cancel any unsaved changes snackbar when opening a new sheet
+        cancelUnsavedChangesSnackbar()
+        
+        _addGameSheetState.value = AddGameSheetState(
+            isOpen = true,
+            originalGame = game,
+            unsavedEntry = null
+        )
     }
 
     /**
-     * Dismiss the status picker.
+     * Dismiss the add game sheet without saving.
      */
     fun dismissStatusPicker() {
-        _gameToAddWithStatus.value = null
+        _addGameSheetState.value = AddGameSheetState()
+    }
+
+    /**
+     * Called when sheet is dismissed with unsaved changes.
+     * Shows the unsaved changes snackbar.
+     */
+    fun handleSheetDismissedWithUnsavedChanges(unsavedEntry: GameListEntry, originalGame: Game) {
+        // First close the sheet
+        _addGameSheetState.value = AddGameSheetState()
+        
+        // Then show the unsaved changes snackbar
+        _unsavedChangesState.value = UnsavedChangesState(
+            show = true,
+            unsavedEntry = unsavedEntry,
+            originalGame = originalGame
+        )
+        
+        // Auto-dismiss after 5 seconds
+        unsavedChangesTimerJob?.cancel()
+        unsavedChangesTimerJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(5000L)
+            if (_unsavedChangesState.value.show) {
+                _unsavedChangesState.value = UnsavedChangesState()
+            }
+        }
+    }
+
+    /**
+     * Reopen the sheet with unsaved changes.
+     */
+    fun reopenAddGameWithUnsavedChanges() {
+        val state = _unsavedChangesState.value
+        if (state.originalGame != null && state.unsavedEntry != null) {
+            // Cancel the timer
+            unsavedChangesTimerJob?.cancel()
+            
+            // Reopen the sheet with the unsaved data
+            _addGameSheetState.value = AddGameSheetState(
+                isOpen = true,
+                originalGame = state.originalGame,
+                unsavedEntry = state.unsavedEntry
+            )
+            
+            // Clear the unsaved changes state
+            _unsavedChangesState.value = UnsavedChangesState()
+        }
+    }
+
+    /**
+     * Save the unsaved changes directly from the snackbar.
+     */
+    fun saveUnsavedAddGameChanges() {
+        val state = _unsavedChangesState.value
+        state.unsavedEntry?.let { entry ->
+            unsavedChangesTimerJob?.cancel()
+            _unsavedChangesState.value = UnsavedChangesState()
+            addGameWithEntry(entry)
+        }
+    }
+
+    /**
+     * Dismiss the unsaved changes snackbar without saving.
+     */
+    fun dismissUnsavedAddGameChanges() {
+        unsavedChangesTimerJob?.cancel()
+        _unsavedChangesState.value = UnsavedChangesState()
+    }
+    
+    private fun cancelUnsavedChangesSnackbar() {
+        unsavedChangesTimerJob?.cancel()
+        _unsavedChangesState.value = UnsavedChangesState()
     }
 
     /**
@@ -104,25 +205,17 @@ abstract class LibraryAwareViewModel(
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
-        dismissStatusPicker()
+        // Close sheet first
+        _addGameSheetState.value = AddGameSheetState()
+        // Clear any unsaved changes state
+        cancelUnsavedChangesSnackbar()
 
         viewModelScope.launch {
             when (val result = addGameToLibraryUseCase(game, status)) {
                 is RequestState.Success -> {
                     val entryId = result.data
-                    _snackbarState.value = SnackbarState(
-                        show = true,
-                        gameName = game.name,
-                        entryId = entryId
-                    )
+                    showAddedGameSnackbar(game.name, entryId)
                     onSuccess()
-
-                    // Auto-hide after 5 seconds
-                    showTemporaryNotification(
-                        setNotification = {},
-                        clearNotification = { dismissSnackbar() },
-                        duration = 5000L
-                    )
                 }
                 is RequestState.Error -> onError(result.message)
                 else -> {}
@@ -139,28 +232,39 @@ abstract class LibraryAwareViewModel(
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
-        dismissStatusPicker()
+        // Close sheet first
+        _addGameSheetState.value = AddGameSheetState()
+        // Clear any unsaved changes state
+        cancelUnsavedChangesSnackbar()
 
         viewModelScope.launch {
             when (val result = gameListRepository.addGameListEntry(entry)) {
                 is RequestState.Success -> {
                     val entryId = result.data
-                    _snackbarState.value = SnackbarState(
-                        show = true,
-                        gameName = entry.name,
-                        entryId = entryId
-                    )
+                    showAddedGameSnackbar(entry.name, entryId)
                     onSuccess()
-
-                    // Auto-hide after 5 seconds
-                    showTemporaryNotification(
-                        setNotification = {},
-                        clearNotification = { dismissSnackbar() },
-                        duration = 5000L
-                    )
                 }
                 is RequestState.Error -> onError(result.message)
                 else -> {}
+            }
+        }
+    }
+    
+    private fun showAddedGameSnackbar(gameName: String, entryId: String) {
+        // Cancel any existing timer
+        addedGameTimerJob?.cancel()
+        
+        _snackbarState.value = SnackbarState(
+            show = true,
+            gameName = gameName,
+            entryId = entryId
+        )
+        
+        // Auto-hide after 5 seconds
+        addedGameTimerJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(5000L)
+            if (_snackbarState.value.show) {
+                _snackbarState.value = SnackbarState()
             }
         }
     }
@@ -170,9 +274,10 @@ abstract class LibraryAwareViewModel(
      */
     fun undoAddGame() {
         val entryId = _snackbarState.value.entryId ?: return
+        addedGameTimerJob?.cancel()
+        _snackbarState.value = SnackbarState()
 
         viewModelScope.launch {
-            _snackbarState.value = SnackbarState()
             gameListRepository.removeGameFromList(entryId)
         }
     }
@@ -181,6 +286,7 @@ abstract class LibraryAwareViewModel(
      * Dismiss the snackbar without undoing.
      */
     fun dismissSnackbar() {
+        addedGameTimerJob?.cancel()
         _snackbarState.value = SnackbarState()
     }
 
@@ -211,4 +317,5 @@ abstract class LibraryAwareViewModel(
             showStatusPicker(game)
         }
     }
+    
 }

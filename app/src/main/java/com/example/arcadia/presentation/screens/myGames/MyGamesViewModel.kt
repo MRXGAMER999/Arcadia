@@ -30,6 +30,7 @@ data class MyGamesScreenState(
     // Unsaved changes snackbar
     val showUnsavedChangesSnackbar: Boolean = false,
     val unsavedChangesGame: GameListEntry? = null,
+    val originalGameBeforeEdit: GameListEntry? = null, // For reopening the sheet with unsaved data
 )
 
 /**
@@ -48,13 +49,14 @@ class MyGamesViewModel(
     
     companion object {
         private const val NOTIFICATION_DURATION_MS = 2000L
-        private const val UNDO_DELAY_MS = 5000L
+        private const val UNSAVED_CHANGES_TIMEOUT_MS = 5000L
     }
     
     var screenState by mutableStateOf(MyGamesScreenState())
         private set
     
-    // private var gamesJob: Job? = null // Removed in favor of launchWithKey
+    // Job for unsaved changes snackbar auto-dismiss
+    private var unsavedChangesJob: kotlinx.coroutines.Job? = null
 
     init {
         // Load saved filter preferences
@@ -234,10 +236,16 @@ class MyGamesViewModel(
         }
     }
     
+    // Track the index of the removed game for restoration at the same position
+    private var removedGameIndex: Int = -1
+    
     fun removeGameWithUndo(game: GameListEntry) {
         // Get the most up-to-date version of the game from allGames to preserve any recent changes
         // (e.g., rating updates that might not have been reflected in the UI yet)
         val currentGame = screenState.allGames.find { it.id == game.id } ?: game
+        
+        // Remember the index before removal for restoration
+        removedGameIndex = screenState.allGames.indexOfFirst { it.id == currentGame.id }
         
         removeGameWithUndo(
             game = currentGame,
@@ -273,7 +281,17 @@ class MyGamesViewModel(
     
     fun undoDeletion() {
         undoRemoval { restoredGame ->
-            val restoredAllGames = screenState.allGames + restoredGame
+            // Restore at the original index if valid, otherwise append to the end
+            val restoredAllGames = if (removedGameIndex >= 0 && removedGameIndex <= screenState.allGames.size) {
+                screenState.allGames.toMutableList().apply {
+                    add(removedGameIndex, restoredGame)
+                }
+            } else {
+                screenState.allGames + restoredGame
+            }
+            
+            // Reset the index tracker
+            removedGameIndex = -1
             
             showTemporaryNotification(
                 setNotification = {
@@ -320,47 +338,85 @@ class MyGamesViewModel(
     }
     
     /**
-     * Show snackbar when user dismisses rating sheet with unsaved changes
+     * Show snackbar when user dismisses rating sheet with unsaved changes.
+     * Uses a dedicated job for proper cancellation.
      */
     fun showUnsavedChangesSnackbar(unsavedGame: GameListEntry) {
-        showTemporaryNotification(
-            setNotification = {
-                screenState = screenState.copy(
-                    showUnsavedChangesSnackbar = true,
-                    unsavedChangesGame = unsavedGame
-                )
-            },
-            clearNotification = {
-                if (screenState.showUnsavedChangesSnackbar) {
-                    dismissUnsavedChangesSnackbar()
-                }
-            },
-            duration = UNDO_DELAY_MS
+        // Cancel any existing job
+        unsavedChangesJob?.cancel()
+        
+        // Show the snackbar
+        screenState = screenState.copy(
+            showUnsavedChangesSnackbar = true,
+            unsavedChangesGame = unsavedGame
         )
+        
+        // Auto-dismiss after timeout
+        unsavedChangesJob = launchWithKey("unsaved_changes_snackbar") {
+            kotlinx.coroutines.delay(UNSAVED_CHANGES_TIMEOUT_MS)
+            if (screenState.showUnsavedChangesSnackbar) {
+                dismissUnsavedChangesSnackbar()
+            }
+        }
     }
     
     /**
      * Save the unsaved changes when user taps "Save" on the snackbar
      */
     fun saveUnsavedChanges() {
+        unsavedChangesJob?.cancel()
         screenState.unsavedChangesGame?.let { game ->
             updateGameEntry(game)
         }
-        dismissUnsavedChangesSnackbar()
+        screenState = screenState.copy(
+            showUnsavedChangesSnackbar = false,
+            unsavedChangesGame = null,
+            originalGameBeforeEdit = null
+        )
     }
     
     /**
      * Dismiss the unsaved changes snackbar
      */
     fun dismissUnsavedChangesSnackbar() {
+        unsavedChangesJob?.cancel()
         screenState = screenState.copy(
             showUnsavedChangesSnackbar = false,
-            unsavedChangesGame = null
+            unsavedChangesGame = null,
+            originalGameBeforeEdit = null
         )
     }
     
+    /**
+     * Reopen the GameRatingSheet with the unsaved changes
+     */
+    fun reopenWithUnsavedChanges() {
+        unsavedChangesJob?.cancel()
+        screenState.unsavedChangesGame?.let { unsavedGame ->
+            screenState = screenState.copy(
+                selectedGameToEdit = unsavedGame,
+                showUnsavedChangesSnackbar = false,
+                unsavedChangesGame = null
+            )
+        }
+    }
+    
     fun selectGameToEdit(game: GameListEntry?) {
-        screenState = screenState.copy(selectedGameToEdit = game)
+        // Cancel unsaved changes snackbar when opening a new edit sheet
+        if (game != null) {
+            unsavedChangesJob?.cancel()
+            screenState = screenState.copy(
+                selectedGameToEdit = game,
+                originalGameBeforeEdit = game,
+                showUnsavedChangesSnackbar = false,
+                unsavedChangesGame = null
+            )
+        } else {
+            screenState = screenState.copy(
+                selectedGameToEdit = null
+                // Keep originalGameBeforeEdit for potential unsaved changes handling
+            )
+        }
     }
 
     fun updateGameEntry(entry: GameListEntry) {
