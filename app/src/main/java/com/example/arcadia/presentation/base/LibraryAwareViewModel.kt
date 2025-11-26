@@ -127,6 +127,41 @@ abstract class LibraryAwareViewModel(
     }
 
     /**
+     * Add a game to the library with a full GameListEntry (includes rating, aspects, etc.).
+     * Shows a snackbar with undo functionality.
+     */
+    fun addGameWithEntry(
+        entry: GameListEntry,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        dismissStatusPicker()
+
+        viewModelScope.launch {
+            when (val result = gameListRepository.addGameListEntry(entry)) {
+                is RequestState.Success -> {
+                    val entryId = result.data
+                    _snackbarState.value = SnackbarState(
+                        show = true,
+                        gameName = entry.name,
+                        entryId = entryId
+                    )
+                    onSuccess()
+
+                    // Auto-hide after 5 seconds
+                    showTemporaryNotification(
+                        setNotification = {},
+                        clearNotification = { dismissSnackbar() },
+                        duration = 5000L
+                    )
+                }
+                is RequestState.Error -> onError(result.message)
+                else -> {}
+            }
+        }
+    }
+
+    /**
      * Undo adding a game - removes it from the library.
      */
     fun undoAddGame() {

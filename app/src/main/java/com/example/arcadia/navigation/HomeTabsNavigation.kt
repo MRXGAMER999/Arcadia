@@ -333,7 +333,16 @@ private fun HomeTabRoot(
                 isOpen = true,
                 onDismiss = { viewModel.dismissStatusPicker() },
                 onSave = { entry ->
-                    viewModel.addGameWithStatus(game, entry.status)
+                    // Use addGameWithEntry to preserve all fields (rating, aspects, hoursPlayed, etc.)
+                    val entryWithGameData = entry.copy(
+                        rawgId = game.id,
+                        name = game.name,
+                        backgroundImage = game.backgroundImage,
+                        genres = game.genres,
+                        platforms = game.platforms,
+                        releaseDate = game.released
+                    )
+                    viewModel.addGameWithEntry(entryWithGameData)
                 },
                 onRemove = null,
                 isInLibrary = false,
@@ -515,7 +524,16 @@ private fun DiscoverTabRoot(
                 isOpen = true,
                 onDismiss = { viewModel.dismissStatusPicker() },
                 onSave = { entry ->
-                    viewModel.addGameWithStatus(game, entry.status)
+                    // Use addGameWithEntry to preserve all fields (rating, aspects, hoursPlayed, etc.)
+                    val entryWithGameData = entry.copy(
+                        rawgId = game.id,
+                        name = game.name,
+                        backgroundImage = game.backgroundImage,
+                        genres = game.genres,
+                        platforms = game.platforms,
+                        releaseDate = game.released
+                    )
+                    viewModel.addGameWithEntry(entryWithGameData)
                 },
                 onRemove = null,
                 isInLibrary = false,
