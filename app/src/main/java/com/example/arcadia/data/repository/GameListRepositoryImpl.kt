@@ -569,4 +569,63 @@ class GameListRepositoryImpl : GameListRepository {
             null
         }
     }
+    
+    /**
+     * Migrates existing library entries to include developer/publisher data.
+     * Only updates entries that are missing developers AND publishers.
+     */
+    override suspend fun migrateLibraryWithDevPub(
+        fetchGameDetails: suspend (Int) -> Game?
+    ): RequestState<Int> {
+        return try {
+            val userId = getCurrentUserId()
+                ?: return RequestState.Error("User not authenticated")
+            
+            // Get all entries
+            val snapshot = getUserGameListCollection(userId)
+                .get()
+                .await()
+            
+            var updatedCount = 0
+            
+            for (doc in snapshot.documents) {
+                try {
+                    val dto = doc.toObject(GameListEntryDto::class.java) ?: continue
+                    
+                    // Skip if already has dev/pub data
+                    if (dto.developers.isNotEmpty() || dto.publishers.isNotEmpty()) {
+                        continue
+                    }
+                    
+                    // Fetch game details from RAWG
+                    val game = fetchGameDetails(dto.rawgId) ?: continue
+                    
+                    // Update only if we got dev/pub data
+                    if (game.developers.isNotEmpty() || game.publishers.isNotEmpty()) {
+                        val updates = mutableMapOf<String, Any>()
+                        if (game.developers.isNotEmpty()) {
+                            updates["developers"] = game.developers
+                        }
+                        if (game.publishers.isNotEmpty()) {
+                            updates["publishers"] = game.publishers
+                        }
+                        
+                        doc.reference.update(updates).await()
+                        updatedCount++
+                        Log.d(TAG, "Migrated ${dto.name}: devs=${game.developers}, pubs=${game.publishers}")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to migrate entry ${doc.id}: ${e.message}")
+                    // Continue with next entry
+                }
+            }
+            
+            Log.d(TAG, "Migration complete. Updated $updatedCount entries.")
+            RequestState.Success(updatedCount)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during migration: ${e.message}", e)
+            RequestState.Error("Migration failed: ${e.message}")
+        }
+    }
 }

@@ -292,6 +292,8 @@ fun DiscoverTabContent(
                         backgroundImage = game.backgroundImage,
                         genres = game.genres,
                         platforms = game.platforms,
+                        developers = game.developers,
+                        publishers = game.publishers,
                         releaseDate = game.released
                     )
                     viewModel.addGameWithEntry(entryWithGameData)

@@ -13,6 +13,7 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.brotli.BrotliInterceptor
 import okhttp3.logging.HttpLoggingInterceptor
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
@@ -103,24 +104,28 @@ val networkModule = module {
     }
     
     // Connection Pool - reuse connections for better performance
+    // Increased pool size for better parallel request handling
     single {
         ConnectionPool(
-            maxIdleConnections = 10,
+            maxIdleConnections = 15,
             keepAliveDuration = 5,
             timeUnit = TimeUnit.MINUTES
         )
     }
     
-    // OkHttpClient - optimized for performance
+    // OkHttpClient - optimized for performance with HTTP/2 and Brotli
     single {
         val cacheDir = androidContext().cacheDir.resolve("http_cache")
         OkHttpClient.Builder()
             // HTTP/2 support for multiplexing multiple requests over single connection
+            // Note: HTTP/3 (QUIC) requires server support and is auto-negotiated
             .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
-            // Connection pooling - reuse connections
+            // Connection pooling - reuse connections (increased for better parallelism)
             .connectionPool(get())
             // Disk cache - 100MB
             .cache(Cache(cacheDir, 100L * 1024 * 1024))
+            // Brotli compression - better than GZIP (20-26% smaller)
+            .addInterceptor(BrotliInterceptor)
             // Interceptors
             .addInterceptor(get<Interceptor>(named("offlineCacheInterceptor")))
             .addInterceptor(get<Interceptor>(named("apiKeyInterceptor")))
@@ -131,10 +136,10 @@ val networkModule = module {
                     addInterceptor(get<HttpLoggingInterceptor>())
                 }
             }
-            // Reduced timeouts for faster failure detection
-            .connectTimeout(10, TimeUnit.SECONDS) // Reduced from 30
-            .readTimeout(15, TimeUnit.SECONDS)    // Reduced from 30
-            .writeTimeout(10, TimeUnit.SECONDS)   // Reduced from 30
+            // Optimized timeouts
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
             // Retry on connection failure
             .retryOnConnectionFailure(true)
             .build()
@@ -156,26 +161,27 @@ val networkModule = module {
         get<Retrofit>().create(RawgApiService::class.java)
     }
     
-    // Groq OkHttpClient (no RAWG interceptor, optimized for AI)
+    // Groq OkHttpClient (optimized for AI with Brotli compression)
     single(named("groqClient")) {
         OkHttpClient.Builder()
             .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
             .connectionPool(get())
+            // Brotli compression for AI responses
+            .addInterceptor(BrotliInterceptor)
             .apply {
                 if (com.example.arcadia.BuildConfig.DEBUG) {
                     addInterceptor(get<HttpLoggingInterceptor>())
                 }
             }
             .addInterceptor { chain ->
-                // Note: Don't manually set Accept-Encoding - OkHttp handles GZIP transparently
                 val request = chain.request().newBuilder()
                     .header("Connection", "keep-alive")
                     .build()
                 chain.proceed(request)
             }
-            .connectTimeout(30, TimeUnit.SECONDS) // Reduced from 60
-            .readTimeout(45, TimeUnit.SECONDS)    // Reduced from 60
-            .writeTimeout(30, TimeUnit.SECONDS)   // Reduced from 60
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
     }

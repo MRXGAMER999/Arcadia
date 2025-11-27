@@ -14,6 +14,7 @@ import com.example.arcadia.domain.model.AIError
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.model.ai.AIGameSuggestions
+import com.example.arcadia.domain.model.ai.GameRecommendation
 import com.example.arcadia.domain.model.ai.GameInsights
 import com.example.arcadia.domain.model.ai.StreamingInsights
 import com.example.arcadia.domain.model.ai.StudioExpansionResult
@@ -110,11 +111,29 @@ class GroqRepositoryImpl(
     private val slugCleanupRegex = Regex("[^a-z0-9-]")
 
     /**
-     * Internal DTO for JSON parsing of AI game suggestions
+     * Internal DTO for JSON parsing of AI game suggestions (legacy format)
      */
     @Serializable
     private data class AIGameSuggestionsDto(
-        val games: List<String>,
+        val games: List<String> = emptyList(),
+        val reasoning: String? = null
+    )
+    
+    /**
+     * Internal DTO for game recommendation with confidence score
+     */
+    @Serializable
+    private data class GameRecommendationDto(
+        val name: String,
+        val confidence: Int = 50
+    )
+    
+    /**
+     * Internal DTO for JSON parsing of AI game suggestions (new format with confidence)
+     */
+    @Serializable
+    private data class AIGameSuggestionsV2Dto(
+        val games: List<GameRecommendationDto> = emptyList(),
         val reasoning: String? = null
     )
 
@@ -992,6 +1011,8 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
 
     /**
      * Ask Groq to suggest games based on the user's existing library.
+     * Enhanced with rich library data including ratings, status, and playtime.
+     * Returns recommendations sorted by confidence score.
      */
     override suspend fun getLibraryBasedRecommendations(
         games: List<GameListEntry>,
@@ -1004,9 +1025,9 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             ))
         }
 
-        // Generate cache key based on library content
-        val libraryHash = games.map { it.rawgId }.sorted().hashCode()
-        val cacheKey = "library_recs_${libraryHash}_$count"
+        // Generate cache key based on library content (include ratings for cache invalidation)
+        val libraryHash = games.map { "${it.rawgId}_${it.rating}_${it.status}" }.sorted().hashCode()
+        val cacheKey = "library_recs_v2_${libraryHash}_$count"
 
         // Check cache
         if (!forceRefresh) {
@@ -1023,26 +1044,25 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
         }
 
         return try {
-            // Build a concise representation of the library (use more games for better recommendations)
-            val libraryString = games.take(100).joinToString("\n") { 
-                "- ${it.name} (${it.genres.take(2).joinToString(", ")})" 
-            }
+            // Build comprehensive library representation with all user data
+            val libraryString = buildEnhancedLibraryString(games)
             
-            val prompt = GeminiPrompts.libraryBasedRecommendationPrompt(libraryString, count)
+            val prompt = GeminiPrompts.libraryBasedRecommendationPromptV2(libraryString, count)
             
-            Log.d(TAG, "Asking Groq for library-based recommendations...")
+            Log.d(TAG, "Asking Groq for library-based recommendations with ${games.size} games...")
             
             val request = GroqChatRequest(
                 model = GroqConfig.MODEL_NAME,
                 messages = listOf(
                     GroqMessage(
                         role = "system", 
-                        content = "You are a helpful assistant that responds only in valid JSON format. Never include markdown code blocks."
+                        content = "You are an expert game recommendation engine with deep knowledge of video games across all eras and platforms. Analyze the user's library carefully to understand their taste, then recommend games they will genuinely love. Respond ONLY with valid JSON."
                     ),
                     GroqMessage(role = "user", content = prompt)
                 ),
-                temperature = GroqConfig.JsonModel.TEMPERATURE,
-                maxTokens = GroqConfig.JsonModel.MAX_TOKENS,
+                temperature = GroqConfig.RecommendationModel.TEMPERATURE,
+                maxTokens = GroqConfig.RecommendationModel.MAX_TOKENS,
+                topP = GroqConfig.RecommendationModel.TOP_P,
                 responseFormat = null
             )
             
@@ -1053,6 +1073,8 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             
             val text = response.choices.firstOrNull()?.message?.content?.trim()
                 ?: return Result.failure(AIError.EmptyResponseError())
+            
+            Log.d(TAG, "Groq response: ${text.take(500)}...")
             
             // Clean up response
             var cleanJson = text
@@ -1065,31 +1087,185 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             }
             cleanJson = cleanJson.trim()
             
-            val parsed = json.decodeFromString<AIGameSuggestionsDto>(cleanJson)
-            
-            if (parsed.games.isEmpty()) {
-                return Result.failure(AIError.EmptyResponseError(
-                    message = "No recommendations found."
-                ))
+            // Try parsing new format with confidence scores first
+            val suggestions = try {
+                val parsed = json.decodeFromString<AIGameSuggestionsV2Dto>(cleanJson)
+                if (parsed.games.isNotEmpty()) {
+                    // New format with confidence scores
+                    val recommendations = parsed.games
+                        .sortedByDescending { it.confidence }
+                        .map { GameRecommendation(it.name, it.confidence) }
+                    
+                    AIGameSuggestions(
+                        games = recommendations.map { it.name },
+                        recommendations = recommendations,
+                        reasoning = parsed.reasoning,
+                        fromCache = false
+                    )
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "V2 parsing failed, trying legacy format: ${e.message}")
+                null
             }
             
-            val suggestions = AIGameSuggestions(
-                games = parsed.games,
-                reasoning = parsed.reasoning,
-                fromCache = false
+            // Fallback to legacy format if new format fails
+            val finalSuggestions = suggestions ?: try {
+                val parsed = json.decodeFromString<AIGameSuggestionsDto>(cleanJson)
+                if (parsed.games.isEmpty()) {
+                    return Result.failure(AIError.EmptyResponseError(
+                        message = "No recommendations found."
+                    ))
+                }
+                AIGameSuggestions(
+                    games = parsed.games,
+                    reasoning = parsed.reasoning,
+                    fromCache = false
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse JSON response", e)
+                return Result.failure(AIError.InvalidResponseError(rawResponse = cleanJson))
+            }
+            
+            // Filter out any games that are already in the library (safety check)
+            val libraryNames = games.map { it.name.lowercase() }.toSet()
+            val filteredGames = finalSuggestions.games.filter { gameName ->
+                val lowerName = gameName.lowercase()
+                !libraryNames.any { libraryGame ->
+                    // Check for exact match or edition variants
+                    lowerName == libraryGame ||
+                    lowerName.startsWith("$libraryGame:") ||
+                    lowerName.contains("$libraryGame -") ||
+                    (lowerName.contains(libraryGame) && 
+                     (lowerName.contains("goty") || lowerName.contains("deluxe") || 
+                      lowerName.contains("ultimate") || lowerName.contains("complete") ||
+                      lowerName.contains("definitive")))
+                }
+            }
+            
+            val filteredRecommendations = finalSuggestions.recommendations.filter { rec ->
+                filteredGames.contains(rec.name)
+            }
+            
+            val filteredSuggestions = finalSuggestions.copy(
+                games = filteredGames,
+                recommendations = filteredRecommendations
             )
+            
+            Log.d(TAG, "Returning ${filteredGames.size} recommendations (filtered from ${finalSuggestions.games.size})")
             
             // Cache the result
             cacheMutex.withLock {
-                suggestionsCache.put(cacheKey, CacheEntry(suggestions))
+                suggestionsCache.put(cacheKey, CacheEntry(filteredSuggestions))
             }
             
-            Result.success(suggestions)
+            Result.success(filteredSuggestions)
             
         } catch (e: Exception) {
             Log.e(TAG, "Error getting library recommendations", e)
             Result.failure(AIError.from(e))
         }
+    }
+    
+    /**
+     * Builds a comprehensive library string with rich user data for AI analysis.
+     * Includes: ratings, status, genres, aspects, developers, publishers.
+     * Sorted by rating (highest first) to emphasize user preferences.
+     */
+    private fun buildEnhancedLibraryString(games: List<GameListEntry>): String {
+        // Sort by rating (highest first), then by status priority
+        val sortedGames = games.sortedWith(
+            compareByDescending<GameListEntry> { it.rating ?: 0f }
+                .thenByDescending { 
+                    when (it.status) {
+                        GameStatus.FINISHED -> 4
+                        GameStatus.PLAYING -> 3
+                        GameStatus.ON_HOLD -> 2
+                        GameStatus.WANT -> 1
+                        GameStatus.DROPPED -> 0
+                    }
+                }
+        )
+        
+        // Build summary stats first for AI context
+        val totalGames = games.size
+        val finishedCount = games.count { it.status == GameStatus.FINISHED }
+        val playingCount = games.count { it.status == GameStatus.PLAYING }
+        val droppedCount = games.count { it.status == GameStatus.DROPPED }
+        val avgRating = games.mapNotNull { it.rating }.average().takeIf { !it.isNaN() }?.let { "%.1f".format(it) } ?: "N/A"
+        
+        // Genre frequency analysis - key preference indicator
+        val genreFrequency = games.flatMap { it.genres }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedByDescending { it.value }
+            .take(5)
+            .joinToString(", ") { "${it.key}(${it.value})" }
+        
+        // Aspect frequency analysis - what the user loves across games
+        val aspectFrequency = games.flatMap { it.aspects }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedByDescending { it.value }
+            .take(5)
+            .joinToString(", ") { "${it.key}(${it.value})" }
+        
+        // Developer frequency - IMPORTANT for recommendations
+        val devFrequency = games.flatMap { it.developers }
+            .filter { it.isNotBlank() }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedByDescending { it.value }
+            .filter { it.value >= 2 } // Only show devs with 2+ games
+            .take(5)
+            .joinToString(", ") { "${it.key}(${it.value})" }
+        
+        // Publisher frequency
+        val pubFrequency = games.flatMap { it.publishers }
+            .filter { it.isNotBlank() }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedByDescending { it.value }
+            .filter { it.value >= 2 } // Only show pubs with 2+ games
+            .take(4)
+            .joinToString(", ") { "${it.key}(${it.value})" }
+        
+        // Compact summary header with dev/pub info
+        val summaryHeader = buildString {
+            appendLine("STATS: $totalGames games | Finished:$finishedCount Playing:$playingCount Dropped:$droppedCount | AvgRating:$avgRating")
+            appendLine("TOP GENRES: $genreFrequency")
+            if (aspectFrequency.isNotEmpty()) appendLine("LOVED ASPECTS: $aspectFrequency")
+            if (devFrequency.isNotEmpty()) appendLine("FAVORITE DEVS: $devFrequency")
+            if (pubFrequency.isNotEmpty()) appendLine("FAVORITE PUBS: $pubFrequency")
+            appendLine()
+            append("GAMES (by preference):")
+        }
+        
+        // Compact single-line format per game to reduce tokens
+        val gamesList = sortedGames.take(75).mapIndexed { index, game ->
+            val rating = game.rating?.let { "${it.toInt()}/10" } ?: "-"
+            val status = when (game.status) {
+                GameStatus.FINISHED -> "Done"
+                GameStatus.PLAYING -> "Playing"
+                GameStatus.ON_HOLD -> "Hold"
+                GameStatus.WANT -> "Want"
+                GameStatus.DROPPED -> "Drop"
+            }
+            val genres = game.genres.take(2).joinToString("/")
+            val aspects = game.aspects.take(3).joinToString(",")
+            // Include short review only for highly rated games (strongest signal)
+            val review = if ((game.rating ?: 0f) >= 8f && game.review.isNotBlank()) 
+                " \"${game.review.take(60)}\"" else ""
+            
+            "${index + 1}. ${game.name} [$status|$rating] $genres ${if (aspects.isNotEmpty()) "(${aspects})" else ""}$review"
+        }.joinToString("\n")
+        
+        return summaryHeader + gamesList
     }
 
     companion object {

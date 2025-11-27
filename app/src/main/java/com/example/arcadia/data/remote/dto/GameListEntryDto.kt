@@ -9,6 +9,8 @@ data class GameListEntryDto(
     val backgroundImage: String? = null,
     val genres: List<String> = emptyList(),
     val platforms: List<String> = emptyList(),
+    val developers: List<String> = emptyList(),
+    val publishers: List<String> = emptyList(),
     val addedAt: Long = 0L,
     val updatedAt: Long = 0L,
     val status: String = "WANT", // Store enum as string

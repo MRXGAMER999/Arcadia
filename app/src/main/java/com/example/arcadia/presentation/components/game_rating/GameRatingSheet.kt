@@ -79,9 +79,13 @@ fun GameRatingSheet(
     
     // Track if save was explicitly clicked (to prevent showing unsaved snackbar)
     var saveClicked by remember { mutableStateOf(false) }
+    
+    // Use stable key (rawgId) to prevent state reset during recomposition
+    // This fixes the issue where slider resets when parent recomposes
+    val stableKey = game.rawgId
 
-    // Initialize state from game entry
-    var aspectsList by remember(game) { 
+    // Initialize state from game entry - use rawgId as key for stability
+    var aspectsList by remember(stableKey) { 
         mutableStateOf(listOf(
             "Great Story", 
             "Amazing Gameplay", 
@@ -91,22 +95,23 @@ fun GameRatingSheet(
             "Challenging"
         )) 
     }
-    var selectedAspects by remember(game) { mutableStateOf(game.aspects.toSet()) }
-    var selectedClassification by remember(game) { mutableStateOf(game.status) }
-    var selectedPlaytime by remember(game) { 
+    var selectedAspects by remember(stableKey) { mutableStateOf(game.aspects.toSet()) }
+    var selectedClassification by remember(stableKey) { mutableStateOf(game.status) }
+    var selectedPlaytime by remember(stableKey) { 
         mutableStateOf<Int?>(if (game.hoursPlayed > 0) game.hoursPlayed else null)
     }
-    var sliderValue by remember(game) { mutableFloatStateOf(game.rating ?: 0f) }
+    var sliderValue by remember(stableKey) { mutableFloatStateOf(game.rating ?: 0f) }
     
     // Store initial values to detect changes
     // Use originalEntry if provided (for reopening with unsaved changes), otherwise use game
     // For new games (not in library), any selection is a "change"
     // For existing games (in library), compare against original values
     val comparisonEntry = originalEntry ?: game
-    val initialAspects = remember(comparisonEntry) { comparisonEntry.aspects.toSet() }
-    val initialStatus = remember(comparisonEntry) { comparisonEntry.status }
-    val initialHours = remember(comparisonEntry) { comparisonEntry.hoursPlayed }
-    val initialRating = remember(comparisonEntry) { comparisonEntry.rating ?: 0f }
+    val comparisonKey = comparisonEntry.rawgId
+    val initialAspects = remember(comparisonKey) { comparisonEntry.aspects.toSet() }
+    val initialStatus = remember(comparisonKey) { comparisonEntry.status }
+    val initialHours = remember(comparisonKey) { comparisonEntry.hoursPlayed }
+    val initialRating = remember(comparisonKey) { comparisonEntry.rating ?: 0f }
 
     // Ensure custom aspects from the game are in the list
     LaunchedEffect(game.aspects) {

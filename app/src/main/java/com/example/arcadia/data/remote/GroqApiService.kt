@@ -33,6 +33,8 @@ data class GroqChatRequest(
     val model: String,
     val messages: List<GroqMessage>,
     val temperature: Float = 0.3f,
+    @SerialName("top_p")
+    val topP: Float? = null,
     @SerialName("max_tokens")
     val maxTokens: Int = 16384,
     @SerialName("response_format")
