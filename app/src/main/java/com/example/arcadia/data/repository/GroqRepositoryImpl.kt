@@ -218,26 +218,23 @@ class GroqRepositoryImpl(
         return try {
             val prompt = GeminiPrompts.gameSuggestionPrompt(userQuery, count)
             
-            Log.d(TAG, "Asking Groq/Kimi for game suggestions: $userQuery")
+            Log.d(TAG, "Asking Groq for game suggestions: $userQuery")
             
-            val request = GroqChatRequest(
-                model = GroqConfig.MODEL_NAME,
-                messages = listOf(
-                    GroqMessage(
-                        role = "system", 
-                        content = "You are a helpful assistant that responds only in valid JSON format. Never include markdown code blocks or any text outside the JSON."
+            val response = executeWithModelFallback { modelName ->
+                GroqChatRequest(
+                    model = modelName,
+                    messages = listOf(
+                        GroqMessage(
+                            role = "system", 
+                            content = "You are a helpful assistant that responds only in valid JSON format. Never include markdown code blocks or any text outside the JSON."
+                        ),
+                        GroqMessage(role = "user", content = prompt)
                     ),
-                    GroqMessage(role = "user", content = prompt)
-                ),
-                temperature = GroqConfig.JsonModel.TEMPERATURE,
-                maxTokens = GroqConfig.JsonModel.MAX_TOKENS,
-                responseFormat = null  // Kimi K2 doesn't support json_object mode
-            )
-            
-            val response = groqApiService.chatCompletion(
-                authorization = "Bearer ${GroqConfig.API_KEY}",
-                request = request
-            )
+                    temperature = GroqConfig.JsonModel.TEMPERATURE,
+                    maxTokens = GroqConfig.JsonModel.MAX_TOKENS,
+                    responseFormat = null  // Kimi K2 doesn't support json_object mode
+                )
+            }
             
             val text = response.choices.firstOrNull()?.message?.content?.trim()
                 ?: return Result.failure(AIError.EmptyResponseError())
@@ -323,19 +320,16 @@ class GroqRepositoryImpl(
 
             Log.d(TAG, "Sending profile analysis to Groq...")
 
-            val request = GroqChatRequest(
-                model = GroqConfig.MODEL_NAME,
-                messages = listOf(
-                    GroqMessage(role = "user", content = prompt)
-                ),
-                temperature = GroqConfig.TextModel.TEMPERATURE,
-                maxTokens = GroqConfig.TextModel.MAX_TOKENS
-            )
-            
-            val response = groqApiService.chatCompletion(
-                authorization = "Bearer ${GroqConfig.API_KEY}",
-                request = request
-            )
+            val response = executeWithModelFallback { modelName ->
+                GroqChatRequest(
+                    model = modelName,
+                    messages = listOf(
+                        GroqMessage(role = "user", content = prompt)
+                    ),
+                    temperature = GroqConfig.TextModel.TEMPERATURE,
+                    maxTokens = GroqConfig.TextModel.MAX_TOKENS
+                )
+            }
             
             val analysisText = response.choices.firstOrNull()?.message?.content
                 ?: return Result.failure(AIError.EmptyResponseError())
@@ -396,64 +390,96 @@ class GroqRepositoryImpl(
         val fullText = StringBuilder()
         
         try {
-            val request = GroqChatRequest(
-                model = GroqConfig.MODEL_NAME,
-                messages = listOf(
-                    GroqMessage(role = "user", content = prompt)
-                ),
-                temperature = GroqConfig.TextModel.TEMPERATURE,
-                maxTokens = GroqConfig.TextModel.MAX_TOKENS,
-                stream = true
-            )
+            // Try models in order until one succeeds
+            val modelsToTry = listOf(GroqConfig.MODEL_NAME) + GroqConfig.FALLBACK_MODELS
+            var lastException: Exception? = null
             
-            val responseBody = groqApiService.streamChatCompletion(
-                authorization = "Bearer ${GroqConfig.API_KEY}",
-                request = request
-            )
+            for ((index, modelName) in modelsToTry.withIndex()) {
+                try {
+                    Log.d(TAG, "Trying streaming with model: $modelName")
+                    
+                    val request = GroqChatRequest(
+                        model = modelName,
+                        messages = listOf(
+                            GroqMessage(role = "user", content = prompt)
+                        ),
+                        temperature = GroqConfig.TextModel.TEMPERATURE,
+                        maxTokens = GroqConfig.TextModel.MAX_TOKENS,
+                        stream = true
+                    )
+                    
+                    val responseBody = groqApiService.streamChatCompletion(
+                        authorization = "Bearer ${GroqConfig.API_KEY}",
+                        request = request
+                    )
             
-            responseBody.byteStream().bufferedReader().use { reader ->
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    val currentLine = line?.trim() ?: continue
-                    if (currentLine.startsWith("data: ")) {
-                        val data = currentLine.removePrefix("data: ")
-                        if (data == "[DONE]") break
-                        
-                        try {
-                            // Parse the partial JSON chunk
-                            // We need a simple DTO for the chunk format
-                            val chunk = json.decodeFromString<GroqStreamChunk>(data)
-                            val content = chunk.choices.firstOrNull()?.delta?.content ?: ""
-                            
-                            if (content.isNotEmpty()) {
-                                fullText.append(content)
-                                emit(StreamingInsights(
-                                    partialText = fullText.toString(),
-                                    isComplete = false,
-                                    parsedInsights = null
-                                ))
+                    responseBody.byteStream().bufferedReader().use { reader ->
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null) {
+                            val currentLine = line?.trim() ?: continue
+                            if (currentLine.startsWith("data: ")) {
+                                val data = currentLine.removePrefix("data: ")
+                                if (data == "[DONE]") break
+                                
+                                try {
+                                    // Parse the partial JSON chunk
+                                    // We need a simple DTO for the chunk format
+                                    val chunk = json.decodeFromString<GroqStreamChunk>(data)
+                                    val content = chunk.choices.firstOrNull()?.delta?.content ?: ""
+                                    
+                                    if (content.isNotEmpty()) {
+                                        fullText.append(content)
+                                        emit(StreamingInsights(
+                                            partialText = fullText.toString(),
+                                            isComplete = false,
+                                            parsedInsights = null
+                                        ))
+                                    }
+                                } catch (e: Exception) {
+                                    // Ignore parse errors for individual chunks
+                                }
                             }
-                        } catch (e: Exception) {
-                            // Ignore parse errors for individual chunks
                         }
+                    }
+                    
+                    val finalText = fullText.toString()
+                    Log.d(TAG, "Streaming complete with $modelName. Total length: ${finalText.length}")
+                    
+                    val insights = parseAIResponse(finalText, games)
+                    
+                    // Emit final complete result
+                    emit(StreamingInsights(
+                        partialText = finalText,
+                        isComplete = true,
+                        parsedInsights = insights
+                    ))
+                    
+                    // Success - break out of model retry loop
+                    return@flow
+                    
+                } catch (e: Exception) {
+                    lastException = e
+                    Log.w(TAG, "Streaming failed with model $modelName: ${e.message}")
+                    
+                    // If this is not the last model, continue to next fallback
+                    if (index < modelsToTry.size - 1) {
+                        Log.d(TAG, "Trying next model for streaming...")
+                        fullText.clear() // Reset for next attempt
+                        continue
                     }
                 }
             }
             
-            val finalText = fullText.toString()
-            Log.d(TAG, "Streaming complete. Total length: ${finalText.length}")
-            
-            val insights = parseAIResponse(finalText, games)
-            
-            // Emit final complete result
+            // All models failed
+            Log.e(TAG, "All streaming models failed. Last error: ${lastException?.message}")
             emit(StreamingInsights(
-                partialText = finalText,
+                partialText = "Error: ${AIError.from(lastException ?: Exception("All models failed")).message}",
                 isComplete = true,
-                parsedInsights = insights
+                parsedInsights = null
             ))
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error during streaming", e)
+            Log.e(TAG, "Unexpected error during streaming", e)
             // Emit error state
             emit(StreamingInsights(
                 partialText = "Error: ${AIError.from(e).message}",
@@ -700,24 +726,21 @@ The slug should be lowercase, hyphen-separated, suitable for RAWG API (e.g., "be
 Use official studio names as they appear in game credits.
         """.trimIndent()
         
-        val request = GroqChatRequest(
-            model = GroqConfig.MODEL_NAME,
-            messages = listOf(
-                GroqMessage(
-                    role = "system",
-                    content = "You are a helpful assistant that responds only in valid JSON format. Never include markdown code blocks."
+        val response = executeWithModelFallback { modelName ->
+            GroqChatRequest(
+                model = modelName,
+                messages = listOf(
+                    GroqMessage(
+                        role = "system",
+                        content = "You are a helpful assistant that responds only in valid JSON format. Never include markdown code blocks."
+                    ),
+                    GroqMessage(role = "user", content = prompt)
                 ),
-                GroqMessage(role = "user", content = prompt)
-            ),
-            temperature = 0.2f,
-            maxTokens = 1024,
-            responseFormat = null
-        )
-        
-        val response = groqApiService.chatCompletion(
-            authorization = "Bearer ${GroqConfig.API_KEY}",
-            request = request
-        )
+                temperature = 0.2f,
+                maxTokens = 1024,
+                responseFormat = null
+            )
+        }
         
         val text = response.choices.firstOrNull()?.message?.content?.trim()
             ?: throw Exception("Empty Groq response for studio expansion")
@@ -956,24 +979,21 @@ IMPORTANT: Return ONLY valid JSON, no markdown:
 Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotoku-studio", "infinity-ward")
         """.trimIndent()
         
-        val request = GroqChatRequest(
-            model = GroqConfig.MODEL_NAME,
-            messages = listOf(
-                GroqMessage(
-                    role = "system",
-                    content = "You are a video game industry expert. Respond only in valid JSON. Never include markdown code blocks."
+        val response = executeWithModelFallback { modelName ->
+            GroqChatRequest(
+                model = modelName,
+                messages = listOf(
+                    GroqMessage(
+                        role = "system",
+                        content = "You are a video game industry expert. Respond only in valid JSON. Never include markdown code blocks."
+                    ),
+                    GroqMessage(role = "user", content = prompt)
                 ),
-                GroqMessage(role = "user", content = prompt)
-            ),
-            temperature = 0.3f,
-            maxTokens = 1024,
-            responseFormat = null
-        )
-        
-        val response = groqApiService.chatCompletion(
-            authorization = "Bearer ${GroqConfig.API_KEY}",
-            request = request
-        )
+                temperature = 0.3f,
+                maxTokens = 1024,
+                responseFormat = null
+            )
+        }
         
         val text = response.choices.firstOrNull()?.message?.content?.trim()
             ?: throw Exception("Empty AI response for studio search")
@@ -1051,25 +1071,22 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             
             Log.d(TAG, "Asking Groq for library-based recommendations with ${games.size} games...")
             
-            val request = GroqChatRequest(
-                model = GroqConfig.MODEL_NAME,
-                messages = listOf(
-                    GroqMessage(
-                        role = "system", 
-                        content = "You are an expert game recommendation engine with deep knowledge of video games across all eras and platforms. Analyze the user's library carefully to understand their taste, then recommend games they will genuinely love. Respond ONLY with valid JSON."
+            val response = executeWithModelFallback { modelName ->
+                GroqChatRequest(
+                    model = modelName,
+                    messages = listOf(
+                        GroqMessage(
+                            role = "system", 
+                            content = "You are an expert game recommendation engine with deep knowledge of video games across all eras and platforms. Analyze the user's library carefully to understand their taste, then recommend games they will genuinely love. Respond ONLY with valid JSON."
+                        ),
+                        GroqMessage(role = "user", content = prompt)
                     ),
-                    GroqMessage(role = "user", content = prompt)
-                ),
-                temperature = GroqConfig.RecommendationModel.TEMPERATURE,
-                maxTokens = GroqConfig.RecommendationModel.MAX_TOKENS,
-                topP = GroqConfig.RecommendationModel.TOP_P,
-                responseFormat = null
-            )
-            
-            val response = groqApiService.chatCompletion(
-                authorization = "Bearer ${GroqConfig.API_KEY}",
-                request = request
-            )
+                    temperature = GroqConfig.RecommendationModel.TEMPERATURE,
+                    maxTokens = GroqConfig.RecommendationModel.MAX_TOKENS,
+                    topP = GroqConfig.RecommendationModel.TOP_P,
+                    responseFormat = null
+                )
+            }
             
             val text = response.choices.firstOrNull()?.message?.content?.trim()
                 ?: return Result.failure(AIError.EmptyResponseError())
@@ -1266,6 +1283,52 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
         }.joinToString("\n")
         
         return summaryHeader + gamesList
+    }
+
+    /**
+     * Execute a Groq API request with automatic model fallback.
+     * Tries primary model first, then falls back through the list of fallback models.
+     * 
+     * @param requestBuilder Function that creates a GroqChatRequest with the given model name
+     * @return The API response
+     * @throws Exception if all models fail
+     */
+    private suspend fun executeWithModelFallback(
+        requestBuilder: (modelName: String) -> GroqChatRequest
+    ): com.example.arcadia.data.remote.GroqChatResponse {
+        val modelsToTry = listOf(GroqConfig.MODEL_NAME) + GroqConfig.FALLBACK_MODELS
+        var lastException: Exception? = null
+        
+        for ((index, modelName) in modelsToTry.withIndex()) {
+            try {
+                Log.d(TAG, "Trying model: $modelName (attempt ${index + 1}/${modelsToTry.size})")
+                val request = requestBuilder(modelName)
+                val response = groqApiService.chatCompletion(
+                    authorization = "Bearer ${GroqConfig.API_KEY}",
+                    request = request
+                )
+                
+                if (index > 0) {
+                    Log.i(TAG, "Successfully used fallback model: $modelName")
+                }
+                return response
+                
+            } catch (e: Exception) {
+                lastException = e
+                val errorMsg = e.message ?: "Unknown error"
+                Log.w(TAG, "Model $modelName failed: $errorMsg")
+                
+                // If this is not the last model, continue to next fallback
+                if (index < modelsToTry.size - 1) {
+                    Log.d(TAG, "Falling back to next model...")
+                    continue
+                }
+            }
+        }
+        
+        // All models failed
+        Log.e(TAG, "All Groq models failed. Last error: ${lastException?.message}")
+        throw lastException ?: Exception("All Groq models failed")
     }
 
     companion object {

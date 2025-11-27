@@ -338,15 +338,18 @@ class DiscoveryViewModel(
      */
     private fun refilterDiscoveryResults() {
         if (lastDiscoveryResults.isEmpty()) {
+            // No cached results - need to fetch fresh data
             applyDiscoveryFilters()
             return
         }
 
         val filtered = lastDiscoveryResults.filter { it.id !in gamesInLibrary }
-        android.util.Log.d(TAG, "Refiltered discovery: ${lastDiscoveryResults.size} -> ${filtered.size} games")
+        android.util.Log.d(TAG, "Refiltered discovery: ${lastDiscoveryResults.size} -> ${filtered.size} games (library has ${gamesInLibrary.size} games)")
         _discoveryState.value = _discoveryState.value.copy(games = RequestState.Success(filtered))
 
+        // Auto-load more if we're running low on games after filtering
         if (filtered.size < MIN_GAMES_THRESHOLD && !isLoadingMoreDiscovery) {
+            android.util.Log.d(TAG, "Low on games after refiltering (${filtered.size} < $MIN_GAMES_THRESHOLD), loading more...")
             loadMoreDiscoveryResults()
         }
     }
@@ -720,7 +723,7 @@ class DiscoveryViewModel(
                 isLoadingMoreDiscovery = true
             }
             
-            // 1. Get user's library
+            // 1. Get user's library to use for recommendations AND filtering
             val libraryState = gameListRepository.getGameList(SortOrder.NEWEST_FIRST).first()
             if (libraryState !is RequestState.Success || libraryState.data.isEmpty()) {
                 val error = RequestState.Error("Add games to your library to get AI recommendations.")
@@ -728,6 +731,11 @@ class DiscoveryViewModel(
                 onComplete?.invoke(error)
                 return
             }
+
+            // Update gamesInLibrary to ensure we have the latest library state
+            val currentLibraryIds = libraryState.data.map { it.rawgId }.toSet()
+            gamesInLibrary = currentLibraryIds
+            android.util.Log.d(TAG, "Updated library IDs for filtering: ${currentLibraryIds.size} games")
 
             // 2. Calculate count based on page
             val count = if (isLoadMore) (discoveryFilterPage + 1) * 10 else 10
@@ -768,8 +776,10 @@ class DiscoveryViewModel(
                     
                     lastDiscoveryResults = finalGames
                     
-                    // Filter out library games
+                    // Filter out library games using the freshly updated library IDs
                     val filtered = finalGames.filter { it.id !in gamesInLibrary }
+                    
+                    android.util.Log.d(TAG, "AI recommendations: ${finalGames.size} total, ${filtered.size} after filtering out library games")
                     
                     val resultState = RequestState.Success(filtered)
                     _discoveryState.value = _discoveryState.value.copy(games = resultState)
