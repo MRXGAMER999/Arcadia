@@ -3,12 +3,17 @@ package com.example.arcadia.data.remote
 import com.example.arcadia.BuildConfig
 
 /**
- * Configuration for Groq API with Kimi K2 model
+ * Configuration for Groq API with Llama 3.3 70B model
+ * Upgraded from Llama 4 Scout (preview) to Llama 3.3 70B (production)
+ * for significantly better reasoning and recommendation quality.
  */
 object GroqConfig {
     
     const val BASE_URL = "https://api.groq.com/"
-    const val MODEL_NAME = "moonshotai/kimi-k2-instruct-0905"
+    
+    // Llama 3.3 70B - Production model with excellent reasoning
+    // Much smarter than the preview Llama 4 Scout models
+    const val MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
     
     val API_KEY: String get() = BuildConfig.GROQ_API_KEY
     
@@ -19,6 +24,20 @@ object GroqConfig {
     object JsonModel {
         const val TEMPERATURE = 0.2f
         const val MAX_TOKENS = 16384
+        const val TOP_P = 0.9f
+    }
+    
+    /**
+     * Configuration for library-based recommendations.
+     * Balanced settings for diverse yet accurate game picks:
+     * - Temperature 0.4: More creative than JSON (0.2) but still grounded
+     * - Top_P 0.85: Nucleus sampling to filter unlikely tokens
+     * - This produces varied recommendations while avoiding hallucinations
+     */
+    object RecommendationModel {
+        const val TEMPERATURE = 0.4f
+        const val MAX_TOKENS = 16384
+        const val TOP_P = 0.85f
     }
     
     /**
@@ -29,5 +48,6 @@ object GroqConfig {
     object TextModel {
         const val TEMPERATURE = 0.6f
         const val MAX_TOKENS = 16384
+        const val TOP_P = 0.95f
     }
 }

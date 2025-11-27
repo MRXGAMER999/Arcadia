@@ -40,6 +40,10 @@ class PreferencesManager(context: Context) {
         
         // Pending deletions key
         private const val KEY_PENDING_DELETIONS = "pending_deletions"
+        
+        // Migration tracking
+        private const val KEY_MIGRATION_VERSION = "migration_version"
+        private const val CURRENT_MIGRATION_VERSION = 1 // Increment when new migration needed
 
         // My Games Screen Settings
         private const val KEY_MEDIA_LAYOUT = "media_layout"
@@ -398,6 +402,22 @@ class PreferencesManager(context: Context) {
      */
     fun clearPendingDeletions() {
         preferences.edit { remove(KEY_PENDING_DELETIONS) }
+    }
+    
+    // ==================== Migration Tracking ====================
+    
+    /**
+     * Check if library needs dev/pub migration (version 1).
+     */
+    fun needsDevPubMigration(): Boolean {
+        return preferences.getInt(KEY_MIGRATION_VERSION, 0) < 1
+    }
+    
+    /**
+     * Mark dev/pub migration as complete.
+     */
+    fun markDevPubMigrationComplete() {
+        preferences.edit { putInt(KEY_MIGRATION_VERSION, 1) }
     }
 }
 

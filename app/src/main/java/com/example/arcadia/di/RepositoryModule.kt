@@ -3,9 +3,9 @@ package com.example.arcadia.di
 import com.example.arcadia.data.GamerRepositoryImpl
 import com.example.arcadia.data.local.StudioCacheDatabase
 import com.example.arcadia.data.local.StudioCacheManager
-import com.example.arcadia.data.remote.AIConfig
 import com.example.arcadia.data.remote.GeminiConfig
 import com.example.arcadia.data.remote.GroqApiService
+import com.example.arcadia.data.repository.FallbackAIRepository
 import com.example.arcadia.data.repository.GameListRepositoryImpl
 import com.example.arcadia.data.repository.GameRepositoryImpl
 import com.example.arcadia.data.repository.GeminiRepositoryImpl
@@ -15,6 +15,7 @@ import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.domain.repository.GameRepository
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
@@ -51,34 +52,39 @@ val repositoryModule = module {
     /** Manager for studio cache operations */
     single { StudioCacheManager(get()) }
     
-    // ==================== AI Repository ====================
+    // ==================== AI Repositories ====================
+    
+    /** Groq AI Repository (Primary - faster, cheaper) */
+    single<AIRepository>(named("groq")) { 
+        GroqRepositoryImpl(
+            groqApiService = get<GroqApiService>(),
+            studioCacheManager = get()
+        )
+    }
+    
+    /** Gemini AI Repository (Fallback - more reliable) */
+    single<AIRepository>(named("gemini")) { 
+        GeminiRepositoryImpl(
+            jsonModel = GeminiConfig.createJsonModel(),
+            textModel = GeminiConfig.createTextModel(),
+            studioCacheManager = get()
+        )
+    }
     
     /**
-     * AI Repository - automatically selects provider based on AIConfig.CURRENT_PROVIDER
+     * Main AI Repository with automatic fallback.
      * 
-     * To switch providers, change AIConfig.CURRENT_PROVIDER in:
-     * com.example.arcadia.data.remote.AIConfig
+     * Strategy:
+     * - Primary: Groq (Llama 3.3 70B) - Fast and cost-effective
+     * - Fallback: Gemini (Flash 2.5) - Reliable backup
      * 
-     * Available providers:
-     * - AIConfig.AIProvider.GEMINI: Google Gemini AI
-     * - AIConfig.AIProvider.GROQ: Groq with Kimi K2 model
-     * 
-     * Features included:
-     * - Game suggestions with caching
-     * - Profile analysis with streaming support
-     * - Studio expansion with multi-layer caching
+     * On any Groq error (rate limit, network, etc.), automatically
+     * switches to Gemini for seamless user experience.
      */
     single<AIRepository> { 
-        when (AIConfig.CURRENT_PROVIDER) {
-            AIConfig.AIProvider.GEMINI -> GeminiRepositoryImpl(
-                jsonModel = GeminiConfig.createJsonModel(),
-                textModel = GeminiConfig.createTextModel(),
-                studioCacheManager = get()
-            )
-            AIConfig.AIProvider.GROQ -> GroqRepositoryImpl(
-                groqApiService = get<GroqApiService>(),
-                studioCacheManager = get()
-            )
-        }
+        FallbackAIRepository(
+            primaryRepository = get(named("groq")),
+            fallbackRepository = get(named("gemini"))
+        )
     }
 }

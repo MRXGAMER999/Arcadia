@@ -123,6 +123,7 @@ dependencies {
     // Retrofit
     implementation(libs.retrofit)
     implementation(libs.okhttp)
+    implementation(libs.okhttp.brotli)
     implementation(libs.kotlinx.serialization.converter)
     implementation(libs.okhttp.logging.interceptor)
 

@@ -110,6 +110,42 @@ class HomeViewModel(
         // Library tracking is automatic!
         // Load initial data - but skip recommendations if filters are active
         loadInitialData()
+        // Run one-time migrations in background
+        runMigrationsIfNeeded()
+    }
+    
+    /**
+     * Run one-time data migrations in the background.
+     * This won't block the UI and runs silently.
+     */
+    private fun runMigrationsIfNeeded() {
+        launchWithKey("migrations") {
+            // Migration V1: Enrich old library entries with developer/publisher data
+            if (preferencesManager.needsDevPubMigration()) {
+                android.util.Log.d(TAG, "Starting dev/pub migration for old library entries...")
+                try {
+                    val result = gameListRepository.migrateLibraryWithDevPub { rawgId ->
+                        // Fetch game details from RAWG API
+                        var game: com.example.arcadia.domain.model.Game? = null
+                        gameRepository.getGameDetails(rawgId).collect { state ->
+                            if (state is RequestState.Success) {
+                                game = state.data
+                            }
+                        }
+                        game
+                    }
+                    if (result is RequestState.Success) {
+                        preferencesManager.markDevPubMigrationComplete()
+                        android.util.Log.d(TAG, "Dev/pub migration completed: ${result.data} entries updated")
+                    } else if (result is RequestState.Error) {
+                        android.util.Log.e(TAG, "Dev/pub migration failed: ${result.message}")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e(TAG, "Dev/pub migration failed, will retry next launch: ${e.message}")
+                    // Don't mark complete - will retry on next app launch
+                }
+            }
+        }
     }
     
     /**
@@ -1002,6 +1038,8 @@ class HomeViewModel(
             screenState = screenState.copy(isLoadingMore = true)
             try {
                 if (discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION) {
+                    // Increment page before fetching to get more games
+                    discoveryFilterPage++
                     fetchAIRecommendations(isLoadMore = true)
                     return@launchWithKey
                 }
@@ -1120,38 +1158,32 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Fetch AI-powered game recommendations based on user's library.
+     * Simplified implementation with better error handling and race condition prevention.
+     */
     private suspend fun fetchAIRecommendations(
         isLoadMore: Boolean,
         forceRefresh: Boolean = false
     ) {
         try {
-            // 1. Get user's library - wait for Success state, not just first emission
-            val libraryData = try {
-                gameListRepository.getGameList(com.example.arcadia.domain.repository.SortOrder.NEWEST_FIRST)
-                    .first { state -> state is RequestState.Success || state is RequestState.Error }
-                    .let { state ->
-                        when (state) {
-                            is RequestState.Success -> state.data
-                            else -> emptyList()
-                        }
-                    }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                android.util.Log.d(TAG, "Library fetch for AI recommendations cancelled")
-                throw e
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "Error fetching library for AI recommendations", e)
-                emptyList()
+            // Set loading state only for initial load (load more sets it before calling)
+            if (!isLoadMore && screenState.recommendedGames !is RequestState.Success) {
+                screenState = screenState.copy(recommendedGames = RequestState.Loading)
             }
             
-            // Fallback for new users with empty library - show popular games instead
+            // 1. Get user's library
+            val libraryData = fetchLibraryData()
+            
+            // Fallback for new users with empty library
             if (libraryData.isEmpty()) {
                 android.util.Log.d(TAG, "Library is empty, falling back to popular games")
                 loadRecommendedGames()
                 return
             }
 
-            // Check if we can use cached results (library hasn't changed significantly)
-            val currentLibraryHash = libraryData.map { it.rawgId }.sorted().hashCode()
+            // 2. Check cache (only if not force refresh and not loading more)
+            val currentLibraryHash = computeLibraryHash(libraryData)
             if (!forceRefresh && !isLoadMore && cachedAIRecommendations.isNotEmpty() && currentLibraryHash == lastLibraryHash) {
                 android.util.Log.d(TAG, "Using cached AI recommendations (${cachedAIRecommendations.size} games)")
                 val filtered = cachedAIRecommendations.filter { !isGameInLibrary(it.id) }
@@ -1160,12 +1192,16 @@ class HomeViewModel(
                 return
             }
 
-            android.util.Log.d(TAG, "Fetching AI recommendations based on ${libraryData.size} library games")
+            android.util.Log.d(TAG, "Fetching AI recommendations for ${libraryData.size} library games")
 
-            // 2. Calculate count based on page - request more games each time
-            val count = if (isLoadMore) AI_RECOMMENDATION_COUNT + (discoveryFilterPage * AI_LOAD_MORE_COUNT) else AI_RECOMMENDATION_COUNT
+            // 3. Calculate request count
+            val count = if (isLoadMore) {
+                AI_RECOMMENDATION_COUNT + (discoveryFilterPage * AI_LOAD_MORE_COUNT)
+            } else {
+                AI_RECOMMENDATION_COUNT
+            }
             
-            // 3. Get recommendations from AI (this is already cached in the repository)
+            // 4. Get AI recommendations (uses sorted by confidence)
             val aiResult = aiRepository.getLibraryBasedRecommendations(
                 games = libraryData, 
                 count = count,
@@ -1174,89 +1210,135 @@ class HomeViewModel(
             
             aiResult.fold(
                 onSuccess = { suggestions ->
-                    android.util.Log.d(TAG, "AI suggested ${suggestions.games.size} games")
-                    
-                    val existingIds = if (isLoadMore) lastDiscoveryResults.map { it.id }.toSet() else emptySet()
-                    
-                    // Filter out games we already have displayed if loading more
-                    val newSuggestions = if (isLoadMore) {
-                        val existingNames = lastDiscoveryResults.map { it.name.lowercase() }
-                        suggestions.games.filter { it.lowercase() !in existingNames }
-                    } else {
-                        suggestions.games
-                    }
-
-                    if (newSuggestions.isEmpty() && isLoadMore) {
-                        // No new games found, stop pagination
-                        screenState = screenState.copy(isLoadingMore = false)
-                        return@fold
-                    }
-
-                    // Initialize state for progressive loading if not loading more
-                    if (!isLoadMore) {
-                        screenState = screenState.copy(recommendedGames = RequestState.Success(emptyList()))
-                    }
-
-                    // 4. Fetch Game objects in PARALLEL for much faster loading
-                    val games = fetchGamesInParallel(newSuggestions, existingIds)
-
-                    val finalGames = if (isLoadMore) {
-                        lastDiscoveryResults + games
-                    } else {
-                        games
-                    }
-                    
-                    // Ensure no duplicates in final list (by ID)
-                    lastDiscoveryResults = finalGames.distinctBy { it.id }
-                    
-                    // Update cache
-                    if (!isLoadMore) {
-                        cachedAIRecommendations = lastDiscoveryResults
-                        lastLibraryHash = currentLibraryHash
-                    }
-                    
-                    // Filter out library games
-                    val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }
-                    
-                    screenState = screenState.copy(
-                        recommendedGames = RequestState.Success(filtered),
-                        isLoadingMore = false
-                    )
-                    
-                    if (isLoadMore && games.isNotEmpty()) {
-                        discoveryFilterPage++
-                    } else if (!isLoadMore) {
-                        discoveryFilterPage = 1
-                    }
+                    handleAIRecommendationsSuccess(suggestions, isLoadMore, currentLibraryHash)
                 },
                 onFailure = { e ->
-                    val error = RequestState.Error(e.message ?: "Failed to get AI recommendations")
-                    if (!isLoadMore) {
-                        screenState = screenState.copy(recommendedGames = error)
-                    } else {
-                        screenState = screenState.copy(isLoadingMore = false)
-                    }
+                    handleAIRecommendationsError(e, isLoadMore)
                 }
             )
         } catch (e: kotlinx.coroutines.CancellationException) {
             android.util.Log.d(TAG, "fetchAIRecommendations cancelled")
-            // Don't update state for cancellation
             if (isLoadMore) screenState = screenState.copy(isLoadingMore = false)
+            throw e
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error fetching AI recommendations", e)
-            val error = RequestState.Error("An error occurred: ${e.message}")
-            if (!isLoadMore) {
-                screenState = screenState.copy(recommendedGames = error)
-            } else {
-                screenState = screenState.copy(isLoadingMore = false)
-            }
+            android.util.Log.e(TAG, "Error in fetchAIRecommendations", e)
+            handleAIRecommendationsError(e, isLoadMore)
         }
     }
     
     /**
-     * Fetch multiple games in parallel for faster loading.
-     * Uses coroutineScope to launch parallel requests and waits for all to complete.
-     * Optimized to update state progressively for better perceived performance.
+     * Fetch the user's library data safely.
+     */
+    private suspend fun fetchLibraryData(): List<GameListEntry> {
+        return try {
+            gameListRepository.getGameList(com.example.arcadia.domain.repository.SortOrder.NEWEST_FIRST)
+                .first { state -> state is RequestState.Success || state is RequestState.Error }
+                .let { state ->
+                    when (state) {
+                        is RequestState.Success -> state.data
+                        else -> emptyList()
+                    }
+                }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Error fetching library", e)
+            emptyList()
+        }
+    }
+    
+    /**
+     * Compute a hash of the library for cache invalidation.
+     * Includes ratings and status to invalidate when user updates library.
+     */
+    private fun computeLibraryHash(games: List<GameListEntry>): Int {
+        return games.map { "${it.rawgId}_${it.rating}_${it.status}" }.sorted().hashCode()
+    }
+    
+    /**
+     * Handle successful AI recommendations response.
+     */
+    private suspend fun handleAIRecommendationsSuccess(
+        suggestions: com.example.arcadia.domain.model.ai.AIGameSuggestions,
+        isLoadMore: Boolean,
+        currentLibraryHash: Int
+    ) {
+        android.util.Log.d(TAG, "AI suggested ${suggestions.games.size} games (sorted by confidence)")
+        
+        // Get game names sorted by confidence
+        val sortedGameNames = suggestions.getGamesSortedByConfidence()
+        
+        // Filter out games we already have if loading more
+        val newSuggestions = if (isLoadMore) {
+            val existingNames = lastDiscoveryResults.map { it.name.lowercase() }.toSet()
+            sortedGameNames.filter { it.lowercase() !in existingNames }
+        } else {
+            sortedGameNames
+        }
+
+        if (newSuggestions.isEmpty()) {
+            if (isLoadMore) {
+                android.util.Log.d(TAG, "No new games to load")
+                screenState = screenState.copy(isLoadingMore = false)
+            }
+            return
+        }
+
+        // Initialize state for fresh load
+        if (!isLoadMore) {
+            screenState = screenState.copy(recommendedGames = RequestState.Success(emptyList()))
+        }
+
+        // Fetch Game objects in parallel
+        val existingIds = if (isLoadMore) lastDiscoveryResults.map { it.id }.toSet() else emptySet()
+        val games = fetchGamesInParallel(newSuggestions, existingIds)
+
+        // Combine results
+        val finalGames = if (isLoadMore) {
+            (lastDiscoveryResults + games).distinctBy { it.id }
+        } else {
+            games.distinctBy { it.id }
+        }
+        
+        lastDiscoveryResults = finalGames
+        
+        // Update cache on fresh load
+        if (!isLoadMore) {
+            cachedAIRecommendations = lastDiscoveryResults
+            lastLibraryHash = currentLibraryHash
+        }
+        
+        // Filter out library games and update state
+        val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }
+        
+        screenState = screenState.copy(
+            recommendedGames = RequestState.Success(filtered),
+            isLoadingMore = false
+        )
+        
+        // Reset pagination on fresh load only (load more increments before calling)
+        if (!isLoadMore) {
+            discoveryFilterPage = 1
+        }
+    }
+    
+    /**
+     * Handle AI recommendations error.
+     */
+    private fun handleAIRecommendationsError(e: Throwable, isLoadMore: Boolean) {
+        val errorMessage = e.message ?: "Failed to get AI recommendations"
+        android.util.Log.e(TAG, "AI recommendations error: $errorMessage")
+        
+        if (!isLoadMore) {
+            screenState = screenState.copy(recommendedGames = RequestState.Error(errorMessage))
+        } else {
+            screenState = screenState.copy(isLoadingMore = false)
+        }
+    }
+    
+    /**
+     * Fetch multiple games in parallel with progressive UI updates.
+     * Simplified implementation with better error handling.
      */
     private suspend fun fetchGamesInParallel(
         gameNames: List<String>,
@@ -1265,32 +1347,20 @@ class HomeViewModel(
         val seenIds = java.util.Collections.synchronizedSet(existingIds.toMutableSet())
         val allGames = java.util.Collections.synchronizedList(mutableListOf<Game>())
         
-        // Use a smaller batch size for progressive updates
+        // Process in batches for progressive UI updates
         val batchSize = 4
-        val chunks = gameNames.chunked(batchSize)
+        val batches = gameNames.chunked(batchSize)
         
-        for (chunk in chunks) {
-            val deferredResults = chunk.map { gameName ->
+        for (batch in batches) {
+            // Launch parallel searches for this batch
+            val results = batch.map { gameName ->
                 async {
-                    try {
-                        // Use a smaller page size for search to be faster
-                        val searchResult = gameRepository.searchGames(gameName, page = 1, pageSize = 1)
-                            .first { it is RequestState.Success || it is RequestState.Error }
-                        if (searchResult is RequestState.Success && searchResult.data.isNotEmpty()) {
-                            searchResult.data.first()
-                        } else {
-                            null
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e(TAG, "Failed to fetch game details for: $gameName")
-                        null
-                    }
+                    searchGameByName(gameName)
                 }
-            }
+            }.awaitAll()
             
-            // Wait for this small batch to complete
-            val chunkResults = deferredResults.awaitAll()
-            val newGames = chunkResults.filterNotNull().filter { game ->
+            // Filter and add unique games
+            val newGames = results.filterNotNull().filter { game ->
                 synchronized(seenIds) {
                     if (game.id !in seenIds) {
                         seenIds.add(game.id)
@@ -1303,19 +1373,34 @@ class HomeViewModel(
             
             allGames.addAll(newGames)
             
-            // Progressive update: If we have results, update the UI immediately
-            // This makes the loading feel much faster as items pop in
-            if (newGames.isNotEmpty()) {
-                val currentList = (screenState.recommendedGames as? RequestState.Success)?.data ?: emptyList()
+            // Progressive UI update
+            if (newGames.isNotEmpty() && screenState.recommendedGames is RequestState.Success) {
+                val currentList = (screenState.recommendedGames as RequestState.Success).data
                 val updatedList = (currentList + newGames).distinctBy { it.id }
-                // Only update if we are already in Success state (to avoid flashing Loading state)
-                if (screenState.recommendedGames is RequestState.Success) {
-                    screenState = screenState.copy(recommendedGames = RequestState.Success(updatedList))
-                }
+                screenState = screenState.copy(recommendedGames = RequestState.Success(updatedList))
             }
         }
         
-        allGames
+        allGames.toList()
+    }
+    
+    /**
+     * Search for a game by name, returning the first match or null.
+     */
+    private suspend fun searchGameByName(gameName: String): Game? {
+        return try {
+            val result = gameRepository.searchGames(gameName, page = 1, pageSize = 1)
+                .first { it is RequestState.Success || it is RequestState.Error }
+            
+            if (result is RequestState.Success && result.data.isNotEmpty()) {
+                result.data.first()
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to fetch game: $gameName", e)
+            null
+        }
     }
 }
 

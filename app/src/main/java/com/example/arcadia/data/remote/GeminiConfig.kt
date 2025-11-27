@@ -36,6 +36,21 @@ object GeminiConfig {
     }
     
     /**
+     * Configuration for library-based recommendations.
+     * Balanced settings for diverse yet accurate game picks:
+     * - Temperature 0.45: More creative than JSON but still grounded
+     * - Top_K 40: Consider more token options for variety
+     * - Top_P 0.85: Nucleus sampling to filter unlikely tokens
+     */
+    object RecommendationModel {
+        const val TEMPERATURE = 0.45f
+        const val TOP_K = 40
+        const val TOP_P = 0.85f
+        const val MAX_OUTPUT_TOKENS = 16384
+        const val RESPONSE_MIME_TYPE = "application/json"
+    }
+    
+    /**
      * Configuration for creative text responses (profile analysis).
      * Uses higher temperature for more creative, varied results.
      */

@@ -73,4 +73,14 @@ interface GameListRepository {
     
 
     suspend fun getEntryIdByRawgId(rawgId: Int): String?
+    
+    /**
+     * Migrates existing library entries to include developer/publisher data.
+     * Fetches game details from RAWG API and updates Firebase entries that are missing this data.
+     * @param fetchGameDetails Function to fetch game details by rawgId
+     * @return Number of entries updated
+     */
+    suspend fun migrateLibraryWithDevPub(
+        fetchGameDetails: suspend (Int) -> Game?
+    ): RequestState<Int>
 }

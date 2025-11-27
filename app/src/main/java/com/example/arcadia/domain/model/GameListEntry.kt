@@ -13,6 +13,8 @@ data class GameListEntry(
     val backgroundImage: String? = null,
     val genres: List<String> = emptyList(),
     val platforms: List<String> = emptyList(), // List of platform names
+    val developers: List<String> = emptyList(), // Game developers
+    val publishers: List<String> = emptyList(), // Game publishers
     val addedAt: Long = 0L, // Timestamp when game was added
     val updatedAt: Long = 0L, // Timestamp when entry was last updated
     val status: GameStatus = GameStatus.WANT,

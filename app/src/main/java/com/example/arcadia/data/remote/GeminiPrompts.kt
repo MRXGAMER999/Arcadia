@@ -20,7 +20,10 @@ object GeminiPrompts {
      * @param count Number of games to suggest
      * @return Complete prompt string
      */
-    fun gameSuggestionPrompt(userQuery: String, count: Int): String = """
+    fun gameSuggestionPrompt(userQuery: String, count: Int): String {
+        val currentYear = java.time.Year.now().value
+        val currentMonth = java.time.LocalDate.now().monthValue
+        return """
 Role: Expert Video Game Curator.
 Task: Suggest $count video games based on the query: "$userQuery"
 
@@ -28,7 +31,7 @@ Analysis Steps (Internal):
 1. Identify the core intent (Genre? Mood? "Like [Game]"? Specific Mechanic?).
 2. Select games that match this intent, prioritizing high critical acclaim (>75 Metacritic) unless it's a specific "so bad it's good" request.
 3. Ensure diversity: Mix AAA blockbusters with high-quality indie titles / hidden gems.
-4. Verify all games are real, released titles with exact English names.
+4. CRITICAL: Only include games that are ALREADY RELEASED as of $currentYear-$currentMonth. NO unreleased/upcoming games.
 5. Order the final list by relevance and quality (best matches first).
 
 Output Rules:
@@ -39,6 +42,7 @@ Output Rules:
 Format:
 {"games": ["Game 1", "Game 2"], "reasoning": "..."}
     """.trimIndent()
+    }
 
     /**
      * Generates an optimized prompt for gaming profile analysis.
@@ -89,40 +93,68 @@ No markdown. No extra commentary. JSON only.
 
     /**
      * Generates an optimized prompt for library-based game recommendations.
+     * This is the legacy version - use libraryBasedRecommendationPromptV2 for better results.
      *
      * @param libraryGames List of games in the user's library (name and genres)
      * @param count Number of games to suggest
      * @return Complete prompt string
      */
     fun libraryBasedRecommendationPrompt(libraryGames: String, count: Int): String {
-        val newerCount = (count * 0.7).toInt().coerceAtLeast(1)
-        val olderCount = count - newerCount
+        return libraryBasedRecommendationPromptV2(libraryGames, count)
+    }
+    
+    /**
+     * Enhanced prompt for library-based game recommendations with richer data.
+     * Includes user ratings, play status, playtime for smarter recommendations.
+     * Sorted by confidence score to show best matches first.
+     *
+     * @param libraryData Formatted string with full library data (name, rating, status, playtime, genres)
+     * @param count Number of games to suggest
+     * @return Complete prompt string
+     */
+    fun libraryBasedRecommendationPromptV2(libraryData: String, count: Int): String {
+        val currentYear = java.time.Year.now().value
+        val currentMonth = java.time.LocalDate.now().monthValue
         return """
-Role: Expert Video Game Curator.
-Task: Suggest $count NEW video games based on the user's library below.
+You are an expert game recommender. Suggest $count games for this user.
 
-User's Library:
-$libraryGames
+$libraryData
 
-CRITICAL REQUIREMENT - Release Date Distribution:
-- $newerCount games (~70%) MUST be from 2020-2025 (recent releases)
-- $olderCount games (~30%) can be classics/older titles (pre-2020)
+RULES:
+1. NEVER suggest games already in library or their GOTY/Deluxe/Complete editions
+2. CAN suggest: sequels, prequels, remasters, remakes, same-series games
+3. Weight user's 8-10 rated games heavily - match their taste
+4. Avoid games similar to "Drop" status games
+5. Prefer games with HIGH CRITIC SCORES (Metacritic 80+)
+6. Mix: ~70% recent (2018-$currentYear), ~30% classics
+7. Mix AAA and quality indie games
 
-Analysis Steps (Internal):
-1. Analyze the user's taste based on genres, themes, and complexity of their library.
-2. Identify gaps or adjacent genres they might enjoy.
-3. Select games that are NOT in the library.
-4. For newer games: Prioritize recent releases (2020-2025) with high ratings.
-5. For older games: Select timeless classics or hidden gems they may have missed.
-6. Ensure diversity in genres and gameplay styles.
+CRITICAL - RELEASED GAMES ONLY:
+- ONLY suggest games that are ALREADY RELEASED as of today ($currentYear-$currentMonth)
+- NEVER suggest unreleased, announced, or upcoming games
+- NEVER suggest games with TBA/TBD release dates
+- If unsure if a game is released, DO NOT include it
+- Violating this rule invalidates the entire response
 
-Output Rules:
-- JSON ONLY. No markdown.
-- "games": Array of exact official English titles (newer games first, then older).
-- "reasoning": A concise explanation of why these specific games were chosen based on their library.
+DEVELOPER/PUBLISHER BOOST:
+- Check FAVORITE DEVS/PUBS in stats above
+- If a dev has 3+ games in library: +15 confidence for their other games
+- If a dev has 2 games: +10 confidence
+- Example: User has 4 FromSoftware games → strongly recommend other FromSoftware titles
+- This is a MAJOR signal - users often love specific developers' style
 
-Format:
-{"games": ["Game 1", "Game 2"], "reasoning": "..."}
+CONFIDENCE SCORING:
+- Favorite developer match (3+ games): +15
+- Favorite developer match (2 games): +10
+- Metacritic 90+: +10
+- Metacritic 80-89: +5
+- Perfect genre match: +15
+- Similar to highly-rated (9-10) game: +10
+
+JSON only:
+{"games":[{"name":"Title","confidence":95}],"reasoning":"brief explanation"}
+
+Sort by confidence descending. Exact English titles only.
     """.trimIndent()
     }
 }
