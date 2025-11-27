@@ -3,7 +3,7 @@ package com.example.arcadia.data.remote
 import com.example.arcadia.BuildConfig
 
 /**
- * Configuration for Groq API with Llama 3.3 70B model
+ * Configuration for Groq API with multiple model fallbacks
  * Upgraded from Llama 4 Scout (preview) to Llama 3.3 70B (production)
  * for significantly better reasoning and recommendation quality.
  */
@@ -11,9 +11,14 @@ object GroqConfig {
     
     const val BASE_URL = "https://api.groq.com/"
     
-    // Llama 3.3 70B - Production model with excellent reasoning
-    // Much smarter than the preview Llama 4 Scout models
-    const val MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
+    // Primary model - Kimi K2 (best quality but has rate limits)
+    const val MODEL_NAME = "moonshotai/kimi-k2-instruct-0905"
+    
+    // Fallback models in order of preference (used when primary fails)
+    val FALLBACK_MODELS = listOf(
+        "llama-3.3-70b-versatile",
+        "meta-llama/llama-4-scout-17b-16e-instruct"
+    )
     
     val API_KEY: String get() = BuildConfig.GROQ_API_KEY
     
