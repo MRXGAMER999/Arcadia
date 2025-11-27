@@ -926,10 +926,13 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
         return try {
             // Build comprehensive library representation with all user data
             val libraryStr = buildEnhancedLibraryString(games)
+            
+            // Build exclusion list with ALL game names to prevent AI from recommending owned games
+            val exclusionList = buildExclusionList(games)
 
-            val prompt = GeminiPrompts.libraryBasedRecommendationPromptV2(libraryStr, count)
+            val prompt = GeminiPrompts.libraryBasedRecommendationPromptV3(libraryStr, exclusionList, count)
 
-            Log.d(TAG, "Asking Gemini for library recommendations with ${games.size} games")
+            Log.d(TAG, "Asking Gemini for library recommendations with ${games.size} games (full exclusion list)")
 
             val response = jsonModel.generateContent(prompt)
             val text = response.text?.trim()
@@ -1105,6 +1108,18 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
         }.joinToString("\n")
         
         return header + "\n" + gamesList
+    }
+    
+    /**
+     * Builds a compact exclusion list containing ALL game names in the user's library.
+     * This ensures the AI never recommends games the user already owns,
+     * even if they weren't in the top 75 sent for detailed analysis.
+     * 
+     * @param games All games in user's library
+     * @return Comma-separated list of all game names
+     */
+    private fun buildExclusionList(games: List<GameListEntry>): String {
+        return games.map { it.name }.joinToString(", ")
     }
     
     companion object {

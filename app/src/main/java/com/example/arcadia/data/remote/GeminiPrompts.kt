@@ -113,16 +113,38 @@ No markdown. No extra commentary. JSON only.
      * @return Complete prompt string
      */
     fun libraryBasedRecommendationPromptV2(libraryData: String, count: Int): String {
+        return libraryBasedRecommendationPromptV3(libraryData, "", count)
+    }
+    
+    /**
+     * Enhanced recommendation prompt with explicit exclusion list.
+     * This ensures AI never recommends games the user already owns,
+     * even if they weren't included in the detailed analysis.
+     *
+     * @param libraryData Formatted string with detailed library data for analysis (top games)
+     * @param exclusionList Comma-separated list of ALL game names user owns (for exclusion)
+     * @param count Number of games to suggest
+     * @return Complete prompt string
+     */
+    fun libraryBasedRecommendationPromptV3(libraryData: String, exclusionList: String, count: Int): String {
         val currentYear = java.time.Year.now().value
         val currentMonth = java.time.LocalDate.now().monthValue
+        val exclusionSection = if (exclusionList.isNotBlank()) {
+            """
+            
+⛔ COMPLETE EXCLUSION LIST - NEVER recommend ANY of these games (user already owns them):
+$exclusionList
+"""
+        } else ""
+        
         return """
 You are an expert game recommender. Suggest $count games for this user.
 
 $libraryData
-
+$exclusionSection
 RULES:
-1. NEVER suggest games already in library or their GOTY/Deluxe/Complete editions
-2. CAN suggest: sequels, prequels, remasters, remakes, same-series games
+1. NEVER suggest games in the exclusion list above or their GOTY/Deluxe/Complete editions
+2. CAN suggest: sequels, prequels, remasters, remakes, same-series games (if not in exclusion list)
 3. Weight user's 8-10 rated games heavily - match their taste
 4. Avoid games similar to "Drop" status games
 5. Prefer games with HIGH CRITIC SCORES (Metacritic 80+)
