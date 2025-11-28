@@ -4,6 +4,7 @@ coilCompose = "3.3.0"
 generativeai = "0.9.0"
 kotlin = "2.2.21"
 room = "2.8.4"
+paging = "3.3.6"
 material3 = "1.5.0-alpha09"
 coreSplashscreen = "1.2.0"
 materialIconsExtended = "1.7.8"
@@ -77,6 +78,11 @@ kotlinx-serialization-converter = { module = "com.squareup.retrofit2:converter-k
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+room-paging = { group = "androidx.room", name = "room-paging", version.ref = "room" }
+
+# Paging 3 dependencies
+paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

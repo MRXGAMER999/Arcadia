@@ -74,7 +74,7 @@ import com.example.arcadia.presentation.components.MediaLayout
 import com.example.arcadia.presentation.components.QuickRateDialog
 import com.example.arcadia.presentation.components.QuickSettingsDialog
 import com.example.arcadia.presentation.components.SwipeToDeleteItem
-import com.example.arcadia.presentation.components.TopNotification
+
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.myGames.components.GameStatsCard
@@ -499,15 +499,6 @@ fun MyGamesScreen(
                     else -> {}
                 }
             }
-            
-            // Notification overlay
-            TopNotification(
-                visible = screenState.showSuccessNotification,
-                message = screenState.notificationMessage,
-                isSuccess = true,
-                onDismiss = { viewModel.dismissNotification() },
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
             
             // Unsaved changes snackbar
             UnsavedChangesSnackbar(

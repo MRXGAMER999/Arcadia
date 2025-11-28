@@ -1,8 +1,10 @@
 package com.example.arcadia.di
 
 import com.example.arcadia.data.GamerRepositoryImpl
+import com.example.arcadia.data.local.GameCacheDatabase
 import com.example.arcadia.data.local.StudioCacheDatabase
 import com.example.arcadia.data.local.StudioCacheManager
+import com.example.arcadia.data.local.dao.RecommendationFeedbackDao
 import com.example.arcadia.data.remote.GeminiConfig
 import com.example.arcadia.data.remote.GroqApiService
 import com.example.arcadia.data.repository.FallbackAIRepository
@@ -10,10 +12,12 @@ import com.example.arcadia.data.repository.GameListRepositoryImpl
 import com.example.arcadia.data.repository.GameRepositoryImpl
 import com.example.arcadia.data.repository.GeminiRepositoryImpl
 import com.example.arcadia.data.repository.GroqRepositoryImpl
+import com.example.arcadia.data.repository.PagedGameRepositoryImpl
 import com.example.arcadia.domain.repository.AIRepository
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.domain.repository.GameRepository
+import com.example.arcadia.domain.repository.PagedGameRepository
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -51,6 +55,36 @@ val repositoryModule = module {
     
     /** Manager for studio cache operations */
     single { StudioCacheManager(get()) }
+    
+    // ==================== Game Cache Dependencies (Paging 3) ====================
+    
+    /** Local database for game caching (AI recommendations + feedback) */
+    single { GameCacheDatabase.getInstance(androidContext()) }
+    
+    /** DAO for cached games (used by Paging 3 RemoteMediator) */
+    single { get<GameCacheDatabase>().cachedGamesDao() }
+    
+    /** DAO for recommendation feedback (tracks user interactions for AI improvement) */
+    single<RecommendationFeedbackDao> { get<GameCacheDatabase>().recommendationFeedbackDao() }
+    
+    /** 
+     * Paged Game Repository for Paging 3 integration.
+     * Provides AI recommendations with offline caching via RemoteMediator.
+     * 
+     * Enhanced with:
+     * - Progressive loading (high confidence first)
+     * - Smarter cache invalidation
+     * - Feedback loop for AI improvement
+     */
+    single<PagedGameRepository> {
+        PagedGameRepositoryImpl(
+            aiRepository = get(),
+            gameRepository = get(),
+            gameListRepository = get(),
+            cachedGamesDao = get(),
+            feedbackDao = get()
+        )
+    }
     
     // ==================== AI Repositories ====================
     

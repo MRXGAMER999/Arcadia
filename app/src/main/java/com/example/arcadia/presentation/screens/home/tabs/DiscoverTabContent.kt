@@ -28,6 +28,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.arcadia.data.remote.mapper.toGameListEntry
 import com.example.arcadia.domain.model.DiscoverySortType
 import com.example.arcadia.presentation.components.DiscoveryFilterDialog
@@ -67,6 +69,9 @@ fun DiscoverTabContent(
     val addGameSheetState by viewModel.addGameSheetState.collectAsState()
     val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
     val pullToRefreshState = rememberPullToRefreshState()
+    
+    // Collect Paging 3 items at composable scope (must be called unconditionally)
+    val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
@@ -155,102 +160,212 @@ fun DiscoverTabContent(
                     )
                 }
 
-                when {
-                    // Show loading when refreshing
-                    screenState.isRefreshing -> {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LoadingIndicator(color = ButtonPrimary)
-                            }
-                        }
-                    }
-                    screenState.recommendedGames is RequestState.Loading -> {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LoadingIndicator(color = ButtonPrimary)
-                            }
-                        }
-                    }
-                    screenState.recommendedGames is RequestState.Success -> {
-                        val data = (screenState.recommendedGames as RequestState.Success).data
-                        if (data.isEmpty() && viewModel.isDiscoveryFilterActive()) {
+                // Use Paging 3 for AI recommendations (default), legacy flow for other sort types
+                val usePagedAI = discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION && 
+                                 !viewModel.isDiscoveryFilterActive()
+                
+                if (usePagedAI) {
+                    // === PAGING 3 AI RECOMMENDATIONS ===
+                    // Uses RemoteMediator for offline caching and progressive loading
+                    
+                    when (aiPagingItems.loadState.refresh) {
+                        is LoadState.Loading -> {
                             item {
-                                EmptyDiscoveryFilterResult(
-                                    onClearFilter = { viewModel.clearDiscoveryFilters() }
-                                )
-                            }
-                        } else {
-                            itemsIndexed(
-                                items = data,
-                                key = { _, game -> game.id }
-                            ) { index, game ->
-                                // Load more when reaching 40% of the list
-                                if (index >= (data.size * 0.4).toInt()) {
-                                    LaunchedEffect(Unit) {
-                                        if (viewModel.isDiscoveryFilterActive()) {
-                                            viewModel.loadMoreDiscoveryResults()
-                                        } else {
-                                            viewModel.loadMoreRecommendations()
-                                        }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        LoadingIndicator(color = ButtonPrimary)
+                                        Text(
+                                            text = "AI is analyzing your library...",
+                                            color = TextSecondary.copy(alpha = 0.7f),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
                                 }
-
-                                GameListItem(
-                                    game = game,
-                                    isInLibrary = viewModel.isGameInLibrary(game.id),
-                                    onClick = { onGameClick(game.id) },
-                                    onAddToLibrary = {
-                                        viewModel.showStatusPicker(game)
-                                    },
-                                    modifier = Modifier.animateItem()
+                            }
+                        }
+                        is LoadState.Error -> {
+                            val error = (aiPagingItems.loadState.refresh as LoadState.Error).error
+                            item {
+                                ErrorSection(
+                                    message = error.localizedMessage ?: "Failed to load recommendations",
+                                    onRetry = { aiPagingItems.retry() }
                                 )
                             }
-                            
-                            // Loading indicator at the bottom
-                            if (screenState.isLoadingMore) {
+                        }
+                        is LoadState.NotLoading -> {
+                            if (aiPagingItems.itemCount == 0) {
                                 item {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 24.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    EmptyDiscoveryFilterResult(
+                                        onClearFilter = { viewModel.clearDiscoveryFilters() }
+                                    )
+                                }
+                            } else {
+                                items(
+                                    count = aiPagingItems.itemCount,
+                                    key = { index -> aiPagingItems[index]?.id ?: index }
+                                ) { index ->
+                                    val game = aiPagingItems[index]
+                                    if (game != null) {
+                                        // Track this game as coming from AI recommendations
+                                        viewModel.trackAIRecommendedGame(game.id)
+                                        
+                                        GameListItem(
+                                            game = game,
+                                            isInLibrary = viewModel.isGameInLibrary(game.id),
+                                            onClick = { 
+                                                // Record click for feedback
+                                                viewModel.recordAIRecommendationClick(game.id)
+                                                onGameClick(game.id) 
+                                            },
+                                            onAddToLibrary = {
+                                                // Record add to library for feedback
+                                                viewModel.recordAIRecommendationAddedToLibrary(game.id)
+                                                viewModel.showStatusPicker(game)
+                                            },
+                                            modifier = Modifier.animateItem()
+                                        )
+                                    }
+                                }
+                                
+                                // Append loading state
+                                if (aiPagingItems.loadState.append is LoadState.Loading) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 24.dp),
+                                            contentAlignment = Alignment.Center
                                         ) {
                                             LoadingIndicator(
                                                 modifier = Modifier.size(24.dp),
                                                 color = ButtonPrimary
                                             )
-                                            Text(
-                                                text = "Loading games based on your library...",
-                                                color = TextSecondary.copy(alpha = 0.7f),
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
                                         }
+                                    }
+                                }
+                                
+                                // Append error state
+                                if (aiPagingItems.loadState.append is LoadState.Error) {
+                                    item {
+                                        val error = (aiPagingItems.loadState.append as LoadState.Error).error
+                                        ErrorSection(
+                                            message = error.localizedMessage ?: "Failed to load more",
+                                            onRetry = { aiPagingItems.retry() }
+                                        )
                                     }
                                 }
                             }
                         }
                     }
-                    screenState.recommendedGames is RequestState.Error -> {
-                        item {
-                            ErrorSection(
-                                message = (screenState.recommendedGames as RequestState.Error).message,
-                                onRetry = { viewModel.retry() }
-                            )
+                } else {
+                    // === LEGACY FLOW ===
+                    // Used for non-AI sort types (Release Date, Rating, Popularity, etc.)
+                    when {
+                        // Show loading when refreshing
+                        screenState.isRefreshing -> {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LoadingIndicator(color = ButtonPrimary)
+                                }
+                            }
+                        }
+                        screenState.recommendedGames is RequestState.Loading -> {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LoadingIndicator(color = ButtonPrimary)
+                                }
+                            }
+                        }
+                        screenState.recommendedGames is RequestState.Success -> {
+                            val data = (screenState.recommendedGames as RequestState.Success).data
+                            if (data.isEmpty() && viewModel.isDiscoveryFilterActive()) {
+                                item {
+                                    EmptyDiscoveryFilterResult(
+                                        onClearFilter = { viewModel.clearDiscoveryFilters() }
+                                    )
+                                }
+                            } else {
+                                itemsIndexed(
+                                    items = data,
+                                    key = { _, game -> game.id }
+                                ) { index, game ->
+                                    // Load more when reaching 40% of the list
+                                    if (index >= (data.size * 0.4).toInt()) {
+                                        LaunchedEffect(Unit) {
+                                            if (viewModel.isDiscoveryFilterActive()) {
+                                                viewModel.loadMoreDiscoveryResults()
+                                            } else {
+                                                viewModel.loadMoreRecommendations()
+                                            }
+                                        }
+                                    }
+
+                                    GameListItem(
+                                        game = game,
+                                        isInLibrary = viewModel.isGameInLibrary(game.id),
+                                        onClick = { onGameClick(game.id) },
+                                        onAddToLibrary = {
+                                            viewModel.showStatusPicker(game)
+                                        },
+                                        modifier = Modifier.animateItem()
+                                    )
+                                }
+                                
+                                // Loading indicator at the bottom
+                                if (screenState.isLoadingMore) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 24.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                LoadingIndicator(
+                                                    modifier = Modifier.size(24.dp),
+                                                    color = ButtonPrimary
+                                                )
+                                                Text(
+                                                    text = "Loading more games...",
+                                                    color = TextSecondary.copy(alpha = 0.7f),
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        screenState.recommendedGames is RequestState.Error -> {
+                            item {
+                                ErrorSection(
+                                    message = (screenState.recommendedGames as RequestState.Error).message,
+                                    onRetry = { viewModel.retry() }
+                                )
+                            }
                         }
                     }
                 }

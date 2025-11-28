@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.arcadia.presentation.components.AddGameSnackbar
-import com.example.arcadia.presentation.components.TopNotification
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.detailsScreen.components.ErrorState
@@ -215,18 +214,6 @@ fun DetailsScreen(
             else -> {}
         }
         
-        // Top Notification for success/error feedback - starts from very top
-        TopNotification(
-            visible = uiState.addToLibraryState is AddToLibraryState.Success,
-            message = (uiState.addToLibraryState as? AddToLibraryState.Success)?.message ?: "",
-            isSuccess = true,
-            onDismiss = { /* Auto-dismiss handled by ViewModel */ },
-            useSystemBarsPadding = false,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .zIndex(3f)
-        )
-        
         // Game Rating Sheet
         if (uiState.showRatingSheet && uiState.tempGameEntry != null) {
             GameRatingSheet(
@@ -246,6 +233,22 @@ fun DetailsScreen(
                 originalEntry = uiState.originalLibraryEntry
             )
         }
+        
+        // Success snackbar for add/update operations
+        // Show undo only for new additions (addedEntry != null), not for updates
+        val successState = uiState.addToLibraryState as? AddToLibraryState.Success
+        val canUndoAdd = successState?.addedEntry != null
+        
+        AddGameSnackbar(
+            visible = uiState.addToLibraryState is AddToLibraryState.Success,
+            gameName = (uiState.gameState as? RequestState.Success)?.data?.name ?: "Game",
+            message = successState?.message,
+            onUndo = if (canUndoAdd) {{ viewModel.undoAdd() }} else null,
+            onDismiss = { viewModel.dismissAddSnackbar() },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+        )
         
         // Unsaved changes snackbar
         UnsavedChangesSnackbar(

@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.sp
 import com.example.arcadia.data.remote.mapper.toGameListEntry
 import com.example.arcadia.presentation.components.AddGameSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
-import com.example.arcadia.presentation.components.TopNotification
+
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchField
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchResultCard
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchSuggestions
@@ -81,10 +81,6 @@ fun SearchScreen(
     val snackbarState by viewModel.snackbarState.collectAsState()
     val addGameSheetState by viewModel.addGameSheetState.collectAsState()
     val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
-    
-    var showNotification by remember { mutableStateOf(false) }
-    var notificationMessage by remember { mutableStateOf("") }
-    var isSuccess by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -190,11 +186,7 @@ fun SearchScreen(
                                 gamesInLibrary = gamesInLibrary,
                                 viewModel = viewModel,
                                 onGameClick = onGameClick,
-                                onNotification = { message, success ->
-                                    notificationMessage = message
-                                    isSuccess = success
-                                    showNotification = true
-                                },
+                                onNotification = { _, _ -> /* Removed TopNotification */ },
                                 isAIMode = state.isAIMode
                             )
                         }
@@ -202,14 +194,6 @@ fun SearchScreen(
                 )
             }
         }
-
-        TopNotification(
-            visible = showNotification,
-            message = notificationMessage,
-            isSuccess = isSuccess,
-            onDismiss = { showNotification = false },
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
         
         // Snackbar with undo for game additions (positioned above bottom bar)
         AddGameSnackbar(
@@ -258,16 +242,8 @@ fun SearchScreen(
                 )
                 viewModel.addGameWithEntry(
                     entry = entryWithGameData,
-                    onSuccess = {
-                        notificationMessage = "${game.name} added to My Games"
-                        isSuccess = true
-                        showNotification = true
-                    },
-                    onError = { error ->
-                        notificationMessage = error
-                        isSuccess = false
-                        showNotification = true
-                    }
+                    onSuccess = { /* Snackbar handled by viewModel */ },
+                    onError = { /* Error handled by viewModel */ }
                 )
             },
             onRemove = null,
