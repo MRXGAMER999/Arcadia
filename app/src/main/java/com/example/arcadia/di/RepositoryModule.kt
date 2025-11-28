@@ -5,13 +5,12 @@ import com.example.arcadia.data.local.GameCacheDatabase
 import com.example.arcadia.data.local.StudioCacheDatabase
 import com.example.arcadia.data.local.StudioCacheManager
 import com.example.arcadia.data.local.dao.RecommendationFeedbackDao
-import com.example.arcadia.data.remote.GeminiConfig
 import com.example.arcadia.data.remote.GroqApiService
 import com.example.arcadia.data.repository.FallbackAIRepository
 import com.example.arcadia.data.repository.GameListRepositoryImpl
 import com.example.arcadia.data.repository.GameRepositoryImpl
-import com.example.arcadia.data.repository.GeminiRepositoryImpl
-import com.example.arcadia.data.repository.GroqRepositoryImpl
+import com.example.arcadia.data.repository.GeminiRepository
+import com.example.arcadia.data.repository.GroqRepository
 import com.example.arcadia.data.repository.PagedGameRepositoryImpl
 import com.example.arcadia.domain.repository.AIRepository
 import com.example.arcadia.domain.repository.GameListRepository
@@ -88,19 +87,23 @@ val repositoryModule = module {
     
     // ==================== AI Repositories ====================
     
-    /** Groq AI Repository (Primary - faster, cheaper) */
+    /** 
+     * Groq AI Repository (Primary - faster, cheaper) 
+     * Uses simplified architecture with BaseAIRepository + GroqAIClient
+     */
     single<AIRepository>(named("groq")) { 
-        GroqRepositoryImpl(
+        GroqRepository(
             groqApiService = get<GroqApiService>(),
             studioCacheManager = get()
         )
     }
     
-    /** Gemini AI Repository (Fallback - more reliable) */
+    /** 
+     * Gemini AI Repository (Fallback - more reliable) 
+     * Uses simplified architecture with BaseAIRepository + GeminiAIClient
+     */
     single<AIRepository>(named("gemini")) { 
-        GeminiRepositoryImpl(
-            jsonModel = GeminiConfig.createJsonModel(),
-            textModel = GeminiConfig.createTextModel(),
+        GeminiRepository(
             studioCacheManager = get()
         )
     }

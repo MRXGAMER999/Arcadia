@@ -1,5 +1,7 @@
 package com.example.arcadia.domain.model
 
+import com.example.arcadia.data.remote.AIClientException
+
 /**
  * Sealed class representing all possible AI-related errors.
  * Provides user-friendly messages and categorization for proper error handling.
@@ -75,6 +77,13 @@ sealed class AIError : Exception() {
         fun from(throwable: Throwable): AIError {
             return when {
                 throwable is AIError -> throwable
+                
+                // Handle AIClientException types from the new architecture
+                throwable is AIClientException.EmptyResponse -> EmptyResponseError(throwable.message ?: "AI returned empty response")
+                throwable is AIClientException.RateLimited -> RateLimitError(throwable.message ?: "Rate limited by AI provider")
+                throwable is AIClientException.AuthenticationError -> ApiError(401, throwable.message ?: "Authentication failed")
+                throwable is AIClientException.NetworkError -> NetworkError(cause = throwable)
+                throwable is AIClientException.ApiError -> UnknownError(message = throwable.message ?: "AI API error", cause = throwable)
                 
                 // Network errors
                 throwable is java.net.UnknownHostException ||
