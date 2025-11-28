@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 sealed class AddToLibraryState {
     data object Idle : AddToLibraryState()
     data object Loading : AddToLibraryState()
-    data class Success(val message: String) : AddToLibraryState()
+    data class Success(val message: String, val addedEntry: GameListEntry? = null) : AddToLibraryState()
     data class Error(val message: String) : AddToLibraryState()
 }
 
@@ -256,10 +256,17 @@ class DetailsScreenViewModel(
                         entry.copy(id = result.data as String)
                     }
                     
+                    // For new additions, show snackbar with undo option (5 seconds)
+                    // For updates, just show brief confirmation (no undo needed)
+                    val snackbarDuration = if (isUpdate) 2000L else UNDO_DELAY_MS
+                    
                     showTemporaryNotification(
                         setNotification = {
                             uiState = uiState.copy(
-                                addToLibraryState = AddToLibraryState.Success(if (isUpdate) "Game updated!" else "Added to library!"),
+                                addToLibraryState = AddToLibraryState.Success(
+                                    message = if (isUpdate) "Game updated!" else "Added to library!",
+                                    addedEntry = if (isUpdate) null else savedEntry // Only track for undo on new adds
+                                ),
                                 addToListInProgress = false,
                                 tempGameEntry = savedEntry
                             )
@@ -267,7 +274,7 @@ class DetailsScreenViewModel(
                         clearNotification = {
                             uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
                         },
-                        duration = 2000
+                        duration = snackbarDuration
                     )
                 }
                 is RequestState.Error -> {
@@ -279,6 +286,35 @@ class DetailsScreenViewModel(
                 else -> {}
             }
         }
+    }
+
+    fun undoAdd() {
+        val successState = uiState.addToLibraryState as? AddToLibraryState.Success ?: return
+        val addedEntry = successState.addedEntry ?: return
+        
+        // Remove the game that was just added
+        removeGameWithUndo(
+            game = addedEntry,
+            onOptimisticRemove = {
+                uiState = uiState.copy(
+                    tempGameEntry = null,
+                    addToLibraryState = AddToLibraryState.Idle
+                )
+            },
+            onActualRemove = {
+                // Silent removal - don't show another snackbar
+            },
+            onError = { restoredGame, error ->
+                uiState = uiState.copy(
+                    tempGameEntry = restoredGame,
+                    addToLibraryState = AddToLibraryState.Error("Failed to undo: $error")
+                )
+            }
+        )
+    }
+    
+    fun dismissAddSnackbar() {
+        uiState = uiState.copy(addToLibraryState = AddToLibraryState.Idle)
     }
 
     fun retry() {

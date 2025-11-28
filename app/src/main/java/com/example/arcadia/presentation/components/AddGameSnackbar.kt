@@ -41,13 +41,22 @@ private const val UNDO_TIMEOUT_MS = 5000L
 /**
  * Professional snackbar shown when a game is added to the library.
  * Matches the design of other snackbars in the app (MyGames remove snackbar).
+ * 
+ * @param visible Whether the snackbar is visible
+ * @param gameName The name of the game to display
+ * @param onUndo Callback when undo is clicked. If null, undo button is hidden.
+ * @param onDismiss Callback when dismissed
+ * @param message Optional custom message. Defaults to "{gameName} added"
+ * @param showUndo Whether to show the undo button and timer. Defaults to true if onUndo is provided.
  */
 @Composable
 fun AddGameSnackbar(
     visible: Boolean,
     gameName: String,
-    onUndo: () -> Unit,
+    onUndo: (() -> Unit)? = null,
     onDismiss: () -> Unit,
+    message: String? = null,
+    showUndo: Boolean = onUndo != null,
     modifier: Modifier = Modifier
 ) {
     val hapticFeedback = LocalHapticFeedback.current
@@ -55,7 +64,8 @@ fun AddGameSnackbar(
     // Countdown timer animation
     val timeRemaining = remember { Animatable(1f) }
     
-    LaunchedEffect(visible) {
+    // Key on both visible AND gameName so timer resets when a new game is added
+    LaunchedEffect(visible, gameName) {
         if (visible) {
             timeRemaining.snapTo(1f)
             timeRemaining.animateTo(
@@ -92,41 +102,43 @@ fun AddGameSnackbar(
             shape = RoundedCornerShape(12.dp),
             containerColor = Color(0xFF1E2A47),
             contentColor = TextSecondary,
-            action = {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Circular progress indicator showing time remaining
-                    Box(contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            progress = { timeRemaining.value },
-                            modifier = Modifier.size(24.dp),
-                            color = ButtonPrimary,
-                            strokeWidth = 2.dp,
-                            trackColor = Color.White.copy(alpha = 0.2f)
-                        )
-                        Text(
-                            text = "${(timeRemaining.value * (UNDO_TIMEOUT_MS / 1000)).toInt()}",
-                            color = ButtonPrimary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    
-                    // Undo button
-                    TextButton(onClick = { 
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onUndo() 
-                    }) {
-                        Text(
-                            text = "UNDO",
-                            color = ButtonPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
+            action = if (showUndo && onUndo != null) {
+                {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Circular progress indicator showing time remaining
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                progress = { timeRemaining.value },
+                                modifier = Modifier.size(24.dp),
+                                color = ButtonPrimary,
+                                strokeWidth = 2.dp,
+                                trackColor = Color.White.copy(alpha = 0.2f)
+                            )
+                            Text(
+                                text = "${(timeRemaining.value * (UNDO_TIMEOUT_MS / 1000)).toInt()}",
+                                color = ButtonPrimary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        // Undo button
+                        TextButton(onClick = { 
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onUndo() 
+                        }) {
+                            Text(
+                                text = "UNDO",
+                                color = ButtonPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
-            },
+            } else null,
             dismissAction = {
                 IconButton(onClick = { 
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -141,7 +153,7 @@ fun AddGameSnackbar(
             }
         ) {
             Text(
-                text = "$gameName added",
+                text = message ?: "$gameName added",
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

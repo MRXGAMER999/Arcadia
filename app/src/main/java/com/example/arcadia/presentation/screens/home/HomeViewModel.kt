@@ -3,6 +3,9 @@ package com.example.arcadia.presentation.screens.home
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import com.example.arcadia.domain.repository.AIRepository
 import com.example.arcadia.presentation.base.LibraryAwareViewModel
 import com.example.arcadia.domain.model.DiscoveryFilterState
@@ -15,6 +18,7 @@ import com.example.arcadia.domain.model.StudioFilterState
 import com.example.arcadia.domain.model.StudioFilterType
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
+import com.example.arcadia.domain.repository.PagedGameRepository
 import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
 import com.example.arcadia.domain.usecase.ParallelGameFilter // Kept for DI, may be used for future local filtering
 import com.example.arcadia.util.PreferencesManager
@@ -23,6 +27,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -46,7 +51,8 @@ class HomeViewModel(
     private val aiRepository: AIRepository,
     private val preferencesManager: PreferencesManager,
     addGameToLibraryUseCase: AddGameToLibraryUseCase,
-    @Suppress("unused") private val parallelGameFilter: ParallelGameFilter // Kept for potential future local filtering
+    @Suppress("unused") private val parallelGameFilter: ParallelGameFilter, // Kept for potential future local filtering
+    private val pagedGameRepository: PagedGameRepository // Paging 3 repository for AI recommendations
 ) : LibraryAwareViewModel(gameListRepository, addGameToLibraryUseCase) {
     
     companion object {
@@ -65,8 +71,8 @@ class HomeViewModel(
         private const val DEFAULT_PAGE_SIZE = 10    // Standard page size after initial load
         private const val RECOMMENDATION_PAGE_SIZE = 15  // Reduced from 30 for faster loading
         private const val MIN_RECOMMENDATIONS_COUNT = 10 // Reduced from 20
-        private const val AI_RECOMMENDATION_COUNT = 12   // Reduced from 40 for instant load
-        private const val AI_LOAD_MORE_COUNT = 8         // Reduced from 15
+        private const val AI_RECOMMENDATION_COUNT = 50   // Increased from 12 - now using Paging 3 with offline caching
+        private const val AI_LOAD_MORE_COUNT = 10        // Load more count for pagination
         
         // API constants
         private const val DEFAULT_RECOMMENDATION_TAGS = "singleplayer,multiplayer"
@@ -74,6 +80,20 @@ class HomeViewModel(
     
     var screenState by mutableStateOf(HomeScreenState())
         private set
+    
+    /**
+     * Paging 3 flow for AI recommendations with offline support.
+     * Uses RemoteMediator pattern for caching in Room.
+     * 
+     * Benefits:
+     * - Progressive loading (10 games at a time)
+     * - Offline support (cached in Room)
+     * - Instant app restart (loads from cache)
+     * - Automatic refresh when library changes
+     */
+    val aiRecommendationsPaged: Flow<PagingData<Game>> = 
+        pagedGameRepository.getAIRecommendations()
+            .cachedIn(viewModelScope)
     
     // Studio filter state (legacy - kept for compatibility)
     var studioFilterState by mutableStateOf(StudioFilterState())
@@ -102,6 +122,9 @@ class HomeViewModel(
     // Cache for AI recommendations to persist across app restarts
     private var cachedAIRecommendations: List<Game> = emptyList()
     private var lastLibraryHash: Int = 0
+    
+    // Track game IDs that came from AI recommendations (for feedback)
+    private val aiRecommendedGameIds = mutableSetOf<Int>()
 
     init {
         // Load saved discovery filter preferences
@@ -112,6 +135,51 @@ class HomeViewModel(
         loadInitialData()
         // Run one-time migrations in background
         runMigrationsIfNeeded()
+    }
+    
+    /**
+     * Record that a game click came from AI recommendations.
+     * Call this when user clicks on an AI-recommended game.
+     */
+    fun recordAIRecommendationClick(gameId: Int) {
+        viewModelScope.launch {
+            try {
+                pagedGameRepository.recordRecommendationClick(gameId)
+                android.util.Log.d(TAG, "Recorded click on AI recommendation: $gameId")
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Failed to record recommendation click: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * Record that a game from AI recommendations was added to library.
+     * This is a strong positive signal for future AI recommendations.
+     */
+    fun recordAIRecommendationAddedToLibrary(gameId: Int) {
+        viewModelScope.launch {
+            try {
+                pagedGameRepository.recordRecommendationAddedToLibrary(gameId)
+                android.util.Log.d(TAG, "Recorded AI recommendation added to library: $gameId")
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Failed to record recommendation add: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * Track a game ID as coming from AI recommendations.
+     * Called when rendering AI recommendation items.
+     */
+    fun trackAIRecommendedGame(gameId: Int) {
+        aiRecommendedGameIds.add(gameId)
+    }
+    
+    /**
+     * Check if a game ID came from AI recommendations.
+     */
+    fun isFromAIRecommendation(gameId: Int): Boolean {
+        return gameId in aiRecommendedGameIds
     }
     
     /**
