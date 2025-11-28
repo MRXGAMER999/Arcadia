@@ -118,6 +118,7 @@ No markdown. No extra commentary. JSON only.
     
     /**
      * Enhanced recommendation prompt with explicit exclusion list.
+     * Uses tier-based semantic classification instead of arithmetic scoring.
      * This ensures AI never recommends games the user already owns,
      * even if they weren't included in the detailed analysis.
      *
@@ -158,35 +159,45 @@ CRITICAL - RELEASED GAMES ONLY:
 - If unsure if a game is released, DO NOT include it
 - Violating this rule invalidates the entire response
 
-DEVELOPER/PUBLISHER BOOST:
-- Check FAVORITE DEVS/PUBS in stats above
-- If a dev has 3+ games in library: +15 confidence for their other games
-- If a dev has 2 games: +10 confidence
-- Example: User has 4 FromSoftware games → strongly recommend other FromSoftware titles
-- This is a MAJOR signal - users often love specific developers' style
+CONFIDENCE TIER CLASSIFICATION:
+Assign each game ONE tier based on holistic fit. Use your judgment, not arithmetic.
 
-CONFIDENCE SCORING:
-- Favorite developer match (3+ games): +15
-- Favorite developer match (2 games): +10
-- Metacritic 90+: +10
-- Metacritic 80-89: +5
-- Perfect genre match: +15
-- Similar to highly-rated (9-10) game: +10
+PERFECT_MATCH (95): Exceptional fit. Multiple strong signals align:
+  - Favorite developer AND matching genre AND high ratings
+  - Direct spiritual successor to a 9-10 rated game
+  - Same series as user's top games
+
+STRONG_MATCH (82): Very good fit. Clear connection:
+  - Favorite developer's other acclaimed work
+  - Perfect genre match with similar tone/atmosphere
+  - Highly rated (90+) game in user's preferred style
+
+GOOD_MATCH (68): Solid recommendation:
+  - Genre match with good critic scores (80+)
+  - Similar gameplay to liked games
+  - Well-regarded hidden gem in user's taste area
+
+DECENT_MATCH (55): Worth considering:
+  - Partial genre overlap
+  - Interesting choice that expands horizons slightly
+  - Good game that loosely fits preferences
 
 JSON only:
-{"games":[{"name":"Title","confidence":95}],"reasoning":"brief explanation"}
+{"games":[{"name":"Title","tier":"STRONG_MATCH","why":"brief reason"}],"reasoning":"overall explanation"}
 
-Sort by confidence descending. Exact English titles only.
+The "why" field: 2-5 words explaining the match (e.g., "FromSoftware + Souls-like", "Same dev as Hades", "Top-rated JRPG")
+
+Sort by tier (PERFECT > STRONG > GOOD > DECENT). Exact English titles only.
     """.trimIndent()
     }
     
     /**
-     * V4 Prompt: Enhanced with user feedback loop and token optimization.
+     * V4 Prompt: Enhanced with user feedback loop and tier-based classification.
      * 
      * Improvements:
      * 1. Includes games user liked from past recommendations (feedback loop)
      * 2. Abbreviated library format to reduce tokens
-     * 3. More specific confidence scoring guidelines
+     * 3. Tier-based semantic classification instead of arithmetic scoring
      * 
      * @param libraryData Abbreviated library data (name|genre|rating|hours format)
      * @param exclusionList Games to never recommend (user owns them)
@@ -208,7 +219,7 @@ Sort by confidence descending. Exact English titles only.
         } else ""
         
         val feedbackSection = if (likedRecommendations.isNotBlank()) {
-            "\n✅ USER LIKED THESE RECOMMENDATIONS: $likedRecommendations\n→ Similar games to these get +20 confidence boost!"
+            "\n✅ USER LIKED THESE RECOMMENDATIONS: $likedRecommendations\n→ Similar games to these should be PERFECT_MATCH or STRONG_MATCH!"
         } else ""
         
         return """
@@ -228,16 +239,15 @@ RULES:
 6. Mix: 70% recent (2018-$currentYear), 30% classics
 7. RELEASED ONLY as of $currentYear-$currentMonth. NO upcoming games.
 
-CONFIDENCE FORMULA:
-- User liked similar recommendation: +20
-- Favorite dev (3+ games): +15
-- Favorite dev (2 games): +10  
-- Metacritic 90+: +10, 80-89: +5
-- Perfect genre match: +15
-- Similar to 9-10 rated game: +10
+CONFIDENCE TIERS (assign ONE per game):
+PERFECT_MATCH: Exceptional fit - favorite dev + genre match + high ratings, or direct spiritual successor to 9-10 rated game
+STRONG_MATCH: Very good fit - favorite dev's work, perfect genre match, or 90+ Metacritic in user's style
+GOOD_MATCH: Solid pick - genre match with 80+ scores, similar gameplay to liked games
+DECENT_MATCH: Worth trying - partial overlap, expands horizons slightly
 
-JSON:{"games":[{"name":"Title","confidence":95}],"reasoning":"brief"}
-Descending confidence. Exact titles.
+JSON:{"games":[{"name":"Title","tier":"STRONG_MATCH","why":"brief reason"}],"reasoning":"brief"}
+"why": 2-5 words (e.g., "FromSoftware + Souls-like", "Top JRPG")
+Sort by tier. Exact titles.
     """.trimIndent()
     }
     
