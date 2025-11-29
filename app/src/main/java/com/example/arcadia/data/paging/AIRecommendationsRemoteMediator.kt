@@ -18,8 +18,8 @@ import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlin.math.abs
 
 /**
  * Enhanced RemoteMediator for AI-powered game recommendations.
@@ -53,7 +53,7 @@ class AIRecommendationsRemoteMediator(
     private val userLibraryProvider: suspend () -> List<GameListEntry>,
     private val libraryHashProvider: (List<GameListEntry>) -> Int,
     private val successfulRecommendationsProvider: (suspend () -> List<String>)? = null,
-    private val recommendationCount: Int = 50
+    private val recommendationCount: Int = 25
 ) : RemoteMediator<Int, CachedGameEntity>() {
 
     companion object {
@@ -84,42 +84,22 @@ class AIRecommendationsRemoteMediator(
      */
     override suspend fun initialize(): InitializeAction {
         val remoteKey = cachedGamesDao.getAIRemoteKey()
+        val cacheCount = cachedGamesDao.getAIRecommendationsCount()
         
-        if (remoteKey == null) {
-            Log.d(TAG, "No remote key found, triggering initial refresh")
+        if (remoteKey == null || cacheCount == 0) {
+            Log.d(TAG, "No cache found (key=$remoteKey, count=$cacheCount), triggering initial refresh")
             return InitializeAction.LAUNCH_INITIAL_REFRESH
         }
         
-        val currentLibrary = userLibraryProvider()
-        val currentHash = libraryHashProvider(currentLibrary)
-        val currentSize = currentLibrary.size
-        val cacheAge = System.currentTimeMillis() - remoteKey.lastRefreshTime
-        
-        return when {
-            // Cache is stale (TTL expired)
-            cacheAge > CACHE_TTL_MS -> {
-                Log.d(TAG, "Cache expired (${cacheAge / 1000}s old), refreshing")
-                InitializeAction.LAUNCH_INITIAL_REFRESH
-            }
-            
-            // SMARTER INVALIDATION: Only refresh if library changed significantly
-            remoteKey.libraryHash != currentHash -> {
-                val libraryDelta = abs(currentSize - remoteKey.librarySize)
-                if (libraryDelta >= MIN_LIBRARY_CHANGE_FOR_REFRESH) {
-                    Log.d(TAG, "Library changed significantly ($libraryDelta games), refreshing")
-                    InitializeAction.LAUNCH_INITIAL_REFRESH
-                } else {
-                    Log.d(TAG, "Library changed slightly ($libraryDelta games), keeping cache")
-                    InitializeAction.SKIP_INITIAL_REFRESH
-                }
-            }
-            
-            // Cache is valid
-            else -> {
-                Log.d(TAG, "Using cached recommendations (${remoteKey.totalRecommendationsCached} games)")
-                InitializeAction.SKIP_INITIAL_REFRESH
-            }
-        }
+        // OFFLINE-FIRST STRATEGY:
+        // If we have ANY data in the cache, we SKIP the initial refresh.
+        // This guarantees that the app displays the cached content instantly on startup,
+        // even if offline or if the cache is "stale" (TTL expired).
+        // A failed network refresh on startup would cause Paging 3 to show an error state
+        // instead of the cached data, which we want to avoid.
+        // The user can always trigger a fresh update via Pull-to-Refresh.
+        Log.d(TAG, "Found $cacheCount cached recommendations. Skipping initial refresh to ensure offline availability.")
+        return InitializeAction.SKIP_INITIAL_REFRESH
     }
 
     /**
@@ -132,19 +112,24 @@ class AIRecommendationsRemoteMediator(
         return when (loadType) {
             LoadType.REFRESH -> refreshRecommendationsProgressive()
             LoadType.PREPEND -> MediatorResult.Success(endOfPaginationReached = true)
-            LoadType.APPEND -> MediatorResult.Success(endOfPaginationReached = true)
+            LoadType.APPEND -> appendMoreRecommendations()
         }
     }
 
     /**
-     * Enhanced refresh with PROGRESSIVE LOADING.
+     * Enhanced refresh with PROGRESSIVE LOADING and robust error handling.
      * 
      * Strategy:
      * 1. Get AI recommendations with confidence scores
      * 2. Sort by confidence: High (70+), Medium (40-69), Low (<40)
      * 3. Fetch high-confidence games first → save to Room (fast initial display)
-     * 4. Fetch medium/low confidence games
+     * 4. Fetch medium/low confidence games → append to Room
      * 5. Record all shown recommendations for feedback loop
+     * 
+     * Error Handling:
+     * - If AI call fails, return error but don't clear cache
+     * - If game fetching partially fails, save what we got
+     * - Progressive saving ensures some data is always available
      */
     private suspend fun refreshRecommendationsProgressive(): MediatorResult {
         return try {
@@ -155,7 +140,6 @@ class AIRecommendationsRemoteMediator(
             val libraryHash = libraryHashProvider(userLibrary)
             val librarySize = userLibrary.size
             val libraryFingerprint = computeLibraryFingerprint(userLibrary)
-            val libraryGameIds = userLibrary.map { it.rawgId }.toSet()
             
             Log.d(TAG, "User library: $librarySize games, fingerprint: $libraryFingerprint")
             
@@ -168,39 +152,76 @@ class AIRecommendationsRemoteMediator(
             
             val suggestions = aiResult.getOrElse { error ->
                 Log.e(TAG, "AI recommendation failed: ${error.message}")
+                // Don't clear existing cache on error - let user see stale data
                 return MediatorResult.Error(error)
             }
             
-            val recommendations = suggestions.recommendations
-            Log.d(TAG, "AI returned ${recommendations.size} recommendations")
+            // CRITICAL FIX: Use recommendations if available, otherwise convert games list
+            val recommendations = if (suggestions.recommendations.isNotEmpty()) {
+                suggestions.recommendations
+            } else if (suggestions.games.isNotEmpty()) {
+                // Fallback: Convert plain game names to recommendations with default confidence
+                Log.w(TAG, "⚠ AI returned ${suggestions.games.size} games but 0 recommendations. Converting to default recommendations.")
+                suggestions.games.map { gameName ->
+                    GameRecommendation(name = gameName, confidence = 50, reason = null)
+                }
+            } else {
+                emptyList()
+            }
+            
+            Log.d(TAG, "✓ AI returned ${recommendations.size} recommendations (from ${suggestions.games.size} games)")
             
             if (recommendations.isEmpty()) {
+                Log.w(TAG, "⚠ AI returned 0 recommendations AND 0 games! This is unusual.")
+                Log.d(TAG, "AI suggestions object: reasoning=${suggestions.reasoning?.take(100)}")
                 saveEmptyState(libraryHash, librarySize, libraryFingerprint)
                 return MediatorResult.Success(endOfPaginationReached = true)
             }
             
-            // 3. PROGRESSIVE LOADING: Sort by confidence tiers
-            val highConfidence = recommendations.filter { it.confidence >= HIGH_CONFIDENCE_THRESHOLD }
-            val mediumConfidence = recommendations.filter { 
-                it.confidence in MEDIUM_CONFIDENCE_THRESHOLD until HIGH_CONFIDENCE_THRESHOLD 
+            // Log if AI returned fewer games than requested (may indicate model limitations)
+            if (recommendations.size < recommendationCount) {
+                Log.w(TAG, "⚠ AI returned only ${recommendations.size}/${recommendationCount} games. This may be due to model token limits or conservative filtering.")
             }
-            val lowConfidence = recommendations.filter { it.confidence < MEDIUM_CONFIDENCE_THRESHOLD }
+            
+            // Log first few recommendations to see metadata
+            recommendations.take(3).forEachIndexed { idx, rec ->
+                Log.d(TAG, "Sample rec[$idx]: name='${rec.name}', confidence=${rec.confidence}, reason='${rec.reason?.take(50)}'")
+            }
+            
+            // 3. PROGRESSIVE LOADING: Sort by confidence tiers (but save ALL games)
+            // Don't filter by confidence - all games are valid recommendations
+            // Within each tier, apply SECONDARY SORT by year (newer first) for better quality ordering
+            val highConfidence = recommendations
+                .filter { it.confidence >= HIGH_CONFIDENCE_THRESHOLD }
+                .sortedWith(compareByDescending<GameRecommendation> { it.confidence }
+                    .thenByDescending { it.year ?: 0 }) // Newer games first within same confidence
+                    
+            val mediumConfidence = recommendations
+                .filter { it.confidence in MEDIUM_CONFIDENCE_THRESHOLD until HIGH_CONFIDENCE_THRESHOLD }
+                .sortedWith(compareByDescending<GameRecommendation> { it.confidence }
+                    .thenByDescending { it.year ?: 0 })
+                    
+            val lowConfidence = recommendations
+                .filter { it.confidence < MEDIUM_CONFIDENCE_THRESHOLD }
+                .sortedWith(compareByDescending<GameRecommendation> { it.confidence }
+                    .thenByDescending { it.year ?: 0 })
             
             Log.d(TAG, "Confidence breakdown: High=${highConfidence.size}, Medium=${mediumConfidence.size}, Low=${lowConfidence.size}")
+            Log.d(TAG, "All recommendations will be cached regardless of confidence scores")
             
-            // Build confidence map
-            val confidenceMap = recommendations.associate { it.name.lowercase() to it.confidence }
+            // Build recommendation map for easy lookup by name
+            val recommendationMap = recommendations.associateBy { it.name.lowercase() }
             
             // 4. Fetch HIGH confidence first for fast initial display
             val highConfidenceGames = fetchGamesInBatches(
                 gameNames = highConfidence.map { it.name },
-                confidenceMap = confidenceMap,
+                recommendationMap = recommendationMap,
                 startOrder = 0,
-                libraryHash = libraryHash,
-                libraryGameIds = libraryGameIds
+                libraryHash = libraryHash
             )
             
-            // Save high-confidence immediately so UI can display
+            // Save high-confidence immediately so UI can display something quickly
+            // Even if medium/low fetching fails later, users see best recommendations
             if (highConfidenceGames.isNotEmpty()) {
                 cachedGamesDao.refreshAIRecommendations(
                     games = highConfidenceGames,
@@ -216,28 +237,42 @@ class AIRecommendationsRemoteMediator(
                         isEndReached = false // More coming
                     )
                 )
-                Log.d(TAG, "Saved ${highConfidenceGames.size} high-confidence games for immediate display")
+                Log.d(TAG, "✓ Saved ${highConfidenceGames.size} high-confidence games for immediate display")
+            } else {
+                Log.w(TAG, "⚠ No high-confidence games fetched, continuing with medium/low tier")
             }
             
-            // 5. Fetch MEDIUM + LOW confidence games
+            // 5. Fetch MEDIUM + LOW confidence games (even if high confidence was empty)
             val mediumGames = fetchGamesInBatches(
                 gameNames = mediumConfidence.map { it.name },
-                confidenceMap = confidenceMap,
+                recommendationMap = recommendationMap,
                 startOrder = highConfidenceGames.size,
-                libraryHash = libraryHash,
-                libraryGameIds = libraryGameIds
+                libraryHash = libraryHash
             )
             
             val lowGames = fetchGamesInBatches(
                 gameNames = lowConfidence.map { it.name },
-                confidenceMap = confidenceMap,
+                recommendationMap = recommendationMap,
                 startOrder = highConfidenceGames.size + mediumGames.size,
-                libraryHash = libraryHash,
-                libraryGameIds = libraryGameIds
+                libraryHash = libraryHash
             )
             
             // 6. Combine all and save final state
             val allGames = highConfidenceGames + mediumGames + lowGames
+            
+            // Always save what we fetched, even if it's less than expected
+            if (allGames.isEmpty()) {
+                Log.w(TAG, "⚠ No games were successfully fetched from RAWG. Saving empty state.")
+                
+                // FIX: If we had recommendations but fetched 0 games, it's likely a network/API error, not a valid empty state.
+                // We should return Error so the UI shows the retry button.
+                if (recommendations.isNotEmpty()) {
+                     return MediatorResult.Error(Exception("Failed to fetch game details. Please check your connection."))
+                }
+
+                saveEmptyState(libraryHash, librarySize, libraryFingerprint)
+                return MediatorResult.Success(endOfPaginationReached = true)
+            }
             
             cachedGamesDao.refreshAIRecommendations(
                 games = allGames,
@@ -250,18 +285,201 @@ class AIRecommendationsRemoteMediator(
                     totalRecommendationsCached = allGames.size,
                     highConfidenceCached = highConfidenceGames.size,
                     mediumConfidenceCached = mediumGames.size,
-                    isEndReached = true
+                    isEndReached = false // Allow fetching more on scroll
                 )
             )
             
             // 7. FEEDBACK LOOP: Record shown recommendations
             recordShownRecommendations(allGames)
             
-            Log.d(TAG, "Successfully cached ${allGames.size} AI recommendations (H:${highConfidenceGames.size}, M:${mediumGames.size}, L:${lowGames.size})")
-            MediatorResult.Success(endOfPaginationReached = true)
+            Log.d(TAG, "✓ Successfully cached ${allGames.size}/${recommendationCount} AI recommendations (H:${highConfidenceGames.size}, M:${mediumGames.size}, L:${lowGames.size})")
+            MediatorResult.Success(endOfPaginationReached = false) // More can be fetched on scroll
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error refreshing recommendations", e)
+            Log.e(TAG, "✗ Error refreshing recommendations: ${e.message}", e)
+            // Return error but existing cache remains intact for offline viewing
+            MediatorResult.Error(e)
+        }
+    }
+
+    /**
+     * Fetch more recommendations when user scrolls to the end.
+     * This allows continuous discovery of new games.
+     */
+    private suspend fun appendMoreRecommendations(): MediatorResult {
+        return try {
+            // Check if we should fetch more
+            val remoteKey = cachedGamesDao.getAIRemoteKey()
+            if (remoteKey?.isEndReached == true) {
+                Log.d(TAG, "Already reached end of recommendations, no more to fetch")
+                return MediatorResult.Success(endOfPaginationReached = true)
+            }
+            
+            val currentCount = cachedGamesDao.getAIRecommendationsCount()
+            Log.d(TAG, "Appending more recommendations (current count: $currentCount)")
+            
+            // Get already-cached game names to exclude from new recommendations
+            val alreadyRecommendedGames = cachedGamesDao.getAIRecommendationsFlow()
+                .first()
+                .map { it.name }
+            Log.d(TAG, "Excluding ${alreadyRecommendedGames.size} already recommended games")
+            
+            // Get current library
+            val userLibrary = userLibraryProvider()
+            val libraryHash = libraryHashProvider(userLibrary)
+            val librarySize = userLibrary.size
+            val libraryFingerprint = computeLibraryFingerprint(userLibrary)
+            
+            // Request more recommendations, excluding already-recommended games
+            val aiResult = aiRepository.getLibraryBasedRecommendations(
+                games = userLibrary,
+                count = recommendationCount,
+                forceRefresh = true,
+                excludeGames = alreadyRecommendedGames // Tell AI to not recommend these again
+            )
+            
+            val suggestions = aiResult.getOrElse { error ->
+                Log.e(TAG, "AI recommendation append failed: ${error.message}")
+                // Don't mark as end reached on error - user can retry
+                return MediatorResult.Error(error)
+            }
+            
+            var recommendations = if (suggestions.recommendations.isNotEmpty()) {
+                suggestions.recommendations
+            } else if (suggestions.games.isNotEmpty()) {
+                suggestions.games.map { gameName ->
+                    GameRecommendation(name = gameName, confidence = 50, reason = null)
+                }
+            } else {
+                // No more recommendations available
+                Log.d(TAG, "AI returned 0 games on append - marking end reached")
+                cachedGamesDao.insertRemoteKey(
+                    remoteKey?.copy(isEndReached = true) ?: AIRecommendationRemoteKey(
+                        lastRefreshTime = System.currentTimeMillis(),
+                        libraryHash = libraryHash,
+                        librarySize = librarySize,
+                        libraryFingerprint = libraryFingerprint,
+                        totalRecommendationsRequested = currentCount,
+                        totalRecommendationsCached = currentCount,
+                        highConfidenceCached = 0,
+                        mediumConfidenceCached = 0,
+                        isEndReached = true
+                    )
+                )
+                return MediatorResult.Success(endOfPaginationReached = true)
+            }
+            
+            Log.d(TAG, "✓ AI returned ${recommendations.size} more recommendations")
+            
+            // Filter out any duplicates that AI might have returned anyway
+            val alreadyRecommendedSet = alreadyRecommendedGames.map { it.lowercase() }.toSet()
+            recommendations = recommendations.filter { rec ->
+                rec.name.lowercase() !in alreadyRecommendedSet
+            }
+            Log.d(TAG, "After duplicate filter: ${recommendations.size} unique new games")
+            
+            if (recommendations.isEmpty()) {
+                Log.d(TAG, "No unique games after filtering - marking end reached")
+                cachedGamesDao.insertRemoteKey(
+                    remoteKey?.copy(isEndReached = true) ?: AIRecommendationRemoteKey(
+                        lastRefreshTime = System.currentTimeMillis(),
+                        libraryHash = libraryHash,
+                        librarySize = librarySize,
+                        libraryFingerprint = libraryFingerprint,
+                        totalRecommendationsRequested = currentCount,
+                        totalRecommendationsCached = currentCount,
+                        highConfidenceCached = 0,
+                        mediumConfidenceCached = 0,
+                        isEndReached = true
+                    )
+                )
+                return MediatorResult.Success(endOfPaginationReached = true)
+            }
+            
+            // Sort by confidence (same as refresh logic)
+            val highConfidence = recommendations
+                .filter { it.confidence >= HIGH_CONFIDENCE_THRESHOLD }
+                .sortedWith(compareByDescending<GameRecommendation> { it.confidence }
+                    .thenByDescending { it.year ?: 0 })
+                    
+            val mediumConfidence = recommendations
+                .filter { it.confidence in MEDIUM_CONFIDENCE_THRESHOLD until HIGH_CONFIDENCE_THRESHOLD }
+                .sortedWith(compareByDescending<GameRecommendation> { it.confidence }
+                    .thenByDescending { it.year ?: 0 })
+                    
+            val lowConfidence = recommendations
+                .filter { it.confidence < MEDIUM_CONFIDENCE_THRESHOLD }
+                .sortedWith(compareByDescending<GameRecommendation> { it.confidence }
+                    .thenByDescending { it.year ?: 0 })
+            
+            val recommendationMap = recommendations.associateBy { it.name.lowercase() }
+            
+            // Fetch all in order
+            val highGames = fetchGamesInBatches(
+                gameNames = highConfidence.map { it.name },
+                recommendationMap = recommendationMap,
+                startOrder = currentCount,
+                libraryHash = libraryHash
+            )
+            
+            val mediumGames = fetchGamesInBatches(
+                gameNames = mediumConfidence.map { it.name },
+                recommendationMap = recommendationMap,
+                startOrder = currentCount + highGames.size,
+                libraryHash = libraryHash
+            )
+            
+            val lowGames = fetchGamesInBatches(
+                gameNames = lowConfidence.map { it.name },
+                recommendationMap = recommendationMap,
+                startOrder = currentCount + highGames.size + mediumGames.size,
+                libraryHash = libraryHash
+            )
+            
+            val newGames = highGames + mediumGames + lowGames
+            
+            if (newGames.isEmpty()) {
+                Log.w(TAG, "No new games fetched from RAWG - marking end reached")
+                cachedGamesDao.insertRemoteKey(
+                    remoteKey?.copy(isEndReached = true) ?: AIRecommendationRemoteKey(
+                        lastRefreshTime = System.currentTimeMillis(),
+                        libraryHash = libraryHash,
+                        librarySize = librarySize,
+                        libraryFingerprint = libraryFingerprint,
+                        totalRecommendationsRequested = currentCount,
+                        totalRecommendationsCached = currentCount,
+                        highConfidenceCached = 0,
+                        mediumConfidenceCached = 0,
+                        isEndReached = true
+                    )
+                )
+                return MediatorResult.Success(endOfPaginationReached = true)
+            }
+            
+            // Append to existing cache
+            cachedGamesDao.appendAIRecommendations(
+                games = newGames,
+                remoteKey = AIRecommendationRemoteKey(
+                    lastRefreshTime = System.currentTimeMillis(),
+                    libraryHash = libraryHash,
+                    librarySize = librarySize,
+                    libraryFingerprint = libraryFingerprint,
+                    totalRecommendationsRequested = currentCount + recommendations.size,
+                    totalRecommendationsCached = currentCount + newGames.size,
+                    highConfidenceCached = (remoteKey?.highConfidenceCached ?: 0) + highGames.size,
+                    mediumConfidenceCached = (remoteKey?.mediumConfidenceCached ?: 0) + mediumGames.size,
+                    isEndReached = false // Can fetch more
+                )
+            )
+            
+            // Record new recommendations for feedback
+            recordShownRecommendations(newGames)
+            
+            Log.d(TAG, "✓ Successfully appended ${newGames.size} AI recommendations (total now: ${currentCount + newGames.size})")
+            MediatorResult.Success(endOfPaginationReached = false)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "✗ Error appending recommendations: ${e.message}", e)
             MediatorResult.Error(e)
         }
     }
@@ -272,29 +490,29 @@ class AIRecommendationsRemoteMediator(
      */
     private suspend fun fetchGamesInBatches(
         gameNames: List<String>,
-        confidenceMap: Map<String, Int>,
+        recommendationMap: Map<String, GameRecommendation>,
         startOrder: Int,
-        libraryHash: Int,
-        libraryGameIds: Set<Int>
+        libraryHash: Int
     ): List<CachedGameEntity> = coroutineScope {
         val results = mutableListOf<CachedGameEntity>()
         
         gameNames.chunked(MAX_CONCURRENT_FETCHES).forEachIndexed { batchIndex, batch ->
             val batchResults = batch.mapIndexed { indexInBatch, gameName ->
                 async {
+                    val recommendation = recommendationMap[gameName.lowercase()] ?: GameRecommendation(gameName)
                     fetchSingleGame(
                         gameName = gameName,
-                        confidence = confidenceMap[gameName.lowercase()] ?: 50,
+                        recommendation = recommendation,
                         order = startOrder + batchIndex * MAX_CONCURRENT_FETCHES + indexInBatch,
                         libraryHash = libraryHash
                     )
                 }
             }.awaitAll().filterNotNull()
             
-            // Filter out games already in library
-            val filtered = batchResults.filter { it.id !in libraryGameIds }
-            results.addAll(filtered)
-            Log.d(TAG, "Batch ${batchIndex + 1}: fetched ${filtered.size}/${batch.size} games")
+            // Don't filter here - we want to cache ALL recommendations
+            // Filtering is done in the ViewModel layer to allow dynamic updates when library changes
+            results.addAll(batchResults)
+            Log.d(TAG, "Batch ${batchIndex + 1}: fetched ${batchResults.size}/${batch.size} games")
         }
         
         results
@@ -302,31 +520,61 @@ class AIRecommendationsRemoteMediator(
 
     /**
      * Fetch a single game from RAWG by name.
+     * Preserves all AI recommendation metadata (confidence, reason, tier, badges).
      */
     private suspend fun fetchSingleGame(
         gameName: String,
-        confidence: Int,
+        recommendation: GameRecommendation,
         order: Int,
         libraryHash: Int
     ): CachedGameEntity? {
         return try {
-            val result = gameRepository.searchGames(gameName, page = 1, pageSize = 1).first()
+            // FIX: Filter out Loading state, otherwise first() returns Loading and we treat it as failure
+            val result = gameRepository.searchGames(gameName, page = 1, pageSize = 1)
+                .filter { it !is RequestState.Loading }
+                .first()
             
             when (result) {
                 is RequestState.Success -> {
                     result.data.firstOrNull()?.let { game ->
-                        CachedGameEntity.fromGame(
+                        // Use recommendation's confidence (default 50 if not specified)
+                        val confidence = recommendation.confidence
+                        
+                        // Derive tier from confidence score if not already set
+                        val tier = when {
+                            confidence >= 90 -> "PERFECT_MATCH"
+                            confidence >= 80 -> "STRONG_MATCH"
+                            confidence >= 60 -> "GOOD_MATCH"
+                            confidence >= 40 -> "DECENT_MATCH"
+                            else -> "OKAY_MATCH"
+                        }
+                        
+                        val cachedEntity = CachedGameEntity.fromGame(
                             game = game,
                             isAIRecommendation = true,
                             aiConfidence = confidence.toFloat(),
+                            aiReason = recommendation.reason,
+                            aiTier = tier,
+                            aiBadges = recommendation.badges,
                             aiRecommendationOrder = order,
                             libraryHash = libraryHash
                         )
+                        
+                        // Log what we're saving
+                        if (order < 3) {
+                            Log.d(TAG, "Saving game[${order}]: '${game.name}' conf=$confidence, badges=${recommendation.badges.take(2)}, reason='${recommendation.reason?.take(40)}', tier=$tier")
+                        }
+                        
+                        cachedEntity
                     }
                 }
-                else -> null
+                else -> {
+                    Log.w(TAG, "No RAWG match for '$gameName'")
+                    null
+                }
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.w(TAG, "Failed to fetch game '$gameName': ${e.message}")
             null
         }

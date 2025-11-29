@@ -32,7 +32,7 @@ interface GroqApiService {
 data class GroqChatRequest(
     val model: String,
     val messages: List<GroqMessage>,
-    val temperature: Float = 0.3f,
+    val temperature: Float = 0.25f,
     @SerialName("top_p")
     val topP: Float? = null,
     @SerialName("max_tokens")

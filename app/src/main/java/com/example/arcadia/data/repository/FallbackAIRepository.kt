@@ -48,11 +48,12 @@ class FallbackAIRepository(
     override suspend fun getLibraryBasedRecommendations(
         games: List<GameListEntry>,
         count: Int,
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        excludeGames: List<String>
     ): Result<AIGameSuggestions> {
         return tryWithFallback("getLibraryBasedRecommendations") {
-            primaryRepository.getLibraryBasedRecommendations(games, count, forceRefresh)
-        } ?: fallbackRepository.getLibraryBasedRecommendations(games, count, forceRefresh)
+            primaryRepository.getLibraryBasedRecommendations(games, count, forceRefresh, excludeGames)
+        } ?: fallbackRepository.getLibraryBasedRecommendations(games, count, forceRefresh, excludeGames)
     }
 
     // ==================== Profile Analysis ====================

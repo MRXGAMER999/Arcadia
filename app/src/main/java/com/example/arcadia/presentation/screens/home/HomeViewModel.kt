@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import androidx.paging.filter
 import com.example.arcadia.domain.repository.AIRepository
 import com.example.arcadia.presentation.base.LibraryAwareViewModel
 import com.example.arcadia.domain.model.DiscoveryFilterState
@@ -28,7 +29,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -71,7 +75,7 @@ class HomeViewModel(
         private const val DEFAULT_PAGE_SIZE = 10    // Standard page size after initial load
         private const val RECOMMENDATION_PAGE_SIZE = 15  // Reduced from 30 for faster loading
         private const val MIN_RECOMMENDATIONS_COUNT = 10 // Reduced from 20
-        private const val AI_RECOMMENDATION_COUNT = 50   // Increased from 12 - now using Paging 3 with offline caching
+        private const val AI_RECOMMENDATION_COUNT = 25   // Reduced from 50 for AI model compatibility (fallback models have token limits)
         private const val AI_LOAD_MORE_COUNT = 10        // Load more count for pagination
         
         // API constants
@@ -90,10 +94,25 @@ class HomeViewModel(
      * - Offline support (cached in Room)
      * - Instant app restart (loads from cache)
      * - Automatic refresh when library changes
+     * - Filters out games already in library (reactive to library changes)
+     * 
+     * Note: We use flatMapLatest to properly handle library changes.
+     * When library changes, flatMapLatest cancels the previous collection
+     * and starts a new one with the updated filter. cachedIn is applied
+     * INSIDE flatMapLatest to cache each new filtered flow properly.
      */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val aiRecommendationsPaged: Flow<PagingData<Game>> = 
-        pagedGameRepository.getAIRecommendations()
-            .cachedIn(viewModelScope)
+        gamesInLibrary.flatMapLatest { currentLibraryIds ->
+            pagedGameRepository.getAIRecommendations()
+                .map { pagingData ->
+                    // Filter out games that are in the user's library
+                    pagingData.filter { game ->
+                        game.id !in currentLibraryIds
+                    }
+                }
+                .cachedIn(viewModelScope)
+        }
     
     // Studio filter state (legacy - kept for compatibility)
     var studioFilterState by mutableStateOf(StudioFilterState())
@@ -1191,6 +1210,12 @@ class HomeViewModel(
     }
 
     /**
+     * Check if the user's library is empty.
+     * Used to show appropriate empty state for AI recommendations.
+     */
+    fun isLibraryEmpty(): Boolean = gamesInLibrary.value.isEmpty()
+
+    /**
      * Calculate the date range based on the release timeframe.
      */
     private fun calculateDateRange(timeframe: ReleaseTimeframe): Pair<String?, String?> {
@@ -1471,4 +1496,6 @@ class HomeViewModel(
         }
     }
 }
+
+
 

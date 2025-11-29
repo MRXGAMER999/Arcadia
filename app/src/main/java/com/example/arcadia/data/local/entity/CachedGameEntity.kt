@@ -35,6 +35,9 @@ data class CachedGameEntity(
     // AI recommendation metadata
     val isAIRecommendation: Boolean = false,
     val aiConfidence: Float? = null,
+    val aiReason: String? = null,
+    val aiTier: String? = null,
+    val aiBadges: String = "", // JSON encoded list of AI-generated badges
     val aiRecommendationOrder: Int? = null, // For maintaining AI's suggested order
     
     // Cache metadata
@@ -62,7 +65,11 @@ data class CachedGameEntity(
         trailerUrl = trailerUrl,
         description = description,
         developers = developers.toStringList(),
-        publishers = publishers.toStringList()
+        publishers = publishers.toStringList(),
+        aiConfidence = aiConfidence,
+        aiReason = aiReason,
+        aiTier = aiTier,
+        aiBadges = aiBadges.toStringList()
     )
     
     companion object {
@@ -73,6 +80,9 @@ data class CachedGameEntity(
             game: Game,
             isAIRecommendation: Boolean = false,
             aiConfidence: Float? = null,
+            aiReason: String? = null,
+            aiTier: String? = null,
+            aiBadges: List<String> = emptyList(),
             aiRecommendationOrder: Int? = null,
             libraryHash: Int? = null
         ): CachedGameEntity = CachedGameEntity(
@@ -96,6 +106,9 @@ data class CachedGameEntity(
             publishers = game.publishers.toJsonString(),
             isAIRecommendation = isAIRecommendation,
             aiConfidence = aiConfidence,
+            aiReason = aiReason,
+            aiTier = aiTier,
+            aiBadges = aiBadges.toJsonString(),
             aiRecommendationOrder = aiRecommendationOrder,
             libraryHashWhenCached = libraryHash
         )

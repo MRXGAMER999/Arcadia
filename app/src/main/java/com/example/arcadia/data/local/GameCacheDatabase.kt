@@ -27,7 +27,7 @@ import com.example.arcadia.data.local.entity.RecommendationFeedbackEntity
         AIRecommendationRemoteKey::class,
         RecommendationFeedbackEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class GameCacheDatabase : RoomDatabase() {

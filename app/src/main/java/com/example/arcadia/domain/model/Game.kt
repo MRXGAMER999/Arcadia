@@ -18,7 +18,13 @@ data class Game(
     val trailerUrl: String? = null,
     val description: String? = null,
     val developers: List<String> = emptyList(),
-    val publishers: List<String> = emptyList()
+    val publishers: List<String> = emptyList(),
+    
+    // AI Metadata
+    val aiConfidence: Float? = null,
+    val aiReason: String? = null,
+    val aiTier: String? = null,
+    val aiBadges: List<String> = emptyList() // AI-generated meaningful tags
 )
 
 

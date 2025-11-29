@@ -50,8 +50,8 @@ class PagedGameRepositoryImpl(
     companion object {
         private const val TAG = "PagedGameRepository"
         
-        /** Number of AI recommendations to request */
-        const val AI_RECOMMENDATION_COUNT = 50
+        /** Number of AI recommendations to request (reduced to 25 for model compatibility) */
+        const val AI_RECOMMENDATION_COUNT = 25
         
         /** Page size for Paging 3 */
         private const val PAGE_SIZE = 10
@@ -96,7 +96,14 @@ class PagedGameRepositoryImpl(
             }
         ).flow.map { pagingData ->
             // Convert CachedGameEntity to Game domain model
-            pagingData.map { entity -> entity.toGame() }
+            pagingData.map { entity ->
+                val game = entity.toGame()
+                // Log metadata for debugging
+                if (entity.aiRecommendationOrder != null && entity.aiRecommendationOrder < 3) {
+                    Log.d(TAG, "Game[${entity.aiRecommendationOrder}] from DB: '${game.name}' conf=${game.aiConfidence}, reason='${game.aiReason?.take(40)}', tier=${game.aiTier}")
+                }
+                game
+            }
         }
     }
 
