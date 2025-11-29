@@ -54,6 +54,9 @@ fun DiscoverySectionHeader(
         
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (filterActive) {
+                // Check if AI is the only active filter (count == 1 and AI is selected)
+                val isOnlyAiFilter = isAiRecommendation && activeFilterCount == 1
+                
                 FilterChip(
                     selected = true,
                     onClick = onFilterClick,
@@ -66,9 +69,14 @@ fun DiscoverySectionHeader(
                                     modifier = Modifier.size(16.dp),
                                     tint = ButtonPrimary
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                // Only show filter count if there are other filters besides AI
+                                if (!isOnlyAiFilter) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("$activeFilterCount Filters", maxLines = 1)
+                                }
+                            } else {
+                                Text("$activeFilterCount Filters", maxLines = 1)
                             }
-                            Text("$activeFilterCount Filters", maxLines = 1)
                         }
                     },
                     trailingIcon = {

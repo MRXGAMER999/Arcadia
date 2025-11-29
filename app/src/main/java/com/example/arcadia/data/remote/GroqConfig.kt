@@ -12,13 +12,14 @@ object GroqConfig {
     const val BASE_URL = "https://api.groq.com/"
     
     // Primary model - Kimi K2 (best quality but has rate limits)
-    const val MODEL_NAME = "openai/gpt-oss-120b "
+    const val MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
     
     // Fallback models in order of preference (used when primary fails)
     val FALLBACK_MODELS = listOf(
-        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "openai/gpt-oss-120b",
         "moonshotai/kimi-k2-instruct-0905",
-        "llama-3.3-70b-versatile"
+        "llama-3.3-70b-versatile",
+
     )
     
     val API_KEY: String get() = BuildConfig.GROQ_API_KEY

@@ -115,17 +115,34 @@ fun DiscoverTabContent(
             viewModel.discoverScrollOffset = listState.firstVisibleItemScrollOffset
         }
     }
+    
+    // Check if we're in AI mode for proper refresh indicator handling
+    val usePagedAI = discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION && 
+                     discoveryFilterState.activeFilterCount == 1
+    
+    // For AI mode, also consider paging refresh state for the pull-to-refresh indicator
+    val isActuallyRefreshing = screenState.isRefreshing || 
+        (usePagedAI && aiPagingItems.loadState.refresh is LoadState.Loading && aiPagingItems.itemCount == 0)
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
-            isRefreshing = screenState.isRefreshing,
-            onRefresh = { viewModel.refreshDiscover() },
+            isRefreshing = isActuallyRefreshing,
+            onRefresh = { 
+                // refreshDiscover() returns true if we need to refresh paging items
+                // (i.e., when in AI mode)
+                val shouldRefreshPaging = viewModel.refreshDiscover()
+                if (shouldRefreshPaging) {
+                    // Trigger Paging refresh - cache was already cleared by ViewModel
+                    // so this will fetch fresh data from AI
+                    aiPagingItems.refresh()
+                }
+            },
             modifier = Modifier.fillMaxSize(),
             state = pullToRefreshState,
             indicator = {
                 PullToRefreshDefaults.LoadingIndicator(
                     state = pullToRefreshState,
-                    isRefreshing = screenState.isRefreshing,
+                    isRefreshing = isActuallyRefreshing,
                     modifier = Modifier.align(Alignment.TopCenter),
                     containerColor = Surface,
                     color = ButtonPrimary
@@ -137,7 +154,7 @@ fun DiscoverTabContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Surface),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 // New Releases Section
@@ -206,8 +223,7 @@ fun DiscoverTabContent(
 
                 // Use Paging 3 for AI recommendations (default), legacy flow for other sort types
                 // Only use Paging 3 if AI is the ONLY active filter (count == 1)
-                val usePagedAI = discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION && 
-                                 discoveryFilterState.activeFilterCount == 1
+                // Note: usePagedAI is already declared above for refresh state handling
                 
                 if (usePagedAI) {
                     // === PAGING 3 AI RECOMMENDATIONS ===

@@ -81,6 +81,7 @@ class AIRecommendationsRemoteMediator(
      * Uses SMARTER INVALIDATION:
      * - Only refreshes if library changed by 3+ games (not every single change)
      * - Still respects TTL for staleness
+     * - Offline-first: shows cached data immediately, refreshes in background if needed
      */
     override suspend fun initialize(): InitializeAction {
         val remoteKey = cachedGamesDao.getAIRemoteKey()
@@ -91,15 +92,37 @@ class AIRecommendationsRemoteMediator(
             return InitializeAction.LAUNCH_INITIAL_REFRESH
         }
         
-        // OFFLINE-FIRST STRATEGY:
-        // If we have ANY data in the cache, we SKIP the initial refresh.
-        // This guarantees that the app displays the cached content instantly on startup,
-        // even if offline or if the cache is "stale" (TTL expired).
-        // A failed network refresh on startup would cause Paging 3 to show an error state
-        // instead of the cached data, which we want to avoid.
-        // The user can always trigger a fresh update via Pull-to-Refresh.
-        Log.d(TAG, "Found $cacheCount cached recommendations. Skipping initial refresh to ensure offline availability.")
-        return InitializeAction.SKIP_INITIAL_REFRESH
+        // Check if cache is stale (TTL expired)
+        val cacheAge = System.currentTimeMillis() - remoteKey.lastRefreshTime
+        val isCacheStale = cacheAge > CACHE_TTL_MS
+        
+        // Check if library has changed significantly
+        val currentLibrary = try {
+            userLibraryProvider()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to get library for cache check, using cached data", e)
+            return InitializeAction.SKIP_INITIAL_REFRESH
+        }
+        
+        val currentLibraryHash = libraryHashProvider(currentLibrary)
+        val currentLibrarySize = currentLibrary.size
+        val librarySizeChange = kotlin.math.abs(currentLibrarySize - remoteKey.librarySize)
+        val libraryHashChanged = currentLibraryHash != remoteKey.libraryHash
+        val significantLibraryChange = librarySizeChange >= MIN_LIBRARY_CHANGE_FOR_REFRESH
+        
+        Log.d(TAG, "Cache check: age=${cacheAge/1000}s, stale=$isCacheStale, hashChanged=$libraryHashChanged, sizeChange=$librarySizeChange")
+        
+        // OFFLINE-FIRST STRATEGY with smart invalidation:
+        // - Always show cached data immediately (SKIP_INITIAL_REFRESH)
+        // - But trigger background refresh if cache is stale OR library changed significantly
+        // This ensures instant app startup while keeping recommendations fresh
+        return if (isCacheStale || (libraryHashChanged && significantLibraryChange)) {
+            Log.d(TAG, "Cache needs refresh (stale=$isCacheStale, significantChange=$significantLibraryChange), triggering background refresh")
+            InitializeAction.LAUNCH_INITIAL_REFRESH
+        } else {
+            Log.d(TAG, "Found $cacheCount cached recommendations. Cache is fresh, skipping refresh.")
+            InitializeAction.SKIP_INITIAL_REFRESH
+        }
     }
 
     /**
@@ -141,11 +164,15 @@ class AIRecommendationsRemoteMediator(
             val librarySize = userLibrary.size
             val libraryFingerprint = computeLibraryFingerprint(userLibrary)
             
-            Log.d(TAG, "User library: $librarySize games, fingerprint: $libraryFingerprint")
+            // Limit library size for AI analysis to prevent token limit issues
+            // Use top 50 most recent/relevant games for analysis
+            val limitedLibrary = userLibrary.take(50)
+            
+            Log.d(TAG, "User library: $librarySize games (using ${limitedLibrary.size} for AI), fingerprint: $libraryFingerprint")
             
             // 2. Get AI recommendations
             val aiResult = aiRepository.getLibraryBasedRecommendations(
-                games = userLibrary,
+                games = limitedLibrary,
                 count = recommendationCount,
                 forceRefresh = true
             )
@@ -380,8 +407,10 @@ class AIRecommendationsRemoteMediator(
             
             if (recommendations.isEmpty()) {
                 Log.d(TAG, "No unique games after filtering - marking end reached")
+                // Always fetch fresh remoteKey to ensure we have correct current state
+                val currentRemoteKey = cachedGamesDao.getAIRemoteKey()
                 cachedGamesDao.insertRemoteKey(
-                    remoteKey?.copy(isEndReached = true) ?: AIRecommendationRemoteKey(
+                    currentRemoteKey?.copy(isEndReached = true) ?: AIRecommendationRemoteKey(
                         lastRefreshTime = System.currentTimeMillis(),
                         libraryHash = libraryHash,
                         librarySize = librarySize,
@@ -440,8 +469,10 @@ class AIRecommendationsRemoteMediator(
             
             if (newGames.isEmpty()) {
                 Log.w(TAG, "No new games fetched from RAWG - marking end reached")
+                // Always fetch fresh remoteKey to ensure we have correct current state
+                val currentRemoteKey = cachedGamesDao.getAIRemoteKey()
                 cachedGamesDao.insertRemoteKey(
-                    remoteKey?.copy(isEndReached = true) ?: AIRecommendationRemoteKey(
+                    currentRemoteKey?.copy(isEndReached = true) ?: AIRecommendationRemoteKey(
                         lastRefreshTime = System.currentTimeMillis(),
                         libraryHash = libraryHash,
                         librarySize = librarySize,
@@ -456,7 +487,8 @@ class AIRecommendationsRemoteMediator(
                 return MediatorResult.Success(endOfPaginationReached = true)
             }
             
-            // Append to existing cache
+            // Append to existing cache - fetch fresh remoteKey for accurate counts
+            val currentRemoteKey = cachedGamesDao.getAIRemoteKey()
             cachedGamesDao.appendAIRecommendations(
                 games = newGames,
                 remoteKey = AIRecommendationRemoteKey(
@@ -466,8 +498,8 @@ class AIRecommendationsRemoteMediator(
                     libraryFingerprint = libraryFingerprint,
                     totalRecommendationsRequested = currentCount + recommendations.size,
                     totalRecommendationsCached = currentCount + newGames.size,
-                    highConfidenceCached = (remoteKey?.highConfidenceCached ?: 0) + highGames.size,
-                    mediumConfidenceCached = (remoteKey?.mediumConfidenceCached ?: 0) + mediumGames.size,
+                    highConfidenceCached = (currentRemoteKey?.highConfidenceCached ?: 0) + highGames.size,
+                    mediumConfidenceCached = (currentRemoteKey?.mediumConfidenceCached ?: 0) + mediumGames.size,
                     isEndReached = false // Can fetch more
                 )
             )

@@ -140,7 +140,8 @@ class GroqAIClient(
                 Log.w(TAG, "Streaming failed with model $modelName: ${e.message}")
                 
                 if (index < modelsToTry.size - 1) {
-                    Log.d(TAG, "Trying next model for streaming...")
+                    Log.d(TAG, "Trying next model for streaming in 2s...")
+                    kotlinx.coroutines.delay(2000)
                     continue
                 }
             }
@@ -175,7 +176,8 @@ class GroqAIClient(
                 
                 // Check if we should retry with fallback
                 if (shouldFallback(e) && index < modelsToTry.size - 1) {
-                    Log.d(TAG, "Falling back to next model...")
+                    Log.d(TAG, "Falling back to next model in 2s...")
+                    kotlinx.coroutines.delay(2000)
                     continue
                 }
                 

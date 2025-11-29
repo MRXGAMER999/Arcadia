@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -81,6 +82,9 @@ fun SearchScreen(
     val snackbarState by viewModel.snackbarState.collectAsState()
     val addGameSheetState by viewModel.addGameSheetState.collectAsState()
     val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
+    
+    // Remember LazyListState at this level to preserve scroll position across recompositions
+    val searchResultsListState = rememberLazyListState()
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -131,17 +135,6 @@ fun SearchScreen(
                     AIErrorCard(message = state.aiError ?: "")
                 }
 
-                // AI Reasoning Card (when results are shown)
-                AnimatedVisibility(
-                    visible = state.aiReasoning != null && state.results is RequestState.Success,
-                    enter = fadeIn() + slideInVertically { -it / 2 },
-                    exit = fadeOut()
-                ) {
-                    AIReasoningCard(reasoning = state.aiReasoning ?: "")
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
                 // Results
                 state.results.DisplayResult(
                     modifier = Modifier.fillMaxSize(),
@@ -187,7 +180,9 @@ fun SearchScreen(
                                 viewModel = viewModel,
                                 onGameClick = onGameClick,
                                 onNotification = { _, _ -> /* Removed TopNotification */ },
-                                isAIMode = state.isAIMode
+                                isAIMode = state.isAIMode,
+                                listState = searchResultsListState,
+                                aiReasoning = state.aiReasoning
                             )
                         }
                     }
@@ -862,14 +857,28 @@ private fun SearchResultsList(
     viewModel: SearchViewModel,
     onGameClick: (Int) -> Unit,
     onNotification: (String, Boolean) -> Unit,
-    isAIMode: Boolean = false
+    isAIMode: Boolean = false,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    aiReasoning: String? = null
 ) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp) // Ensure no centering
     ) {
-        items(games) { game ->
+        // AI Reasoning Card as first item (scrolls with the list)
+        if (isAIMode && aiReasoning != null) {
+            item(key = "ai_reasoning") {
+                AIReasoningCard(reasoning = aiReasoning)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+        
+        items(
+            items = games,
+            key = { game -> game.id } // Use game ID as key to preserve scroll position
+        ) { game ->
             SearchResultCard(
                 game = game,
                 isAdded = game.id in gamesInLibrary,

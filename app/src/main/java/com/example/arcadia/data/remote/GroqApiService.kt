@@ -36,7 +36,7 @@ data class GroqChatRequest(
     @SerialName("top_p")
     val topP: Float? = null,
     @SerialName("max_tokens")
-    val maxTokens: Int = 16384,
+    val maxTokens: Int = 4096,
     @SerialName("response_format")
     val responseFormat: GroqResponseFormat? = null,
     val stream: Boolean = false

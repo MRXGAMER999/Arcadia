@@ -35,7 +35,7 @@ interface AIClient {
     suspend fun generateJsonContent(
         prompt: String,
         temperature: Float = 0.2f,
-        maxTokens: Int = 16384
+        maxTokens: Int = 4096
     ): String
     
     /**
@@ -51,7 +51,7 @@ interface AIClient {
     suspend fun generateTextContent(
         prompt: String,
         temperature: Float = 0.7f,
-        maxTokens: Int = 16384
+        maxTokens: Int = 4096
     ): String
     
     /**
@@ -66,7 +66,7 @@ interface AIClient {
     fun generateStreamingContent(
         prompt: String,
         temperature: Float = 0.7f,
-        maxTokens: Int = 16384
+        maxTokens: Int = 4096
     ): Flow<String>
 }
 

@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -54,7 +56,8 @@ fun MyGameCard(
     showDateAdded: Boolean = true,
     showReleaseDate: Boolean = false,
     onClick: () -> Unit = {},
-    onLongClick: (() -> Unit)? = {}
+    onEditClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null
 ) {
     val context = LocalPlatformContext.current
     val density = LocalDensity.current
@@ -145,6 +148,35 @@ fun MyGameCard(
                         )
                     }
                 }
+            }
+            
+            // Edit icon button - Bottom left corner
+            if (onEditClick != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(x = 2.dp, y = (-2).dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1E2A47).copy(alpha = 0.75f))
+                ){
+                    IconButton(
+                        onClick = onEditClick,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit game",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                        )
+                    }
+                }
+
             }
         }
         

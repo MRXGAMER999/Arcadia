@@ -51,7 +51,7 @@ class FallbackAIRepository(
         forceRefresh: Boolean,
         excludeGames: List<String>
     ): Result<AIGameSuggestions> {
-        return tryWithFallback("getLibraryBasedRecommendations") {
+        return tryWithFallbackAndRetry("getLibraryBasedRecommendations") {
             primaryRepository.getLibraryBasedRecommendations(games, count, forceRefresh, excludeGames)
         } ?: fallbackRepository.getLibraryBasedRecommendations(games, count, forceRefresh, excludeGames)
     }
@@ -164,6 +164,46 @@ class FallbackAIRepository(
         } catch (e: Exception) {
             Log.w(TAG, "Primary $operationName threw exception, switching to fallback: ${e.message}")
             null // Signal to use fallback
+        }
+    }
+    
+    /**
+     * Tries the primary operation with retry logic for rate limits.
+     * If rate limited, waits and retries before falling back to secondary.
+     */
+    private suspend fun <T> tryWithFallbackAndRetry(
+        operationName: String,
+        primaryOperation: suspend () -> Result<T>
+    ): Result<T>? {
+        return try {
+            val result = primaryOperation()
+            if (result.isSuccess) {
+                result
+            } else {
+                val error = result.exceptionOrNull()
+                val errorMessage = error?.message?.lowercase() ?: ""
+                
+                // If rate limited, wait and retry once before falling back
+                if (errorMessage.contains("rate") || errorMessage.contains("429")) {
+                    Log.w(TAG, "Primary $operationName rate limited, waiting 3s before fallback to Gemini")
+                    kotlinx.coroutines.delay(3000)
+                    // Don't retry Groq - just fall back to Gemini immediately
+                    Log.w(TAG, "Falling back to Gemini due to Groq rate limit")
+                    null
+                } else {
+                    Log.w(TAG, "Primary $operationName returned failure: ${error?.message}")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            val errorMessage = e.message?.lowercase() ?: ""
+            if (errorMessage.contains("rate") || errorMessage.contains("429")) {
+                Log.w(TAG, "Primary $operationName rate limited (exception), falling back to Gemini")
+                kotlinx.coroutines.delay(1000) // Brief delay before fallback
+            } else {
+                Log.w(TAG, "Primary $operationName threw exception, switching to fallback: ${e.message}")
+            }
+            null
         }
     }
 }

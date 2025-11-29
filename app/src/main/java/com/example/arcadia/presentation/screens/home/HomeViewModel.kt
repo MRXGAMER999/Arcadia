@@ -25,6 +25,7 @@ import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
 import com.example.arcadia.domain.usecase.ParallelGameFilter // Kept for DI, may be used for future local filtering
 import com.example.arcadia.util.PreferencesManager
 import com.example.arcadia.util.RequestState
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -362,8 +364,8 @@ class HomeViewModel(
      * Load popular games with configurable page size.
      * Uses smaller page size for initial load, larger for refresh.
      */
-    private fun loadPopularGames(pageSize: Int = DEFAULT_PAGE_SIZE) {
-        launchWithKey("popular_games") {
+    private fun loadPopularGames(pageSize: Int = DEFAULT_PAGE_SIZE): Job {
+        return launchWithKey("popular_games") {
             gameRepository.getPopularGames(page = 1, pageSize = pageSize).collect { state ->
                 screenState = screenState.copy(popularGames = state)
             }
@@ -374,8 +376,8 @@ class HomeViewModel(
      * Load upcoming games with configurable page size.
      * Uses smaller page size for initial load, larger for refresh.
      */
-    private fun loadUpcomingGames(pageSize: Int = DEFAULT_PAGE_SIZE) {
-        launchWithKey("upcoming_games") {
+    private fun loadUpcomingGames(pageSize: Int = DEFAULT_PAGE_SIZE): Job {
+        return launchWithKey("upcoming_games") {
             // Load most anticipated upcoming games (ordered by added count)
             val today = LocalDate.now()
             val oneYearFromNow = today.plusYears(1)
@@ -396,8 +398,8 @@ class HomeViewModel(
      * Load new releases with configurable page size.
      * Uses smaller page size for initial load, larger for refresh.
      */
-    private fun loadNewReleases(pageSize: Int = DEFAULT_PAGE_SIZE) {
-        launchWithKey("new_releases") {
+    private fun loadNewReleases(pageSize: Int = DEFAULT_PAGE_SIZE): Job {
+        return launchWithKey("new_releases") {
             gameRepository.getNewReleases(page = 1, pageSize = pageSize).collect { state ->
                 screenState = screenState.copy(newReleases = state)
             }
@@ -518,22 +520,33 @@ class HomeViewModel(
     /**
      * Refresh Home tab data - used for pull-to-refresh on Home screen.
      * Loads more recommended games and refreshes horizontal sections.
+     * Also clears AI recommendations cache for fresh fetch.
      */
     fun refreshHome() {
         launchWithKey("refresh_home") {
             screenState = screenState.copy(isRefreshing = true)
             
             try {
-                // Load more recommended games directly (bypass guard)
-                fetchMoreRecommendedGames()
+                // Clear AI recommendations cache for fresh fetch from AI
+                android.util.Log.d(TAG, "Refresh: Clearing AI recommendations cache for fresh fetch")
+                pagedGameRepository.clearAIRecommendationsCache()
                 
-                // Also refresh the horizontal sections with fresh data
-                loadPopularGames()
-                loadUpcomingGames()
-                loadNewReleases()
+                coroutineScope {
+                    // Launch all refresh operations in parallel
+                    // Use reloadRecommendedGames to RESET the list instead of appending
+                    val recommendedJob = launch { reloadRecommendedGames() }
+                    val popularJob = loadPopularGames()
+                    val upcomingJob = loadUpcomingGames()
+                    val releasesJob = loadNewReleases()
+                    
+                    // Wait for all jobs to complete
+                    listOf(recommendedJob, popularJob, upcomingJob, releasesJob).joinAll()
+                }
                 
                 // Give a small delay for the refresh indicator to be visible
-                delay(800)
+                delay(500)
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Error refreshing home: ${e.message}", e)
             } finally {
                 screenState = screenState.copy(isRefreshing = false)
             }
@@ -543,14 +556,31 @@ class HomeViewModel(
     /**
      * Refresh Discover tab data - used for pull-to-refresh on Discover screen.
      * Loads more discovery games based on current filters.
+     * 
+     * For AI recommendations:
+     * - Clears the entire cache so the list appears empty while loading
+     * - Triggers a fresh fetch from the AI
+     * - Returns true if caller should also refresh Paging items
      */
-    fun refreshDiscover() {
+    fun refreshDiscover(): Boolean {
+        val shouldRefreshPaging = discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION && 
+                                  discoveryFilterState.activeFilterCount == 1
+        
         launchWithKey("refresh_discover") {
             screenState = screenState.copy(isRefreshing = true)
             
             try {
-                // Load more discovery games (works with or without filters)
-                fetchMoreDiscoveryGames()
+                if (shouldRefreshPaging) {
+                    // Clear the AI cache completely so the list appears empty
+                    // and shows loading state while fetching fresh data
+                    android.util.Log.d(TAG, "Refresh: Clearing AI recommendations cache for fresh fetch")
+                    pagedGameRepository.clearAIRecommendationsCache()
+                    // The Paging refresh() call from UI will trigger RemoteMediator
+                    // since cache is now empty
+                } else {
+                    // Reload discovery games for non-AI filters
+                    reloadDiscoveryGames()
+                }
                 
                 // Brief delay for visual feedback
                 delay(300)
@@ -558,40 +588,41 @@ class HomeViewModel(
                 screenState = screenState.copy(isRefreshing = false)
             }
         }
+        
+        return shouldRefreshPaging
     }
     
     /**
-     * Directly fetch more recommended games for pull-to-refresh.
-     * This bypasses the isLoadingMoreRecommendations guard.
+     * Reload recommended games from scratch (Reset page to 1).
+     * Replaces the current list instead of appending.
      */
-    private suspend fun fetchMoreRecommendedGames() {
+    private suspend fun reloadRecommendedGames() {
         try {
-            recommendationPage++
-            android.util.Log.d(TAG, "Refresh: Fetching recommended games page $recommendationPage")
+            recommendationPage = 1
+            android.util.Log.d(TAG, "Refresh: Reloading recommended games (page 1)")
             gameRepository.getRecommendedGames(
                 tags = DEFAULT_RECOMMENDATION_TAGS,
-                page = recommendationPage,
+                page = 1,
                 pageSize = RECOMMENDATION_PAGE_SIZE
             ).collect { state ->
                 if (state is RequestState.Success) {
-                    android.util.Log.d(TAG, "Refresh: Got ${state.data.size} new games")
-                    lastRecommended = lastRecommended + state.data
+                    android.util.Log.d(TAG, "Refresh: Got ${state.data.size} games (Replacing list)")
+                    lastRecommended = state.data
                     applyRecommendationFilter()
                 }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
-            android.util.Log.d(TAG, "fetchMoreRecommendedGames cancelled")
+            throw e
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error fetching more recommendations on refresh", e)
+            android.util.Log.e(TAG, "Error reloading recommendations", e)
         }
     }
     
     /**
-     * Directly fetch more discovery games for pull-to-refresh.
-     * This bypasses the isLoadingMoreDiscovery guard.
-     * If no filters are active, it fetches games with default ordering.
+     * Reload discovery games from scratch (Reset page to 1).
+     * Replaces the current list instead of appending.
      */
-    private suspend fun fetchMoreDiscoveryGames() {
+    private suspend fun reloadDiscoveryGames() {
         try {
             if (discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION) {
                 // Force refresh to get new recommendations
@@ -599,8 +630,8 @@ class HomeViewModel(
                 return
             }
 
-            discoveryFilterPage++
-            android.util.Log.d(TAG, "Refresh: Fetching discovery games page $discoveryFilterPage (hasFilters=${discoveryFilterState.hasActiveFilters})")
+            discoveryFilterPage = 1
+            android.util.Log.d(TAG, "Refresh: Reloading discovery games (page 1)")
             
             val developerSlugs = if (discoveryFilterState.selectedDevelopers.isNotEmpty()) {
                 discoveryFilterState.getAllDeveloperSlugs()
@@ -624,9 +655,9 @@ class HomeViewModel(
                 page = discoveryFilterPage,
                 pageSize = 40
             ).collect { state ->
-                if (state is RequestState.Success && state.data.isNotEmpty()) {
-                    android.util.Log.d(TAG, "Refresh: Got ${state.data.size} new discovery games")
-                    lastDiscoveryResults = lastDiscoveryResults + state.data
+                if (state is RequestState.Success) {
+                    android.util.Log.d(TAG, "Refresh: Got ${state.data.size} new discovery games (Replacing list)")
+                    lastDiscoveryResults = state.data
                     val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }
                     screenState = screenState.copy(
                         recommendedGames = RequestState.Success(filtered)
@@ -634,9 +665,9 @@ class HomeViewModel(
                 }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
-            android.util.Log.d(TAG, "fetchMoreDiscoveryGames cancelled")
+            throw e
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error fetching more discovery games on refresh", e)
+            android.util.Log.e(TAG, "Error reloading discovery games", e)
         }
     }
     
@@ -1192,7 +1223,10 @@ class HomeViewModel(
         cancelJob("discovery_filter")
         cancelJob("developer_search")
         
-        discoveryFilterState = DiscoveryFilterState()
+        // Reset to default state but with POPULARITY sort type instead of AI
+        discoveryFilterState = DiscoveryFilterState(
+            sortType = DiscoverySortType.POPULARITY
+        )
         clearStudioFilter()
         
         // Clear discovery cache
@@ -1504,6 +1538,3 @@ class HomeViewModel(
         }
     }
 }
-
-
-

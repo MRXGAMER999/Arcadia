@@ -18,7 +18,9 @@ import com.example.arcadia.domain.repository.SortOrder
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.util.PreferencesManager
 import com.example.arcadia.util.RequestState
@@ -470,7 +472,10 @@ class DiscoveryViewModel(
         cancelJob("discovery_filter")
         cancelJob("developer_search")
 
-        discoveryFilterState = DiscoveryFilterState()
+        // Reset to default state but with POPULARITY sort type instead of AI
+        discoveryFilterState = DiscoveryFilterState(
+            sortType = com.example.arcadia.domain.model.DiscoverySortType.POPULARITY
+        )
         clearStudioFilter()
 
         lastDiscoveryResults = emptyList()
@@ -730,7 +735,20 @@ class DiscoveryViewModel(
             }
             
             // 1. Get user's library to use for recommendations AND filtering
-            val libraryState = gameListRepository.getGameList(SortOrder.NEWEST_FIRST).first()
+            // Use filter to skip Loading state and add timeout to prevent indefinite blocking
+            val libraryState = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+                gameListRepository.getGameList(SortOrder.NEWEST_FIRST)
+                    .filter { it is RequestState.Success || it is RequestState.Error }
+                    .first()
+            }
+            
+            if (libraryState == null) {
+                val error = RequestState.Error("Timed out loading library. Please try again.")
+                _discoveryState.value = _discoveryState.value.copy(games = error)
+                onComplete?.invoke(error)
+                return
+            }
+            
             if (libraryState !is RequestState.Success || libraryState.data.isEmpty()) {
                 val error = RequestState.Error("Add games to your library to get AI recommendations.")
                 _discoveryState.value = _discoveryState.value.copy(games = error)
@@ -741,14 +759,19 @@ class DiscoveryViewModel(
             // Update gamesInLibrary to ensure we have the latest library state
             val currentLibraryIds = libraryState.data.map { it.rawgId }.toSet()
             gamesInLibrary = currentLibraryIds
-            android.util.Log.d(TAG, "Updated library IDs for filtering: ${currentLibraryIds.size} games")
+            
+            // Limit library size for AI analysis to prevent token limit issues
+            // Use top 50 most recent/relevant games for analysis
+            val limitedLibrary = libraryState.data.take(50)
+            android.util.Log.d(TAG, "Using ${limitedLibrary.size} of ${libraryState.data.size} library games for AI analysis")
 
             // 2. Calculate count based on page
             val count = if (isLoadMore) (discoveryFilterPage + 1) * 10 else 10
             
             // 3. Get recommendations from AI (already sorted by confidence)
+            // Use limited library to avoid token limits with large libraries
             val aiResult = aiRepository.getLibraryBasedRecommendations(
-                games = libraryState.data, 
+                games = limitedLibrary, 
                 count = count,
                 forceRefresh = forceRefresh
             )
@@ -820,20 +843,27 @@ class DiscoveryViewModel(
     
     /**
      * Fetch Game objects for a list of game names.
-     * Uses parallel requests for faster loading.
+     * Uses parallel requests for faster loading with thread-safe deduplication.
      */
     private suspend fun fetchGamesForNames(gameNames: List<String>): List<Game> {
-        val games = mutableListOf<Game>()
-        val seenIds = mutableSetOf<Int>()
+        // Use thread-safe collections for concurrent access
+        val seenIds = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
         
         // Process in batches for better performance
         val batchSize = 4
+        val allResults = mutableListOf<Game>()
+        
         for (batch in gameNames.chunked(batchSize)) {
             coroutineScope {
-                val results = batch.map { gameName ->
+                val batchResults = batch.map { gameName ->
                     async {
                         try {
-                            val searchResult = gameRepository.searchGames(gameName, page = 1, pageSize = 1).first()
+                            // Use filter to skip Loading state and add timeout to prevent hanging
+                            val searchResult = kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                                gameRepository.searchGames(gameName, page = 1, pageSize = 1)
+                                    .filter { it !is RequestState.Loading }
+                                    .first()
+                            }
                             if (searchResult is RequestState.Success && searchResult.data.isNotEmpty()) {
                                 searchResult.data.first()
                             } else {
@@ -846,15 +876,18 @@ class DiscoveryViewModel(
                     }
                 }.awaitAll()
                 
-                results.filterNotNull().forEach { game ->
-                    if (game.id !in seenIds) {
-                        seenIds.add(game.id)
-                        games.add(game)
+                // Thread-safe deduplication: only add if not already seen
+                batchResults.filterNotNull().forEach { game ->
+                    if (seenIds.add(game.id)) {
+                        // Successfully added to set means it wasn't there before
+                        synchronized(allResults) {
+                            allResults.add(game)
+                        }
                     }
                 }
             }
         }
         
-        return games
+        return allResults
     }
 }

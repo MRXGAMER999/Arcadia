@@ -104,20 +104,25 @@ fun HomeTabContent(
             viewModel.homeScrollOffset = listState.firstVisibleItemScrollOffset
         }
     }
+    
+    // For Home tab, consider paging refresh state for the pull-to-refresh indicator
+    // Show refreshing when the list is empty and paging is loading (after cache clear)
+    val isActuallyRefreshing = screenState.isRefreshing || 
+        (aiPagingItems.loadState.refresh is LoadState.Loading && aiPagingItems.itemCount == 0)
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
-            isRefreshing = screenState.isRefreshing,
+            isRefreshing = isActuallyRefreshing,
             onRefresh = { 
                 viewModel.refreshHome()
-                aiPagingItems.refresh() // Also refresh AI recommendations
+                aiPagingItems.refresh() // Also refresh AI recommendations (cache cleared in refreshHome)
             },
             modifier = Modifier.fillMaxSize(),
             state = pullToRefreshState,
             indicator = {
                 PullToRefreshDefaults.LoadingIndicator(
                     state = pullToRefreshState,
-                    isRefreshing = screenState.isRefreshing,
+                    isRefreshing = isActuallyRefreshing,
                     modifier = Modifier.align(Alignment.TopCenter),
                     containerColor = Surface,
                     color = ButtonPrimary
@@ -129,7 +134,7 @@ fun HomeTabContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Surface),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 // Popular Games Section (Carousel)
