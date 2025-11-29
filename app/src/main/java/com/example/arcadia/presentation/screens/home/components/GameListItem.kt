@@ -85,7 +85,7 @@ fun GameListItem(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isAIRecommendation) Modifier.height(IntrinsicSize.Min) else Modifier.height(140.dp))
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF0F1B41)

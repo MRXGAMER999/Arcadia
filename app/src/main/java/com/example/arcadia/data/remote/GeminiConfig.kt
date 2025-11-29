@@ -2,6 +2,9 @@ package com.example.arcadia.data.remote
 
 import com.example.arcadia.BuildConfig
 import com.google.ai.client.generativeai.GenerativeModel
+import com.google.ai.client.generativeai.type.BlockThreshold
+import com.google.ai.client.generativeai.type.HarmCategory
+import com.google.ai.client.generativeai.type.SafetySetting
 import com.google.ai.client.generativeai.type.generationConfig
 
 /**
@@ -31,7 +34,7 @@ object GeminiConfig {
         const val TEMPERATURE = 0.2f
         const val TOP_K = 32
         const val TOP_P = 0.9f
-        const val MAX_OUTPUT_TOKENS = 16384
+        const val MAX_OUTPUT_TOKENS = 8192 // Increased to 8192 to prevent cut-off JSON
         const val RESPONSE_MIME_TYPE = "application/json"
     }
     
@@ -58,8 +61,19 @@ object GeminiConfig {
         const val TEMPERATURE = 0.7f
         const val TOP_K = 40
         const val TOP_P = 0.95f
-        const val MAX_OUTPUT_TOKENS = 16384  // Increased significantly for 2.5 models
+        const val MAX_OUTPUT_TOKENS = 8192  // Increased significantly for 2.5 models
     }
+
+    /**
+     * Safety settings to prevent blocking legitimate game content (e.g. "Violence" in games).
+     * We set threshold to BLOCK_ONLY_HIGH to be permissive but still safe.
+     */
+    private val safetySettings = listOf(
+        SafetySetting(HarmCategory.HARASSMENT, BlockThreshold.ONLY_HIGH),
+        SafetySetting(HarmCategory.HATE_SPEECH, BlockThreshold.ONLY_HIGH),
+        SafetySetting(HarmCategory.SEXUALLY_EXPLICIT, BlockThreshold.ONLY_HIGH),
+        SafetySetting(HarmCategory.DANGEROUS_CONTENT, BlockThreshold.ONLY_HIGH),
+    )
     
     /**
      * Creates a GenerativeModel configured for JSON-structured responses.
@@ -76,7 +90,8 @@ object GeminiConfig {
                 topP = JsonModel.TOP_P
                 maxOutputTokens = JsonModel.MAX_OUTPUT_TOKENS
                 responseMimeType = JsonModel.RESPONSE_MIME_TYPE
-            }
+            },
+            safetySettings = safetySettings
         )
     }
     
@@ -95,7 +110,8 @@ object GeminiConfig {
                 topK = TextModel.TOP_K
                 topP = TextModel.TOP_P
                 maxOutputTokens = TextModel.MAX_OUTPUT_TOKENS
-            }
+            },
+            safetySettings = safetySettings
         )
     }
 }

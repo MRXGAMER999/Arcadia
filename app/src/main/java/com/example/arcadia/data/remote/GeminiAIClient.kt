@@ -3,6 +3,7 @@ package com.example.arcadia.data.remote
 import android.util.Log
 import com.example.arcadia.BuildConfig
 import com.google.ai.client.generativeai.GenerativeModel
+import com.google.ai.client.generativeai.type.SerializationException
 import com.google.ai.client.generativeai.type.generationConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -33,7 +34,7 @@ class GeminiAIClient : AIClient {
                 temperature = 0.2f
                 topK = 32
                 topP = 0.9f
-                maxOutputTokens = 16384
+                maxOutputTokens = 4096
                 responseMimeType = "application/json"
             }
         )
@@ -74,6 +75,11 @@ class GeminiAIClient : AIClient {
                 
         } catch (e: AIClientException) {
             throw e
+        } catch (e: SerializationException) {
+            // This usually happens when Gemini's response is blocked by safety filters
+            // The response comes back without the 'parts' field
+            Log.e(TAG, "Gemini response blocked or malformed (likely safety filter)", e)
+            throw AIClientException.EmptyResponse("AI response was blocked or malformed. Please try again.")
         } catch (e: Exception) {
             Log.e(TAG, "Error generating JSON content", e)
             throw mapException(e)
@@ -97,6 +103,10 @@ class GeminiAIClient : AIClient {
             text
         } catch (e: AIClientException) {
             throw e
+        } catch (e: SerializationException) {
+            // This usually happens when Gemini's response is blocked by safety filters
+            Log.e(TAG, "Gemini response blocked or malformed (likely safety filter)", e)
+            throw AIClientException.EmptyResponse("AI response was blocked or malformed. Please try again.")
         } catch (e: Exception) {
             Log.e(TAG, "Error generating text content", e)
             throw mapException(e)
@@ -115,6 +125,10 @@ class GeminiAIClient : AIClient {
             }
         } catch (e: AIClientException) {
             throw e
+        } catch (e: SerializationException) {
+            // This usually happens when Gemini's response is blocked by safety filters
+            Log.e(TAG, "Gemini streaming response blocked or malformed", e)
+            throw AIClientException.EmptyResponse("AI response was blocked or malformed. Please try again.")
         } catch (e: Exception) {
             Log.e(TAG, "Error during streaming", e)
             throw mapException(e)
@@ -127,6 +141,11 @@ class GeminiAIClient : AIClient {
     private fun mapException(e: Exception): AIClientException {
         val message = e.message ?: "Unknown error"
         return when {
+            // Handle serialization errors (blocked responses)
+            message.contains("parts", ignoreCase = true) && 
+            message.contains("missing", ignoreCase = true) ->
+                AIClientException.EmptyResponse("AI response was blocked or incomplete. Please try again.")
+            
             message.contains("quota", ignoreCase = true) ||
             message.contains("rate", ignoreCase = true) -> 
                 AIClientException.RateLimited(message)

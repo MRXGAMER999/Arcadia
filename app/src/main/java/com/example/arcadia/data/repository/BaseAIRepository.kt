@@ -1014,10 +1014,10 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             appendLine("Total Hours: $totalHours")
             appendLine()
 
-            appendLine("=== GAME LIBRARY ===")
+            appendLine("=== GAME LIBRARY (Top 50) ===")
             appendLine("Format: [Status] Name (Rating/10) - Hours Played")
             
-            sortedGames.forEach { game ->
+            sortedGames.take(50).forEach { game ->
                 val ratingStr = if (game.rating != null && game.rating > 0) "${game.rating}" else "Unrated"
                 val statusStr = when(game.status) {
                     GameStatus.FINISHED -> "[FINISHED]"

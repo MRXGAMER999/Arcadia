@@ -456,17 +456,68 @@ class GameRepositoryImpl(
                     DateUtils.formatDateRange(startDate, endDate)
                 } else null
                 
-                Log.d(TAG, "Filtering games: developers=$developerSlugs, genres=$genres, dates=$dates, ordering=$ordering")
+                Log.d(TAG, "Filtering games: studios=$developerSlugs, genres=$genres, dates=$dates, ordering=$ordering")
                 
-                apiService.getGames(
-                    page = page,
-                    pageSize = pageSize,
-                    developers = developerSlugs,
-                    genres = genres,
-                    dates = dates,
-                    ordering = ordering ?: "-rating,-added"
-                ).results.map { it.toGame() }.also {
-                    Log.d(TAG, "Filtered games result: ${it.size} games")
+                // If filtering by studio (developerSlugs), search both Developers AND Publishers
+                // This fixes the issue where selecting a publisher returns 0 results
+                if (!developerSlugs.isNullOrBlank()) {
+                    coroutineScope {
+                        val devDeferred = async {
+                            try {
+                                apiService.getGames(
+                                    page = page,
+                                    pageSize = pageSize,
+                                    developers = developerSlugs,
+                                    genres = genres,
+                                    dates = dates,
+                                    ordering = ordering ?: "-rating,-added"
+                                ).results
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to fetch by developers: ${e.message}")
+                                emptyList()
+                            }
+                        }
+                        
+                        val pubDeferred = async {
+                            try {
+                                apiService.getGames(
+                                    page = page,
+                                    pageSize = pageSize,
+                                    publishers = developerSlugs,
+                                    genres = genres,
+                                    dates = dates,
+                                    ordering = ordering ?: "-rating,-added"
+                                ).results
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to fetch by publishers: ${e.message}")
+                                emptyList()
+                            }
+                        }
+                        
+                        val devGames = devDeferred.await()
+                        val pubGames = pubDeferred.await()
+                        
+                        Log.d(TAG, "Merged results: ${devGames.size} dev games + ${pubGames.size} pub games")
+                        
+                        val merged = (devGames + pubGames)
+                            .distinctBy { it.id }
+                            .map { it.toGame() }
+                            
+                        // Re-sort merged list based on ordering
+                        sortMergedGames(merged, ordering)
+                    }
+                } else {
+                    // Standard single request if no studio filter
+                    apiService.getGames(
+                        page = page,
+                        pageSize = pageSize,
+                        developers = null,
+                        genres = genres,
+                        dates = dates,
+                        ordering = ordering ?: "-rating,-added"
+                    ).results.map { it.toGame() }.also {
+                        Log.d(TAG, "Filtered games result: ${it.size} games")
+                    }
                 }
             }
             
@@ -480,6 +531,28 @@ class GameRepositoryImpl(
             emit(RequestState.Error("Failed to fetch filtered games: ${e.message}"))
         }
     }.flowOn(Dispatchers.IO)
+    
+    private fun sortMergedGames(games: List<Game>, ordering: String?): List<Game> {
+        if (ordering == null) return games.sortedByDescending { it.rating }
+        
+        return when {
+            ordering.contains("rating") -> {
+                if (ordering.startsWith("-")) games.sortedByDescending { it.rating }
+                else games.sortedBy { it.rating }
+            }
+            ordering.contains("released") -> {
+                if (ordering.startsWith("-")) games.sortedByDescending { it.released }
+                else games.sortedBy { it.released }
+            }
+            ordering.contains("name") -> {
+                if (ordering.startsWith("-")) games.sortedByDescending { it.name }
+                else games.sortedBy { it.name }
+            }
+            // For 'added' (popularity) or others, we preserve the API's relative ordering
+            // as best as we can (usually API sorts strictly, so merging maintains rough order)
+            else -> games 
+        }
+    }
     
     /**
      * Invalidate all cached game data. Call this when data might be stale.

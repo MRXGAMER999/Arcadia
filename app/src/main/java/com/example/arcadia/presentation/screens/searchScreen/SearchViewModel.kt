@@ -308,8 +308,9 @@ class SearchViewModel(
             )
             
             try {
-                val excludeNames = allAIResults.take(5).joinToString(", ") { it.name }
-                val modifiedQuery = "$lastAIQuery (different from: $excludeNames)"
+                // Exclude ALL existing games to prevent duplicates
+                val excludeNames = allAIResults.map { it.name }.joinToString(", ")
+                val modifiedQuery = "$lastAIQuery (do NOT suggest: $excludeNames)"
                 val moreResult = getAIGameSuggestionsUseCase(
                     query = modifiedQuery,
                     count = 10

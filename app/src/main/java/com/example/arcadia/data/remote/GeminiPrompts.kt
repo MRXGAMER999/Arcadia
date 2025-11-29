@@ -47,7 +47,7 @@ ANALYSIS GOALS:
 1.  **Identify the "Player DNA"**: What motivates them? Challenge? Story? Exploration? Comfort?
 2.  **Spot Patterns**: Do they binge-play? Do they drop long games? Do they stick to one developer?
 3.  **Avoid Generic Advice**: Don't say "try new genres". Be specific based on their actual behavior.
-4.  **Respect the Library**: Do not recommend games they already own (listed in the data).
+4.  **STRICTLY EXCLUDE OWNED GAMES**: NEVER recommend a game that appears in the user's history above. This is critical.
 
 OUTPUT FORMAT (JSON ONLY):
 {
@@ -58,7 +58,7 @@ OUTPUT FORMAT (JSON ONLY):
     "A specific strength or quirk in their gaming history.",
     "A pattern they might not have noticed themselves."
   ],
-  "recommendations": "A conversational recommendation of 2-3 broad themes or genres they might enjoy next (no specific game titles here, just ideas)."
+  "recommendations": "Recommend 3 specific games they DO NOT own. Wrap titles in <<GAME:Title>> tags (e.g. 'You should try <<GAME:Elden Ring>> because...'). Explain why for each."
 }
 """.trimIndent()
 

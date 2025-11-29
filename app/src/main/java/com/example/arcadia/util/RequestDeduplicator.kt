@@ -36,6 +36,11 @@ class RequestDeduplicator {
      * @param block The suspend function that performs the actual request
      * @return The result of the request
      */
+    private sealed class DedupeResult<T> {
+        data class FoundExisting<T>(val deferred: Deferred<T>) : DedupeResult<T>()
+        data class CreatedNew<T>(val deferred: CompletableDeferred<T>) : DedupeResult<T>()
+    }
+
     @Suppress("UNCHECKED_CAST")
     suspend fun <T> dedupe(key: String, block: suspend () -> T): T {
         // Check if there's already an in-flight request
@@ -49,46 +54,46 @@ class RequestDeduplicator {
         }
         
         // Use mutex to prevent race conditions when creating new requests
-        val deferred = mutex.withLock {
+        val dedupeResult = mutex.withLock {
             // Double-check after acquiring lock
             val existingAfterLock = inFlightRequests[key] as? Deferred<T>
             if (existingAfterLock != null && existingAfterLock.isActive) {
-                return@withLock existingAfterLock
-            }
-            
-            // Create new CompletableDeferred (not tied to any scope)
-            val newDeferred = CompletableDeferred<T>()
-            inFlightRequests[key] = newDeferred
-            newDeferred
-        }
-        
-        // If we got an existing deferred from the double-check, just await it
-        if (deferred.isCompleted || (deferred is CompletableDeferred<*> && deferred != inFlightRequests[key])) {
-            return try {
-                deferred.await()
-            } catch (e: CancellationException) {
-                // Retry with a fresh request
-                return dedupe(key, block)
+                DedupeResult.FoundExisting(existingAfterLock)
+            } else {
+                // Create new CompletableDeferred (not tied to any scope)
+                val newDeferred = CompletableDeferred<T>()
+                inFlightRequests[key] = newDeferred
+                DedupeResult.CreatedNew(newDeferred)
             }
         }
         
-        // We have a CompletableDeferred that we need to complete
-        val completableDeferred = deferred as CompletableDeferred<T>
-        
-        try {
-            val result = block()
-            completableDeferred.complete(result)
-            return result
-        } catch (e: CancellationException) {
-            // Don't propagate cancellation to other waiters - let them retry
-            completableDeferred.cancel(e)
-            throw e
-        } catch (e: Exception) {
-            completableDeferred.completeExceptionally(e)
-            throw e
-        } finally {
-            // Only remove if this is still the same request (not replaced)
-            inFlightRequests.remove(key, completableDeferred)
+        return when (dedupeResult) {
+            is DedupeResult.FoundExisting -> {
+                try {
+                    dedupeResult.deferred.await()
+                } catch (e: CancellationException) {
+                    // Retry with a fresh request
+                    dedupe(key, block)
+                }
+            }
+            is DedupeResult.CreatedNew -> {
+                val completableDeferred = dedupeResult.deferred
+                try {
+                    val result = block()
+                    completableDeferred.complete(result)
+                    result
+                } catch (e: CancellationException) {
+                    // Don't propagate cancellation to other waiters - let them retry
+                    completableDeferred.cancel(e)
+                    throw e
+                } catch (e: Exception) {
+                    completableDeferred.completeExceptionally(e)
+                    throw e
+                } finally {
+                    // Only remove if this is still the same request (not replaced)
+                    inFlightRequests.remove(key, completableDeferred)
+                }
+            }
         }
     }
     
