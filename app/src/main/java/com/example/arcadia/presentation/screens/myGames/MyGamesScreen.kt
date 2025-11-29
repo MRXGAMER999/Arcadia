@@ -10,11 +10,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -73,6 +77,7 @@ import com.example.arcadia.presentation.components.ListGameCard
 import com.example.arcadia.presentation.components.MediaLayout
 import com.example.arcadia.presentation.components.QuickRateDialog
 import com.example.arcadia.presentation.components.QuickSettingsDialog
+import com.example.arcadia.presentation.components.ScrollToTopFAB
 import com.example.arcadia.presentation.components.SwipeToDeleteItem
 
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
@@ -95,7 +100,9 @@ fun MyGamesScreen(
     onNavigateBack: () -> Unit = {},
     onGameClick: (Int) -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
-    showBackButton: Boolean = false
+    showBackButton: Boolean = false,
+    listState: LazyListState = rememberLazyListState(),
+    gridState: LazyGridState = rememberLazyGridState()
 ) {
     val viewModel: MyGamesViewModel = koinViewModel()
     val screenState = viewModel.screenState
@@ -400,6 +407,7 @@ fun MyGamesScreen(
                                 if (layout == MediaLayout.LIST) {
                                     // List View - Reduced padding for more space
                                     LazyColumn(
+                                        state = listState,
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
                                         modifier = Modifier.fillMaxSize()
@@ -444,6 +452,7 @@ fun MyGamesScreen(
                                 } else {
                                     // Grid View
                                     LazyVerticalGrid(
+                                        state = gridState,
                                         columns = GridCells.Fixed(3),
                                         contentPadding = PaddingValues(16.dp),
                                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -498,6 +507,19 @@ fun MyGamesScreen(
                     
                     else -> {}
                 }
+            }
+            
+            // Scroll to top FAB - show based on current layout
+            if (screenState.quickSettingsState.mediaLayout == MediaLayout.LIST) {
+                ScrollToTopFAB(
+                    listState = listState,
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                )
+            } else {
+                ScrollToTopFAB(
+                    gridState = gridState,
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                )
             }
             
             // Unsaved changes snackbar
