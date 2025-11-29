@@ -150,33 +150,30 @@ fun MyGameCard(
                 }
             }
             
-            // Edit icon button - Bottom left corner
+            // Edit icon button - Bottom left corner, positioned outside the card
             if (onEditClick != null) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .offset(x = 2.dp, y = (-2).dp)
-                        .size(32.dp)
+                        .offset(x = (-8).dp, y = 8.dp) // Offset outside the card bounds
+                        .size(28.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1E2A47).copy(alpha = 0.75f))
+                        .background(Color(0xFF1E2A47))
                 ){
                     IconButton(
                         onClick = onEditClick,
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(28.dp)
                             .clip(CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit game",
                             tint = Color.White,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clip(CircleShape)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
-
             }
         }
         

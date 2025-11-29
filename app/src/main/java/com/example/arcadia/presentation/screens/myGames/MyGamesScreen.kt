@@ -77,6 +77,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.example.arcadia.presentation.base.UndoableViewModel
 import com.example.arcadia.presentation.components.DraggableGameItem
 import com.example.arcadia.presentation.components.DraggableGridItem
@@ -418,6 +419,7 @@ fun MyGamesScreen(
                                 val listItemHeight = with(density) { 156.dp.toPx() } // List item height (140dp card + 16dp spacing)
                                 val gridItemHeight = with(density) { 200.dp.toPx() } // Approximate grid item height
                                 val gridItemWidth = with(density) { 120.dp.toPx() } // Approximate grid item width
+                                var containerHeight by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
                                 
                                 if (layout == MediaLayout.LIST) {
                                     // List View
@@ -426,7 +428,11 @@ fun MyGamesScreen(
                                             state = listState,
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                             verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.fillMaxSize(),
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .onGloballyPositioned { coordinates ->
+                                                    containerHeight = coordinates.size.height.toFloat()
+                                                },
                                             userScrollEnabled = !reorderState.isDragging
                                         ) {
                                             // Stats Card as first item (with animation)
@@ -455,9 +461,10 @@ fun MyGamesScreen(
                                             DraggableGameItem(
                                                 game = game,
                                                 index = index,
-                                                isReorderMode = true, // Always enabled for drag
+                                                isReorderMode = true,
                                                 isDragging = isDragging,
                                                 dragOffset = if (isDragging) reorderState.dragOffset else 0f,
+                                                currentIndex = if (isDragging) reorderState.currentTargetIndex else index,
                                                 onDragStart = { idx ->
                                                     reorderState.startDrag(idx, listItemHeight)
                                                 },
@@ -470,7 +477,12 @@ fun MyGamesScreen(
                                                         viewModel.onGameReorder(result.first, result.second)
                                                     }
                                                 },
-                                                // Only animate items that are not being dragged with spring animation
+                                                onIndexChange = { newIndex ->
+                                                    reorderState.updateTargetIndex(newIndex.coerceIn(0, visibleGames.size - 1))
+                                                },
+                                                listState = listState,
+                                                containerHeight = containerHeight,
+                                                itemHeight = listItemHeight,
                                                 modifier = if (!isDragging) Modifier.animateItem(
                                                     placementSpec = spring(
                                                         dampingRatio = Spring.DampingRatioLowBouncy,
@@ -478,7 +490,6 @@ fun MyGamesScreen(
                                                     )
                                                 ) else Modifier
                                             ) {
-                                                // Swipe to delete with edit button (long press is used for reordering)
                                                 SwipeToDeleteItem(
                                                     onDelete = { 
                                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -491,7 +502,7 @@ fun MyGamesScreen(
                                                         showReleaseDate = screenState.quickSettingsState.showReleaseDate,
                                                         onClick = { onGameClick(game.rawgId) },
                                                         onEditClick = { viewModel.selectGameToEdit(game) },
-                                                        onLongClick = null // Long press is handled by DraggableGameItem for reordering
+                                                        onLongClick = null
                                                     )
                                                 }
                                             }
@@ -501,6 +512,7 @@ fun MyGamesScreen(
                                 } else {
                                     // Grid View with reorder support (always enabled via long press)
                                     val gridReorderState = rememberReorderState()
+                                    var gridContainerHeight by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
                                     
                                     LazyVerticalGrid(
                                         state = gridState,
@@ -508,7 +520,11 @@ fun MyGamesScreen(
                                         contentPadding = PaddingValues(16.dp),
                                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .onGloballyPositioned { coordinates ->
+                                                gridContainerHeight = coordinates.size.height.toFloat()
+                                            },
                                         userScrollEnabled = !gridReorderState.isDragging
                                     ) {
                                         // Stats Card as first item (with animation)
@@ -539,10 +555,11 @@ fun MyGamesScreen(
                                             DraggableGridItem(
                                                 game = game,
                                                 index = index,
-                                                isReorderMode = true, // Always enabled for drag
+                                                isReorderMode = true,
                                                 isDragging = isDragging,
                                                 dragOffsetX = if (isDragging) gridReorderState.dragOffsetX else 0f,
                                                 dragOffsetY = if (isDragging) gridReorderState.dragOffsetY else 0f,
+                                                currentIndex = if (isDragging) gridReorderState.currentTargetIndex else index,
                                                 onDragStart = { idx ->
                                                     gridReorderState.startDrag(idx, gridItemHeight, gridItemWidth, 3)
                                                 },
@@ -555,7 +572,14 @@ fun MyGamesScreen(
                                                         viewModel.onGameReorder(result.first, result.second)
                                                     }
                                                 },
-                                                // Only animate items that are not being dragged with spring animation
+                                                onIndexChange = { newIndex ->
+                                                    gridReorderState.updateTargetIndex(newIndex.coerceIn(0, visibleGames.size - 1))
+                                                },
+                                                gridState = gridState,
+                                                containerHeight = gridContainerHeight,
+                                                itemHeight = gridItemHeight,
+                                                itemWidth = gridItemWidth,
+                                                columns = 3,
                                                 modifier = if (!isDragging) Modifier.animateItem(
                                                     placementSpec = spring(
                                                         dampingRatio = Spring.DampingRatioLowBouncy,
@@ -569,7 +593,7 @@ fun MyGamesScreen(
                                                     showReleaseDate = screenState.quickSettingsState.showReleaseDate,
                                                     onClick = { onGameClick(game.rawgId) },
                                                     onEditClick = { viewModel.selectGameToEdit(game) },
-                                                    onLongClick = null // Long press is handled by DraggableGridItem for reordering
+                                                    onLongClick = null
                                                 )
                                             }
                                         }
