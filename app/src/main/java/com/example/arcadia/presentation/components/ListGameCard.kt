@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
@@ -36,7 +37,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.LocalPlatformContext
@@ -153,71 +153,36 @@ fun ListGameCard(
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Top Section: Rating and Status Badge
+                // Top Section: Rating only (Status moved to right side of card)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Rating with Gradient Icon
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (game.rating != null && game.rating > 0f) {
-                            // Rating with gradient text
-                            BasicText(
-                                text = String.format(Locale.US, "%.1f", game.rating),
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    brush = getRatingGradient(game.rating),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 24.sp
-                                )
-                            )
-
-                            // Rating icon with gradient color
-                            Icon(
-                                painter = painterResource(id = getRatingIcon(game.rating)),
-                                contentDescription = "Rating icon",
-                                modifier = Modifier.size(20.dp),
-                                tint = getRatingColor(game.rating)
-                            )
-                        } else {
-                            Text(
-                                text = "Not Rated",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextSecondary.copy(alpha = 0.4f),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    // Status Badge with Icon and Text
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(getStatusColor(game.status))
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // Status Text
-                        Text(
-                            text = game.status.displayName,
-                            style = MaterialTheme.typography.labelSmall.copy(
+                    if (game.rating != null && game.rating > 0f) {
+                        // Rating with gradient text
+                        BasicText(
+                            text = String.format(Locale.US, "%.1f", game.rating),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                brush = getRatingGradient(game.rating),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            ),
-                            color = Color.Black
+                                fontSize = 24.sp
+                            )
                         )
 
-                        // Status Icon
+                        // Rating icon with gradient color
                         Icon(
-                            painter = painterResource(id = getStatusIcon(game.status)),
-                            contentDescription = game.status.displayName,
-                            tint = Color.Black,
-                            modifier = Modifier.size(18.dp)
+                            painter = painterResource(id = getRatingIcon(game.rating)),
+                            contentDescription = "Rating icon",
+                            modifier = Modifier.size(20.dp),
+                            tint = getRatingColor(game.rating)
+                        )
+                    } else {
+                        Text(
+                            text = "Not Rated",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary.copy(alpha = 0.4f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -232,8 +197,7 @@ fun ListGameCard(
                         fontSize = 16.sp
                     ),
                     color = TextSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 2
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -249,8 +213,7 @@ fun ListGameCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary.copy(alpha = 0.6f),
                             fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
                     }
 
@@ -266,30 +229,70 @@ fun ListGameCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary.copy(alpha = 0.5f),
                             fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
                     }
                 }
             }
             
-            // Edit icon button - positioned on the right side
-            if (onEditClick != null) {
-                Column(
-                    modifier = Modifier.fillMaxHeight(),
-                    verticalArrangement = Arrangement.Center
+            // Right side: Status Badge and Edit button
+            Column(
+                modifier = Modifier.fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                // Status Badge with Icon and Text - aligned to top right
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(getStatusColor(game.status))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    IconButton(
-                        onClick = onEditClick,
-                        modifier = Modifier.size(36.dp)
+                    // Status Text
+                    Text(
+                        text = game.status.displayName,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        ),
+                        color = Color.Black
+                    )
+
+                    // Status Icon
+                    Icon(
+                        painter = painterResource(id = getStatusIcon(game.status)),
+                        contentDescription = game.status.displayName,
+                        tint = Color.Black,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                
+                // Edit icon button - positioned at bottom right with circular background
+                if (onEditClick != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1E2A47))
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit game",
-                            tint = TextSecondary.copy(alpha = 0.7f),
-                            modifier = Modifier.size(20.dp)
-                        )
+                        IconButton(
+                            onClick = onEditClick,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit game",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
+                } else {
+                    Spacer(modifier = Modifier.height(28.dp))
                 }
             }
         }

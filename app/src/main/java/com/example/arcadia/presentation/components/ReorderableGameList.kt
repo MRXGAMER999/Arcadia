@@ -7,29 +7,40 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.example.arcadia.domain.model.GameListEntry
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * A simple wrapper that enables drag-and-drop reordering for list items.
- * Shows elevation and scale effect while dragging. No extra UI elements.
+ * A wrapper that enables drag-and-drop reordering for list items.
+ * Shows elevation and scale effect while dragging.
+ * Supports auto-scroll and live reordering preview.
  */
 @Composable
 fun DraggableGameItem(
@@ -38,14 +49,23 @@ fun DraggableGameItem(
     isReorderMode: Boolean,
     isDragging: Boolean,
     dragOffset: Float,
+    currentIndex: Int, // The current visual index (may differ from original during drag)
     onDragStart: (Int) -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: () -> Unit,
+    onIndexChange: (Int) -> Unit, // Called when item should move to new index
     modifier: Modifier = Modifier,
+    listState: LazyListState? = null,
+    containerHeight: Float = 0f,
+    itemHeight: Float = 156f,
     content: @Composable () -> Unit
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val canDrag = isReorderMode && game.rating != null
+    val coroutineScope = rememberCoroutineScope()
+    
+    var itemPositionY by remember { mutableFloatStateOf(0f) }
+    var autoScrollJob by remember { mutableStateOf<Job?>(null) }
     
     val elevation by animateDpAsState(
         targetValue = if (isDragging) 16.dp else 0.dp,
@@ -65,8 +85,54 @@ fun DraggableGameItem(
         label = "dragScale"
     )
     
+    // Calculate target index based on drag offset and trigger live reorder
+    LaunchedEffect(isDragging, dragOffset) {
+        if (isDragging && itemHeight > 0) {
+            val offsetInItems = (dragOffset / itemHeight).roundToInt()
+            val newIndex = (currentIndex + offsetInItems).coerceAtLeast(0)
+            if (newIndex != currentIndex) {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onIndexChange(newIndex)
+            }
+        }
+    }
+    
+    // Auto-scroll when dragging near edges
+    LaunchedEffect(isDragging) {
+        if (isDragging && listState != null && containerHeight > 0f) {
+            autoScrollJob = coroutineScope.launch {
+                while (isActive) {
+                    val currentY = itemPositionY + dragOffset
+                    val edgeThreshold = containerHeight * 0.2f
+                    
+                    val scrollAmount = when {
+                        currentY < edgeThreshold -> {
+                            val proximity = ((edgeThreshold - currentY) / edgeThreshold).coerceIn(0f, 1f)
+                            -(5f + proximity * 15f)
+                        }
+                        currentY > containerHeight - edgeThreshold -> {
+                            val proximity = ((currentY - (containerHeight - edgeThreshold)) / edgeThreshold).coerceIn(0f, 1f)
+                            5f + proximity * 15f
+                        }
+                        else -> 0f
+                    }
+                    
+                    if (scrollAmount != 0f) {
+                        listState.dispatchRawDelta(-scrollAmount)
+                    }
+                    delay(16)
+                }
+            }
+        } else {
+            autoScrollJob?.cancel()
+        }
+    }
+    
     Box(
         modifier = modifier
+            .onGloballyPositioned { coordinates ->
+                itemPositionY = coordinates.positionInRoot().y
+            }
             .then(
                 if (isDragging) {
                     Modifier
@@ -91,10 +157,12 @@ fun DraggableGameItem(
                                 onDrag(dragAmount.y)
                             },
                             onDragEnd = {
+                                autoScrollJob?.cancel()
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onDragEnd()
                             },
                             onDragCancel = {
+                                autoScrollJob?.cancel()
                                 onDragEnd()
                             }
                         )
@@ -109,8 +177,8 @@ fun DraggableGameItem(
 }
 
 /**
- * A simple wrapper for grid items that enables drag-and-drop reordering.
- * No extra UI elements - just elevation and scale while dragging.
+ * A wrapper for grid items that enables drag-and-drop reordering.
+ * Supports auto-scroll and live reordering preview.
  */
 @Composable
 fun DraggableGridItem(
@@ -120,14 +188,25 @@ fun DraggableGridItem(
     isDragging: Boolean,
     dragOffsetX: Float,
     dragOffsetY: Float,
+    currentIndex: Int,
     onDragStart: (Int) -> Unit,
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
+    onIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    gridState: LazyGridState? = null,
+    containerHeight: Float = 0f,
+    itemHeight: Float = 200f,
+    itemWidth: Float = 120f,
+    columns: Int = 3,
     content: @Composable () -> Unit
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val canDrag = isReorderMode && game.rating != null
+    val coroutineScope = rememberCoroutineScope()
+    
+    var itemPositionY by remember { mutableFloatStateOf(0f) }
+    var autoScrollJob by remember { mutableStateOf<Job?>(null) }
     
     val elevation by animateDpAsState(
         targetValue = if (isDragging) 16.dp else 0.dp,
@@ -147,8 +226,55 @@ fun DraggableGridItem(
         label = "dragScale"
     )
     
+    // Calculate target index based on drag offset and trigger live reorder
+    LaunchedEffect(isDragging, dragOffsetX, dragOffsetY) {
+        if (isDragging && itemHeight > 0 && itemWidth > 0) {
+            val rowOffset = (dragOffsetY / itemHeight).roundToInt()
+            val colOffset = (dragOffsetX / itemWidth).roundToInt()
+            val newIndex = (currentIndex + rowOffset * columns + colOffset).coerceAtLeast(0)
+            if (newIndex != currentIndex) {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onIndexChange(newIndex)
+            }
+        }
+    }
+    
+    // Auto-scroll when dragging near edges
+    LaunchedEffect(isDragging) {
+        if (isDragging && gridState != null && containerHeight > 0f) {
+            autoScrollJob = coroutineScope.launch {
+                while (isActive) {
+                    val currentY = itemPositionY + dragOffsetY
+                    val edgeThreshold = containerHeight * 0.2f
+                    
+                    val scrollAmount = when {
+                        currentY < edgeThreshold -> {
+                            val proximity = ((edgeThreshold - currentY) / edgeThreshold).coerceIn(0f, 1f)
+                            -(5f + proximity * 15f)
+                        }
+                        currentY > containerHeight - edgeThreshold -> {
+                            val proximity = ((currentY - (containerHeight - edgeThreshold)) / edgeThreshold).coerceIn(0f, 1f)
+                            5f + proximity * 15f
+                        }
+                        else -> 0f
+                    }
+                    
+                    if (scrollAmount != 0f) {
+                        gridState.dispatchRawDelta(-scrollAmount)
+                    }
+                    delay(16)
+                }
+            }
+        } else {
+            autoScrollJob?.cancel()
+        }
+    }
+    
     Box(
         modifier = modifier
+            .onGloballyPositioned { coordinates ->
+                itemPositionY = coordinates.positionInRoot().y
+            }
             .then(
                 if (isDragging) {
                     Modifier
@@ -173,10 +299,12 @@ fun DraggableGridItem(
                                 onDrag(dragAmount.x, dragAmount.y)
                             },
                             onDragEnd = {
+                                autoScrollJob?.cancel()
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onDragEnd()
                             },
                             onDragCancel = {
+                                autoScrollJob?.cancel()
                                 onDragEnd()
                             }
                         )
@@ -191,12 +319,14 @@ fun DraggableGridItem(
 }
 
 /**
- * State holder for drag-and-drop reordering.
+ * State holder for drag-and-drop reordering with live preview.
  */
 class ReorderState {
     var isDragging by mutableStateOf(false)
         private set
     var draggedItemIndex by mutableIntStateOf(-1)
+        private set
+    var currentTargetIndex by mutableIntStateOf(-1)
         private set
     var dragOffset by mutableFloatStateOf(0f)
         private set
@@ -205,13 +335,19 @@ class ReorderState {
     var dragOffsetY by mutableFloatStateOf(0f)
         private set
     
-    private var itemHeight = 0f
-    private var itemWidth = 0f
-    private var columnsCount = 1
+    private var originalIndex = -1
+    var itemHeight = 0f
+        private set
+    var itemWidth = 0f
+        private set
+    var columnsCount = 1
+        private set
     
     fun startDrag(index: Int, itemHeight: Float = 100f, itemWidth: Float = 100f, columns: Int = 1) {
         isDragging = true
         draggedItemIndex = index
+        originalIndex = index
+        currentTargetIndex = index
         dragOffset = 0f
         dragOffsetX = 0f
         dragOffsetY = 0f
@@ -229,30 +365,25 @@ class ReorderState {
         dragOffsetY += offsetY
     }
     
+    fun updateTargetIndex(newIndex: Int) {
+        if (newIndex != currentTargetIndex && newIndex >= 0) {
+            currentTargetIndex = newIndex
+        }
+    }
+    
     fun endDrag(): Pair<Int, Int>? {
-        if (!isDragging || draggedItemIndex < 0) {
+        if (!isDragging || originalIndex < 0) {
             reset()
             return null
         }
         
-        val fromIndex = draggedItemIndex
-        
-        // Calculate target index based on offset
-        val targetIndex = if (columnsCount > 1) {
-            // Grid calculation
-            val rowOffset = (dragOffsetY / itemHeight).roundToInt()
-            val colOffset = (dragOffsetX / itemWidth).roundToInt()
-            (fromIndex + rowOffset * columnsCount + colOffset).coerceAtLeast(0)
-        } else {
-            // List calculation
-            val indexOffset = (dragOffset / itemHeight).roundToInt()
-            (fromIndex + indexOffset).coerceAtLeast(0)
-        }
+        val fromIndex = originalIndex
+        val toIndex = currentTargetIndex
         
         reset()
         
-        return if (fromIndex != targetIndex) {
-            fromIndex to targetIndex
+        return if (fromIndex != toIndex && toIndex >= 0) {
+            fromIndex to toIndex
         } else {
             null
         }
@@ -261,6 +392,8 @@ class ReorderState {
     private fun reset() {
         isDragging = false
         draggedItemIndex = -1
+        originalIndex = -1
+        currentTargetIndex = -1
         dragOffset = 0f
         dragOffsetX = 0f
         dragOffsetY = 0f
