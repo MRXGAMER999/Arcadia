@@ -65,6 +65,13 @@ interface GameListRepository {
 
     suspend fun updateGameEntry(entry: GameListEntry): RequestState<Unit>
     
+    /**
+     * Updates the importance values for multiple games at once.
+     * Used for reordering games with the same rating.
+     * @param updates Map of entryId to new importance value
+     */
+    suspend fun updateGamesImportance(updates: Map<String, Int>): RequestState<Unit>
+    
 
     suspend fun removeGameFromList(entryId: String): RequestState<Unit>
     

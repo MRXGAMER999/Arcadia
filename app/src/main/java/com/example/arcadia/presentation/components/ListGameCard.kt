@@ -67,7 +67,7 @@ fun ListGameCard(
     showDateAdded: Boolean = true,
     showReleaseDate: Boolean = false,
     onClick: () -> Unit = {},
-    onLongClick: () -> Unit = {}
+    onLongClick: (() -> Unit)? = {}
 ) {
     val context = LocalPlatformContext.current
     val density = LocalDensity.current

@@ -18,12 +18,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,6 +38,20 @@ import com.example.arcadia.presentation.screens.home.tabs.DiscoverTabContent
 import com.example.arcadia.presentation.screens.home.tabs.HomeTabContent
 import com.example.arcadia.presentation.screens.home.tabs.LibraryTabContent
 import com.example.arcadia.ui.theme.Surface
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+
+// Custom Saver for LazyListState to ensure scroll position is preserved
+private val LazyListStateSaver = listSaver<LazyListState, Int>(
+    save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
+    restore = { LazyListState(it[0], it[1]) }
+)
+
+// Custom Saver for LazyGridState
+private val LazyGridStateSaver = listSaver<LazyGridState, Int>(
+    save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
+    restore = { LazyGridState(it[0], it[1]) }
+)
 
 @Composable
 fun NewHomeScreen(
@@ -49,11 +67,14 @@ fun NewHomeScreen(
     val screenState = viewModel.screenState
     val snackbarState by viewModel.snackbarState.collectAsState()
     
-    // Preserve scroll states for each tab
+    // For Paging tabs (Home, Discover), scroll state is managed internally by the tab content
+    // to handle the async loading nature of Paging 3
     val homeTabListState = rememberLazyListState()
     val discoverTabListState = rememberLazyListState()
-    val libraryTabListState = rememberLazyListState()
-    val libraryTabGridState = rememberLazyGridState()
+    
+    // For Library tab (non-paging), we use custom savers to preserve state
+    val libraryTabListState = rememberSaveable(saver = LazyListStateSaver) { LazyListState() }
+    val libraryTabGridState = rememberSaveable(saver = LazyGridStateSaver) { LazyGridState() }
 
     Box(
         modifier = Modifier.fillMaxSize()

@@ -4,6 +4,15 @@ import com.example.arcadia.data.remote.dto.GameListEntryDto
 import com.example.arcadia.domain.model.Game
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
+import kotlin.math.roundToInt
+
+/**
+ * Round a float to one decimal place.
+ * Example: 8.976004600524902 -> 9.0, 8.45 -> 8.5
+ */
+private fun Float.roundToOneDecimal(): Float {
+    return (this * 10).roundToInt() / 10f
+}
 
 /**
  * Convert DTO to domain model
@@ -21,11 +30,12 @@ fun GameListEntryDto.toGameListEntry(documentId: String): GameListEntry {
         addedAt = addedAt,
         updatedAt = updatedAt,
         status = GameStatus.fromString(status),
-        rating = rating,
+        rating = rating?.roundToOneDecimal(),
         review = review,
         hoursPlayed = hoursPlayed,
         aspects = aspects,
-        releaseDate = releaseDate
+        releaseDate = releaseDate,
+        importance = importance
     )
 }
 
@@ -44,11 +54,12 @@ fun GameListEntry.toDto(): GameListEntryDto {
         addedAt = addedAt,
         updatedAt = updatedAt,
         status = status.name,
-        rating = rating,
+        rating = rating?.roundToOneDecimal(),
         review = review,
         hoursPlayed = hoursPlayed,
         aspects = aspects,
-        releaseDate = releaseDate
+        releaseDate = releaseDate,
+        importance = importance
     )
 }
 
@@ -72,6 +83,7 @@ fun Game.toGameListEntry(status: GameStatus = GameStatus.FINISHED): GameListEntr
         review = "",
         hoursPlayed = 0,
         aspects = emptyList(),
-        releaseDate = released
+        releaseDate = released,
+        importance = 0
     )
 }

@@ -44,6 +44,17 @@ import com.example.arcadia.util.RequestState
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+
 /**
  * Home tab content displaying Popular Games, Upcoming Games, and Playlist Recommendations.
  * Extracted from HomeTabsNavigation for better separation of concerns.
@@ -63,6 +74,36 @@ fun HomeTabContent(
     
     // Use offline-capable Paging 3 flow for recommendations
     val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
+
+    // Manage scroll state manually for Paging 3 using ViewModel state
+    // This ensures persistence even if the View is destroyed/recreated
+    
+    // Track if we are currently restoring the scroll position
+    // We initialize based on whether we have a saved position in the ViewModel
+    var isRestoring by remember { mutableStateOf(viewModel.homeScrollIndex > 0) }
+    
+    // Cancel restoration if user manually scrolls
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.isScrollInProgress }
+            .filter { it }
+            .collect { isRestoring = false }
+    }
+    
+    // Restore scroll position when items are available
+    LaunchedEffect(aiPagingItems.itemCount) {
+        if (isRestoring && aiPagingItems.itemCount > viewModel.homeScrollIndex) {
+            listState.scrollToItem(viewModel.homeScrollIndex, viewModel.homeScrollOffset)
+            isRestoring = false
+        }
+    }
+    
+    // Save scroll position to ViewModel
+    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        if (!isRestoring) {
+            viewModel.homeScrollIndex = listState.firstVisibleItemIndex
+            viewModel.homeScrollOffset = listState.firstVisibleItemScrollOffset
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
