@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
@@ -33,6 +35,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.arcadia.data.remote.mapper.toGameListEntry
 import com.example.arcadia.domain.model.DiscoverySortType
 import com.example.arcadia.presentation.components.DiscoveryFilterDialog
+import com.example.arcadia.presentation.components.ScrollToTopFAB
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.home.HomeViewModel
@@ -62,7 +65,8 @@ import com.example.arcadia.ui.theme.TextSecondary
 fun DiscoverTabContent(
     viewModel: HomeViewModel,
     onGameClick: (Int) -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
+    listState: LazyListState = rememberLazyListState()
 ) {
     val screenState = viewModel.screenState
     val discoveryFilterState = viewModel.discoveryFilterState
@@ -91,6 +95,7 @@ fun DiscoverTabContent(
             }
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Surface),
@@ -434,6 +439,12 @@ fun DiscoverTabContent(
             onSave = { viewModel.saveUnsavedAddGameChanges() },
             onDismiss = { viewModel.dismissUnsavedAddGameChanges() },
             modifier = Modifier.align(Alignment.BottomCenter)
+        )
+        
+        // Scroll to top FAB
+        ScrollToTopFAB(
+            listState = listState,
+            modifier = Modifier.align(Alignment.BottomEnd)
         )
     }
 }

@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -44,6 +48,12 @@ fun NewHomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val screenState = viewModel.screenState
     val snackbarState by viewModel.snackbarState.collectAsState()
+    
+    // Preserve scroll states for each tab
+    val homeTabListState = rememberLazyListState()
+    val discoverTabListState = rememberLazyListState()
+    val libraryTabListState = rememberLazyListState()
+    val libraryTabGridState = rememberLazyGridState()
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -94,16 +104,20 @@ fun NewHomeScreen(
                         0 -> HomeTabContent(
                             viewModel = viewModel,
                             onGameClick = onGameClick,
-                            snackbarHostState = snackbarHostState
+                            snackbarHostState = snackbarHostState,
+                            listState = homeTabListState
                         )
                         1 -> DiscoverTabContent(
                             viewModel = viewModel,
                             onGameClick = onGameClick,
-                            snackbarHostState = snackbarHostState
+                            snackbarHostState = snackbarHostState,
+                            listState = discoverTabListState
                         )
                         2 -> LibraryTabContent(
                             onGameClick = onGameClick,
-                            onNavigateToAnalytics = onNavigateToAnalytics
+                            onNavigateToAnalytics = onNavigateToAnalytics,
+                            listState = libraryTabListState,
+                            gridState = libraryTabGridState
                         )
                     }
                 }
