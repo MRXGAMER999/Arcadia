@@ -109,6 +109,12 @@ class DiscoveryViewModel(
     }
 
     /**
+     * Check if the user's library is empty.
+     * Used to show appropriate empty state for AI recommendations.
+     */
+    fun isLibraryEmpty(): Boolean = gamesInLibrary.isEmpty()
+
+    /**
      * Get current filtered games as RequestState for compatibility.
      */
     fun getFilteredGames(): RequestState<List<Game>> = _discoveryState.value.games

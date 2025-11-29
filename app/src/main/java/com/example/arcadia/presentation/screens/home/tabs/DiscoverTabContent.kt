@@ -40,6 +40,7 @@ import com.example.arcadia.presentation.screens.home.components.GameListItem
 import com.example.arcadia.presentation.screens.home.components.SectionHeader
 import com.example.arcadia.presentation.screens.home.components.SmallGameCard
 import com.example.arcadia.presentation.screens.home.tabs.components.DiscoverySectionHeader
+import com.example.arcadia.presentation.screens.home.tabs.components.EmptyAIRecommendationsState
 import com.example.arcadia.presentation.screens.home.tabs.components.EmptyDiscoveryFilterResult
 import com.example.arcadia.presentation.screens.home.tabs.components.ErrorSection
 import com.example.arcadia.ui.theme.ButtonPrimary
@@ -161,8 +162,9 @@ fun DiscoverTabContent(
                 }
 
                 // Use Paging 3 for AI recommendations (default), legacy flow for other sort types
+                // Only use Paging 3 if AI is the ONLY active filter (count == 1)
                 val usePagedAI = discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION && 
-                                 !viewModel.isDiscoveryFilterActive()
+                                 discoveryFilterState.activeFilterCount == 1
                 
                 if (usePagedAI) {
                     // === PAGING 3 AI RECOMMENDATIONS ===
@@ -204,8 +206,10 @@ fun DiscoverTabContent(
                         is LoadState.NotLoading -> {
                             if (aiPagingItems.itemCount == 0) {
                                 item {
-                                    EmptyDiscoveryFilterResult(
-                                        onClearFilter = { viewModel.clearDiscoveryFilters() }
+                                    // Show AI-specific empty state instead of generic filter empty state
+                                    EmptyAIRecommendationsState(
+                                        isLibraryEmpty = viewModel.isLibraryEmpty(),
+                                        onRetry = { aiPagingItems.refresh() }
                                     )
                                 }
                             } else {

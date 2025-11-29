@@ -124,7 +124,11 @@ abstract class BaseAIRepository(
     protected data class GameRecommendationTierDto(
         val name: String,
         val tier: String = "GOOD_MATCH",
-        val why: String? = null
+        val why: String? = null,
+        val badges: List<String> = emptyList(),
+        val developer: String? = null,
+        val year: Int? = null,
+        val similarTo: List<String> = emptyList()
     )
     
     @Serializable
@@ -291,7 +295,8 @@ abstract class BaseAIRepository(
     override suspend fun getLibraryBasedRecommendations(
         games: List<GameListEntry>,
         count: Int,
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        excludeGames: List<String>
     ): Result<AIGameSuggestions> {
         if (games.isEmpty()) {
             return Result.failure(AIError.EmptyResponseError(
@@ -299,11 +304,13 @@ abstract class BaseAIRepository(
             ))
         }
 
+        // Include excludeGames in cache key to differentiate paginated requests
+        val excludeHash = excludeGames.sorted().hashCode()
         val libraryHash = games.map { "${it.rawgId}_${it.rating}_${it.status}" }.sorted().hashCode()
-        val cacheKey = "library_recs_v2_${libraryHash}_$count"
+        val cacheKey = "library_recs_v3_${libraryHash}_${count}_$excludeHash"
 
-        // Check cache
-        if (!forceRefresh) {
+        // Check cache (skip if we have exclusions - pagination request)
+        if (!forceRefresh && excludeGames.isEmpty()) {
             cacheMutex.withLock {
                 suggestionsCache.get(cacheKey)?.let { entry ->
                     if (!entry.isExpired()) {
@@ -326,7 +333,7 @@ abstract class BaseAIRepository(
 
         // Create new request with deduplication
         val deferred = CoroutineScope(Dispatchers.IO).async {
-            performLibraryBasedRecommendations(games, count, cacheKey)
+            performLibraryBasedRecommendations(games, count, cacheKey, excludeGames)
         }
 
         deduplicationMutex.withLock {
@@ -345,18 +352,31 @@ abstract class BaseAIRepository(
     private suspend fun performLibraryBasedRecommendations(
         games: List<GameListEntry>,
         count: Int,
-        cacheKey: String
+        cacheKey: String,
+        excludeGames: List<String> = emptyList()
     ): Result<AIGameSuggestions> {
         return try {
             val libraryString = buildEnhancedLibraryString(games)
-            val exclusionList = buildExclusionList(games)
-            val prompt = GeminiPrompts.libraryBasedRecommendationPromptV3(libraryString, exclusionList, count)
+            // Combine library games with already-recommended games for exclusion
+            val libraryExclusion = buildExclusionList(games)
+            val fullExclusionList = if (excludeGames.isNotEmpty()) {
+                val alreadyRecommended = excludeGames.joinToString(", ")
+                if (libraryExclusion.isNotBlank()) {
+                    "$libraryExclusion, $alreadyRecommended"
+                } else {
+                    alreadyRecommended
+                }
+            } else {
+                libraryExclusion
+            }
             
-            Log.d(TAG, "Asking ${aiClient.providerName} for library recommendations with ${games.size} games")
+            val prompt = GeminiPrompts.libraryBasedRecommendationPromptV3(libraryString, fullExclusionList, count)
+            
+            Log.d(TAG, "Asking ${aiClient.providerName} for library recommendations with ${games.size} games, excluding ${excludeGames.size} already recommended")
             
             val text = aiClient.generateJsonContent(
                 prompt = prompt,
-                temperature = 0.4f // Slightly more creative for recommendations
+                temperature = 0.25f // Slightly more creative for recommendations
             )
             
             Log.d(TAG, "AI response: ${text.take(500)}...")
@@ -388,18 +408,53 @@ abstract class BaseAIRepository(
     
     /**
      * Parse library recommendations response with multi-version fallback.
-     * Tries V4 (tiers) → V3 (reasons) → V2 (confidence) → Legacy (simple list)
+     * Tries V6 (tiers with badges) → V3 (reasons) → V2 (confidence) → Legacy (simple list)
+     * 
+     * Enhanced to preserve metadata even when tier/confidence fields are partially missing.
      */
     private fun parseLibraryRecommendationsResponse(text: String): AIGameSuggestions? {
-        // Try V4 format with tier-based classification
+        Log.d(TAG, "Parsing AI response (${text.length} chars): ${text.take(200)}...")
+        
+        // Try V6 format with tier-based classification, badges, and full metadata
         try {
             val parsed = json.decodeFromString<AIGameSuggestionsTierDto>(text)
-            if (parsed.games.isNotEmpty() && parsed.games.any { it.tier.isNotBlank() }) {
+            if (parsed.games.isNotEmpty()) {
+                val withTiers = parsed.games.count { it.tier.isNotBlank() }
+                val withReasons = parsed.games.count { !it.why.isNullOrBlank() }
+                val withBadges = parsed.games.count { it.badges.isNotEmpty() }
+                val withDevelopers = parsed.games.count { !it.developer.isNullOrBlank() }
+                val withYears = parsed.games.count { it.year != null }
+                val withSimilarTo = parsed.games.count { it.similarTo.isNotEmpty() }
+                Log.d(TAG, "V6 structure: ${parsed.games.size} games, $withTiers tiers, $withReasons reasons, $withBadges badges, $withDevelopers devs, $withYears years, $withSimilarTo similarTo")
+                
                 val recommendations = parsed.games.map { dto ->
-                    GameRecommendation.fromTierString(dto.name, dto.tier, dto.why)
+                    // Even if tier is blank, preserve all metadata fields including badges
+                    if (dto.tier.isNotBlank()) {
+                        GameRecommendation.fromTierString(
+                            name = dto.name, 
+                            tier = dto.tier, 
+                            why = dto.why,
+                            badges = dto.badges,
+                            developer = dto.developer,
+                            year = dto.year,
+                            similarTo = dto.similarTo
+                        )
+                    } else {
+                        // Tier is blank but we still have game name and metadata
+                        // Create with default confidence but preserve all fields
+                        GameRecommendation(
+                            name = dto.name, 
+                            confidence = 50, 
+                            reason = dto.why,
+                            badges = dto.badges,
+                            developer = dto.developer,
+                            year = dto.year,
+                            similarTo = dto.similarTo
+                        )
+                    }
                 }.sortedByDescending { it.confidence }
                 
-                Log.d(TAG, "Parsed V4 tier format: ${recommendations.size} games")
+                Log.d(TAG, "✓ Parsed V6 tier format: ${recommendations.size} games (with badges and full metadata)")
                 return AIGameSuggestions(
                     games = recommendations.map { it.name },
                     recommendations = recommendations,
@@ -408,7 +463,7 @@ abstract class BaseAIRepository(
                 )
             }
         } catch (e: Exception) {
-            Log.d(TAG, "V4 tier parsing failed, trying V3: ${e.message}")
+            Log.d(TAG, "V6 tier parsing failed, trying V3: ${e.javaClass.simpleName} - ${e.message}")
         }
         
         // Try V3 format with semantic match reasons
@@ -417,14 +472,19 @@ abstract class BaseAIRepository(
             if (parsed.games.isNotEmpty()) {
                 val recommendations = parsed.games.map { dto ->
                     val matchReasons = dto.reasons.mapNotNull { parseMatchReason(it) }
-                    GameRecommendation.fromReasons(
-                        name = dto.name,
-                        reasons = matchReasons,
-                        primaryReason = dto.why
-                    )
+                    if (matchReasons.isNotEmpty()) {
+                        GameRecommendation.fromReasons(
+                            name = dto.name,
+                            reasons = matchReasons,
+                            primaryReason = dto.why
+                        )
+                    } else {
+                        // No valid reasons parsed, but preserve the 'why' field
+                        GameRecommendation(name = dto.name, confidence = 50, reason = dto.why)
+                    }
                 }.sortedByDescending { it.confidence }
                 
-                Log.d(TAG, "Parsed V3 format: ${recommendations.size} games")
+                Log.d(TAG, "Parsed V3 format: ${recommendations.size} games (with metadata preservation)")
                 return AIGameSuggestions(
                     games = recommendations.map { it.name },
                     recommendations = recommendations,
@@ -444,7 +504,7 @@ abstract class BaseAIRepository(
                     .sortedByDescending { it.confidence }
                     .map { GameRecommendation.fromLegacyScore(it.name, it.confidence) }
                 
-                Log.d(TAG, "Parsed V2 format: ${recommendations.size} games")
+                Log.d(TAG, "Parsed V2 format: ${recommendations.size} games (with confidence scores)")
                 return AIGameSuggestions(
                     games = recommendations.map { it.name },
                     recommendations = recommendations,
@@ -456,13 +516,20 @@ abstract class BaseAIRepository(
             Log.d(TAG, "V2 parsing failed, trying legacy: ${e.message}")
         }
         
-        // Try legacy format (simple list)
+        // Try legacy format (simple list) - convert to GameRecommendation for consistency
         try {
             val parsed = json.decodeFromString<AIGameSuggestionsDto>(text)
             if (parsed.games.isNotEmpty()) {
-                Log.d(TAG, "Parsed legacy format: ${parsed.games.size} games")
+                // Convert legacy format to recommendations with default confidence
+                // This ensures all games get saved with proper metadata structure
+                val recommendations = parsed.games.map { gameName ->
+                    GameRecommendation(name = gameName, confidence = 50, reason = null)
+                }
+                
+                Log.d(TAG, "Parsed legacy format: ${parsed.games.size} games (converted to recommendations)")
                 return AIGameSuggestions(
                     games = parsed.games,
+                    recommendations = recommendations,
                     reasoning = parsed.reasoning,
                     fromCache = false
                 )
@@ -484,12 +551,10 @@ abstract class BaseAIRepository(
             val lowerName = gameName.lowercase()
             !libraryNames.any { libraryGame ->
                 lowerName == libraryGame ||
-                lowerName.startsWith("$libraryGame:") ||
-                lowerName.contains("$libraryGame -") ||
                 (lowerName.contains(libraryGame) && 
                  (lowerName.contains("goty") || lowerName.contains("deluxe") || 
                   lowerName.contains("ultimate") || lowerName.contains("complete") ||
-                  lowerName.contains("definitive")))
+                  lowerName.contains("definitive") || lowerName.contains("edition")))
             }
         }
         
@@ -960,7 +1025,6 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
                     GameStatus.DROPPED -> "[DROPPED]"
                     GameStatus.WANT -> "[WISHLIST]"
                     GameStatus.ON_HOLD -> "[ON HOLD]"
-                    else -> "[UNKNOWN]"
                 }
                 
                 appendLine("$statusStr ${game.name} ($ratingStr) - ${game.hoursPlayed}h")
@@ -969,6 +1033,16 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
     }
     
     private fun buildEnhancedLibraryString(games: List<GameListEntry>): String {
+        // Separate positive signal games from dropped/disliked games
+        // Dropped games with low ratings (<=5) are NEGATIVE signals - don't use for preferences
+        val droppedLowRating = games.filter { 
+            it.status == GameStatus.DROPPED && (it.rating ?: 0f) <= 5f 
+        }
+        val positiveSignalGames = games.filter { game ->
+            // Exclude dropped games with low ratings from positive signal calculations
+            !(game.status == GameStatus.DROPPED && (game.rating ?: 0f) <= 5f)
+        }
+        
         val sortedGames = games.sortedWith(
             compareByDescending<GameListEntry> { it.rating ?: 0f }
                 .thenByDescending { 
@@ -986,19 +1060,22 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
         val finishedCount = games.count { it.status == GameStatus.FINISHED }
         val playingCount = games.count { it.status == GameStatus.PLAYING }
         val droppedCount = games.count { it.status == GameStatus.DROPPED }
-        val avgRating = games.mapNotNull { it.rating }.average().takeIf { !it.isNaN() }?.let { "%.1f".format(it) } ?: "N/A"
+        // Calculate average rating ONLY from positive signal games
+        val avgRating = positiveSignalGames.mapNotNull { it.rating }.average().takeIf { !it.isNaN() }?.let { "%.1f".format(it) } ?: "N/A"
         
-        val genreFrequency = games.flatMap { it.genres }
+        // IMPORTANT: Use positiveSignalGames for preference calculations to avoid contaminating
+        // the user's taste profile with games they dropped and disliked
+        val genreFrequency = positiveSignalGames.flatMap { it.genres }
             .groupingBy { it }.eachCount().entries
             .sortedByDescending { it.value }.take(5)
             .joinToString(", ") { "${it.key}(${it.value})" }
         
-        val aspectFrequency = games.flatMap { it.aspects }
+        val aspectFrequency = positiveSignalGames.flatMap { it.aspects }
             .groupingBy { it }.eachCount().entries
             .sortedByDescending { it.value }.take(5)
             .joinToString(", ") { "${it.key}(${it.value})" }
         
-        val devFrequency = games.flatMap { it.developers }
+        val devFrequency = positiveSignalGames.flatMap { it.developers }
             .filter { it.isNotBlank() }
             .groupingBy { it }.eachCount().entries
             .sortedByDescending { it.value }
@@ -1006,7 +1083,7 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             .take(5)
             .joinToString(", ") { "${it.key}(${it.value})" }
         
-        val pubFrequency = games.flatMap { it.publishers }
+        val pubFrequency = positiveSignalGames.flatMap { it.publishers }
             .filter { it.isNotBlank() }
             .groupingBy { it }.eachCount().entries
             .sortedByDescending { it.value }
@@ -1014,12 +1091,29 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             .take(4)
             .joinToString(", ") { "${it.key}(${it.value})" }
         
+        // Build DISLIKED section for dropped games with low ratings
+        val dislikedSection = if (droppedLowRating.isNotEmpty()) {
+            val dislikedGenres = droppedLowRating.flatMap { it.genres }
+                .groupingBy { it }.eachCount().entries
+                .sortedByDescending { it.value }.take(5)
+                .joinToString(", ") { "${it.key}(${it.value})" }
+            val dislikedGames = droppedLowRating.take(10).joinToString(", ") { 
+                "${it.name}(${it.rating?.toInt() ?: 0}/10)" 
+            }
+            buildString {
+                appendLine("\n⚠️ DISLIKED/DROPPED (DO NOT recommend similar games):")
+                appendLine("Games: $dislikedGames")
+                if (dislikedGenres.isNotEmpty()) appendLine("Genres to AVOID: $dislikedGenres")
+            }
+        } else ""
+        
         val header = buildString {
             appendLine("STATS: $totalGames games | Finished:$finishedCount Playing:$playingCount Dropped:$droppedCount | AvgRating:$avgRating")
-            appendLine("TOP GENRES: $genreFrequency")
+            appendLine("TOP GENRES (from liked games only): $genreFrequency")
             if (aspectFrequency.isNotEmpty()) appendLine("LOVED ASPECTS: $aspectFrequency")
             if (devFrequency.isNotEmpty()) appendLine("FAVORITE DEVS: $devFrequency")
             if (pubFrequency.isNotEmpty()) appendLine("FAVORITE PUBS: $pubFrequency")
+            append(dislikedSection)
             appendLine()
             append("GAMES (by preference):")
         }
@@ -1058,16 +1152,14 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             .map { it.first }
 
         try {
-            // Clean up response
-            var cleanJson = response
-            if (cleanJson.contains("```")) {
-                val jsonStart = cleanJson.indexOf("{")
-                val jsonEnd = cleanJson.lastIndexOf("}") + 1
-                if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                    cleanJson = cleanJson.substring(jsonStart, jsonEnd)
-                }
+            // Clean up response - robustly extract JSON from markdown or text
+            var cleanJson = response.trim()
+            val jsonStart = cleanJson.indexOf("{")
+            val jsonEnd = cleanJson.lastIndexOf("}")
+            
+            if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                cleanJson = cleanJson.substring(jsonStart, jsonEnd + 1)
             }
-            cleanJson = cleanJson.trim()
 
             val parsed = json.decodeFromString<ProfileAnalysisDto>(cleanJson)
 

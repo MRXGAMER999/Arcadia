@@ -41,12 +41,15 @@ interface AIRepository {
      *
      * @param games List of games in the user's library
      * @param count Number of games to suggest
+     * @param forceRefresh Whether to bypass cache
+     * @param excludeGames List of game names to exclude from recommendations (already recommended)
      * @return Result containing AI game suggestions or an error
      */
     suspend fun getLibraryBasedRecommendations(
         games: List<GameListEntry>,
         count: Int = 10,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
+        excludeGames: List<String> = emptyList()
     ): Result<AIGameSuggestions>
 
     // ==================== Profile Analysis ====================

@@ -1,285 +1,124 @@
 package com.example.arcadia.data.remote
 
 /**
- * Object containing optimized prompt templates for Gemini AI.
- * Prompts are condensed for minimal token usage while maintaining quality output.
- * 
- * Token Optimization Strategy:
- * - Remove redundant instructions
- * - Use concise language
- * - Rely on model's inherent capabilities
- * - Keep examples minimal but effective
+ * Object containing natural language prompt templates for Gemini AI.
+ * Focused on qualitative analysis and human-like curation over "scoring" or "math".
  */
 object GeminiPrompts {
 
     /**
-     * Generates an optimized prompt for game suggestions.
-     * Uses Chain-of-Thought prompting to improve relevance and diversity.
-     *
-     * @param userQuery The user's natural language query
-     * @param count Number of games to suggest
-     * @return Complete prompt string
+     * Generates a prompt for general game suggestions.
+     * Persona: Expert Game Curator.
      */
     fun gameSuggestionPrompt(userQuery: String, count: Int): String {
         val currentYear = java.time.Year.now().value
         val currentMonth = java.time.LocalDate.now().monthValue
+        
         return """
-Role: Expert Video Game Curator.
-Task: Suggest $count video games based on the query: "$userQuery"
+You are a world-class Video Game Curator. The user has a request: "$userQuery"
 
-Analysis Steps (Internal):
-1. Identify the core intent (Genre? Mood? "Like [Game]"? Specific Mechanic?).
-2. Select games that match this intent, prioritizing high critical acclaim (>75 Metacritic) unless it's a specific "so bad it's good" request.
-3. Ensure diversity: Mix AAA blockbusters with high-quality indie titles / hidden gems.
-4. CRITICAL: Only include games that are ALREADY RELEASED as of $currentYear-$currentMonth. NO unreleased/upcoming games.
-5. Order the final list by relevance and quality (best matches first).
+Your task: Curate a collection of $count games that perfectly answer this request.
 
-Output Rules:
-- JSON ONLY. No markdown.
-- "games": Array of exact official English titles.
-- "reasoning": A concise explanation of the common thread connecting these suggestions to the query.
+GUIDELINES:
+1.  **Understand the Vibe**: Look beyond just keywords. What is the *feeling* the user wants?
+2.  **Quality First**: Prioritize games that are generally well-regarded or cult classics.
+3.  **Diverse Selection**: Unless the user asked for a specific franchise, try to mix big hits with hidden gems.
+4.  **Released Games Only**: Suggest ONLY games released before $currentYear-$currentMonth. Do not suggest upcoming titles.
 
-Format:
-{"games": ["Game 1", "Game 2"], "reasoning": "..."}
-    """.trimIndent()
+OUTPUT FORMAT (JSON ONLY):
+{
+  "games": ["Exact Title 1", "Exact Title 2"],
+  "reasoning": "A brief, conversational note to the user explaining why these games were chosen for them."
+}
+""".trimIndent()
     }
 
     /**
-     * Generates an optimized prompt for gaming profile analysis.
-     * ~600 tokens vs ~1200 tokens in verbose version (50% reduction)
-     *
-     * @param gameData Formatted string containing user's game statistics
-     * @return Complete prompt string
+     * Generates a prompt for gaming profile analysis.
+     * Persona: Gaming Psychologist / Profiler.
      */
     fun profileAnalysisPrompt(gameData: String): String = """
-Analyze the player's gaming profile using ONLY the data below:
+Act as a "Gaming Psychologist" and analyze the user's gaming history below.
+Your goal is to understand *who* they are as a player, not just count stats.
 
 $gameData
 
-STEP 1 — INTERNAL INTERPRETATION
-Silently extract:
-- Genre preferences (frequency, ratings, playtime)
-- Playstyle tendencies (focus vs variety, long vs short games)
-- Difficulty preference (casual, balanced, challenging)
-- Completion habits (story finisher vs explorer vs sampler)
-- Rating patterns (what they reward most: story, gameplay, art, mechanics)
-- Engagement trends (hours, spikes, abandoned games)
-Do NOT output this step.
+ANALYSIS GOALS:
+1.  **Identify the "Player DNA"**: What motivates them? Challenge? Story? Exploration? Comfort?
+2.  **Spot Patterns**: Do they binge-play? Do they drop long games? Do they stick to one developer?
+3.  **Avoid Generic Advice**: Don't say "try new genres". Be specific based on their actual behavior.
+4.  **Respect the Library**: Do not recommend games they already own (listed in the data).
 
-STEP 2 — RULES (MUST FOLLOW)
-- All insights must reference actual numbers from the data.
-- No generic statements that could apply to anyone.
-- No invented stats, no assumptions beyond trends present in the data.
-- Focus on specific behavior patterns, not clichés.
-- CRITICAL: Do NOT recommend any game listed in the "GAME LIBRARY" section. Suggest ONLY new games the user does not own.
-- Ensure all recommended games are real, released titles (no unreleased/upcoming games).
-
-STEP 3 — OUTPUT STRUCTURE  
-Respond ONLY with this exact JSON:
-
+OUTPUT FORMAT (JSON ONLY):
 {
-  "personality": "2–3 sentences describing their gaming identity using specific numbers and patterns.",
-  "play_style": "1–2 sentences describing how they play, referencing concrete behaviors.",
+  "personality": "A warm, insightful description of their gaming identity (2-3 sentences). Focus on 'why' they play.",
+  "play_style": "Describe how they approach games (e.g., 'You're a completionist who...', 'You prefer short, intense experiences...').",
   "insights": [
-    "One numeric insight about their habits or performance.",
-    "One pattern they likely haven't noticed.",
-    "One interesting comparison or anomaly in their data."
+    "A surprising observation about their habits.",
+    "A specific strength or quirk in their gaming history.",
+    "A pattern they might not have noticed themselves."
   ],
-  "recommendations": "2–3 sentences recommending genres or game types based on their highest-rated patterns. Wrap any game title like <<GAME:Title>>."
+  "recommendations": "A conversational recommendation of 2-3 broad themes or genres they might enjoy next (no specific game titles here, just ideas)."
 }
-
-No markdown. No extra commentary. JSON only.
 """.trimIndent()
 
     /**
-     * Generates an optimized prompt for library-based game recommendations.
-     * This is the legacy version - use libraryBasedRecommendationPromptV2 for better results.
-     *
-     * @param libraryGames List of games in the user's library (name and genres)
-     * @param count Number of games to suggest
-     * @return Complete prompt string
-     */
-    fun libraryBasedRecommendationPrompt(libraryGames: String, count: Int): String {
-        return libraryBasedRecommendationPromptV2(libraryGames, count)
-    }
-    
-    /**
-     * Enhanced prompt for library-based game recommendations with richer data.
-     * Includes user ratings, play status, playtime for smarter recommendations.
-     * Sorted by confidence score to show best matches first.
-     *
-     * @param libraryData Formatted string with full library data (name, rating, status, playtime, genres)
-     * @param count Number of games to suggest
-     * @return Complete prompt string
-     */
-    fun libraryBasedRecommendationPromptV2(libraryData: String, count: Int): String {
-        return libraryBasedRecommendationPromptV3(libraryData, "", count)
-    }
-    
-    /**
-     * Enhanced recommendation prompt with explicit exclusion list.
-     * Uses tier-based semantic classification instead of arithmetic scoring.
-     * This ensures AI never recommends games the user already owns,
-     * even if they weren't included in the detailed analysis.
-     *
-     * @param libraryData Formatted string with detailed library data for analysis (top games)
-     * @param exclusionList Comma-separated list of ALL game names user owns (for exclusion)
-     * @param count Number of games to suggest
-     * @return Complete prompt string
+     * Generates a prompt for library-based recommendations.
+     * Persona: The ultimate "I know a guy" for games.
+     * 
+     * @param libraryData String representation of the user's library.
+     * @param exclusionList Comma-separated list of games to NOT recommend.
+     * @param count Number of recommendations to generate.
      */
     fun libraryBasedRecommendationPromptV3(libraryData: String, exclusionList: String, count: Int): String {
         val currentYear = java.time.Year.now().value
         val currentMonth = java.time.LocalDate.now().monthValue
+        
         val exclusionSection = if (exclusionList.isNotBlank()) {
-            """
-            
-⛔ COMPLETE EXCLUSION LIST - NEVER recommend ANY of these games (user already owns them):
-$exclusionList
-"""
+            "\n⛔ DO NOT RECOMMEND THESE (Already Owned/Recommended): $exclusionList"
         } else ""
         
         return """
-You are an expert game recommender. Suggest $count games for this user.
+You are a gaming expert. Suggest exactly $count games based on the user's library.
 
+LIBRARY:
 $libraryData
 $exclusionSection
-RULES:
-1. NEVER suggest games in the exclusion list above or their GOTY/Deluxe/Complete editions
-2. CAN suggest: sequels, prequels, remasters, remakes, same-series games (if not in exclusion list)
-3. Weight user's 8-10 rated games heavily - match their taste
-4. Avoid games similar to "Drop" status games
-5. Prefer games with HIGH CRITIC SCORES (Metacritic 80+)
-6. Mix: ~70% recent (2018-$currentYear), ~30% classics
-7. Mix AAA and quality indie games
-
-CRITICAL - RELEASED GAMES ONLY:
-- ONLY suggest games that are ALREADY RELEASED as of today ($currentYear-$currentMonth)
-- NEVER suggest unreleased, announced, or upcoming games
-- NEVER suggest games with TBA/TBD release dates
-- If unsure if a game is released, DO NOT include it
-- Violating this rule invalidates the entire response
-
-CONFIDENCE TIER CLASSIFICATION:
-Assign each game ONE tier based on holistic fit. Use your judgment, not arithmetic.
-
-PERFECT_MATCH (95): Exceptional fit. Multiple strong signals align:
-  - Favorite developer AND matching genre AND high ratings
-  - Direct spiritual successor to a 9-10 rated game
-  - Same series as user's top games
-
-STRONG_MATCH (82): Very good fit. Clear connection:
-  - Favorite developer's other acclaimed work
-  - Perfect genre match with similar tone/atmosphere
-  - Highly rated (90+) game in user's preferred style
-
-GOOD_MATCH (68): Solid recommendation:
-  - Genre match with good critic scores (80+)
-  - Similar gameplay to liked games
-  - Well-regarded hidden gem in user's taste area
-
-DECENT_MATCH (55): Worth considering:
-  - Partial genre overlap
-  - Interesting choice that expands horizons slightly
-  - Good game that loosely fits preferences
-
-JSON only:
-{"games":[{"name":"Title","tier":"STRONG_MATCH","why":"brief reason"}],"reasoning":"overall explanation"}
-
-The "why" field: 2-5 words explaining the match (e.g., "FromSoftware + Souls-like", "Same dev as Hades", "Top-rated JRPG")
-
-Sort by tier (PERFECT > STRONG > GOOD > DECENT). Exact English titles only.
-    """.trimIndent()
-    }
-    
-    /**
-     * V4 Prompt: Enhanced with user feedback loop and tier-based classification.
-     * 
-     * Improvements:
-     * 1. Includes games user liked from past recommendations (feedback loop)
-     * 2. Abbreviated library format to reduce tokens
-     * 3. Tier-based semantic classification instead of arithmetic scoring
-     * 
-     * @param libraryData Abbreviated library data (name|genre|rating|hours format)
-     * @param exclusionList Games to never recommend (user owns them)
-     * @param likedRecommendations Games user added from past AI recommendations
-     * @param count Number of games to suggest
-     * @return Complete prompt string
-     */
-    fun libraryBasedRecommendationPromptV4(
-        libraryData: String, 
-        exclusionList: String, 
-        likedRecommendations: String,
-        count: Int
-    ): String {
-        val currentYear = java.time.Year.now().value
-        val currentMonth = java.time.LocalDate.now().monthValue
-        
-        val exclusionSection = if (exclusionList.isNotBlank()) {
-            "\n⛔ EXCLUSION (user owns): $exclusionList"
-        } else ""
-        
-        val feedbackSection = if (likedRecommendations.isNotBlank()) {
-            "\n✅ USER LIKED THESE RECOMMENDATIONS: $likedRecommendations\n→ Similar games to these should be PERFECT_MATCH or STRONG_MATCH!"
-        } else ""
-        
-        return """
-Expert game recommender. Suggest $count games.
-
-📚 LIBRARY (name|genre|rating|hours):
-$libraryData
-$exclusionSection
-$feedbackSection
 
 RULES:
-1. NEVER recommend games in exclusion list or their editions (GOTY/Deluxe/etc)
-2. CAN suggest: sequels, prequels, remasters if not excluded
-3. Weight 8-10 rated games heavily
-4. Avoid games like "Drop" status ones
-5. Prefer Metacritic 80+ games
-6. Mix: 70% recent (2018-$currentYear), 30% classics
-7. RELEASED ONLY as of $currentYear-$currentMonth. NO upcoming games.
+1. NO games from exclusion list above
+2. Only released games (as of $currentYear-$currentMonth)
+3. Match their favorite developers/genres
+4. Mix: 60% modern (2018+), 30% classic (2010-2017), 10% older gems
 
-CONFIDENCE TIERS (assign ONE per game):
-PERFECT_MATCH: Exceptional fit - favorite dev + genre match + high ratings, or direct spiritual successor to 9-10 rated game
-STRONG_MATCH: Very good fit - favorite dev's work, perfect genre match, or 90+ Metacritic in user's style
-GOOD_MATCH: Solid pick - genre match with 80+ scores, similar gameplay to liked games
-DECENT_MATCH: Worth trying - partial overlap, expands horizons slightly
+TIERS:
+- PERFECT_MATCH: Same studio as favorite or spiritual successor
+- STRONG_MATCH: Matches 3+ aspects of taste
+- GOOD_MATCH: Matches genre + quality
+- DECENT_MATCH: Expands horizons
 
-JSON:{"games":[{"name":"Title","tier":"STRONG_MATCH","why":"brief reason"}],"reasoning":"brief"}
-"why": 2-5 words (e.g., "FromSoftware + Souls-like", "Top JRPG")
-Sort by tier. Exact titles.
-    """.trimIndent()
+OUTPUT JSON:
+{
+  "games": [
+    {
+      "name": "Exact Game Title",
+      "tier": "PERFECT_MATCH",
+      "why": "Short 1-2 sentence reason connecting to their library",
+      "badges": ["Tag1", "Tag2"],
+      "developer": "Studio Name",
+      "year": 2022,
+      "similarTo": ["Game1", "Game2"]
+    }
+  ],
+  "reasoning": "1 sentence summary"
+}
+
+IMPORTANT:
+- "why" field: 1-2 SHORT sentences max. Be concise!
+- badges: 2-3 short tags (2-4 words each)
+- name must match RAWG database exactly
+""".trimIndent()
     }
     
-    /**
-     * Build abbreviated library string for token optimization.
-     * Format: "GameName|RPG,Action|9|150h" instead of verbose descriptions.
-     * 
-     * Reduces token usage by ~40% compared to V3 format.
-     */
-    fun buildAbbreviatedLibraryString(
-        games: List<GameLibraryItem>,
-        maxGames: Int = 30
-    ): String {
-        return games
-            .sortedByDescending { (it.rating ?: 0f) * (it.hoursPlayed ?: 1) }
-            .take(maxGames)
-            .joinToString("\n") { game ->
-                val genres = game.genres.take(2).joinToString(",")
-                val rating = game.rating?.toInt() ?: "?"
-                val hours = game.hoursPlayed?.let { "${it}h" } ?: "?"
-                "${game.name}|$genres|$rating|$hours"
-            }
-    }
-    
-    /**
-     * Simple data class for library items (to avoid domain model dependency)
-     */
-    data class GameLibraryItem(
-        val name: String,
-        val genres: List<String>,
-        val rating: Float?,
-        val hoursPlayed: Int?,
-        val status: String?
-    )
+    // Removed unused "V2", "V4" and helper methods to keep the file clean and focused.
 }

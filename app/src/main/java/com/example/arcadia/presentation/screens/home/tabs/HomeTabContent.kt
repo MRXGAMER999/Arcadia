@@ -38,6 +38,9 @@ import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.util.RequestState
 
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+
 /**
  * Home tab content displaying Popular Games, Upcoming Games, and Playlist Recommendations.
  * Extracted from HomeTabsNavigation for better separation of concerns.
@@ -53,11 +56,17 @@ fun HomeTabContent(
     val addGameSheetState by viewModel.addGameSheetState.collectAsState()
     val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
     val pullToRefreshState = rememberPullToRefreshState()
+    
+    // Use offline-capable Paging 3 flow for recommendations
+    val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = screenState.isRefreshing,
-            onRefresh = { viewModel.refreshHome() },
+            onRefresh = { 
+                viewModel.refreshHome()
+                aiPagingItems.refresh() // Also refresh AI recommendations
+            },
             modifier = Modifier.fillMaxSize(),
             state = pullToRefreshState,
             indicator = {
@@ -169,25 +178,18 @@ fun HomeTabContent(
                     )
                 }
                 
-                // Recommended Games Section
-                when (val state = screenState.recommendedGames) {
-                    is RequestState.Loading -> {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LoadingIndicator(color = ButtonPrimary)
-                            }
-                        }
-                    }
-                    is RequestState.Success -> {
-                        items(
-                            items = state.data.take(3),
-                            key = { it.id }
-                        ) { game ->
+                // Recommended Games Section (Paging 3 with Offline Cache)
+                val loadState = aiPagingItems.loadState.refresh
+                
+                // Check if we have cached data to show
+                if (aiPagingItems.itemCount > 0) {
+                    // Show cached data (limit to 3)
+                    items(
+                        count = minOf(aiPagingItems.itemCount, 3),
+                        key = { index -> aiPagingItems[index]?.id ?: index }
+                    ) { index ->
+                        val game = aiPagingItems[index]
+                        if (game != null) {
                             GameListItem(
                                 game = game,
                                 isInLibrary = viewModel.isGameInLibrary(game.id),
@@ -199,15 +201,31 @@ fun HomeTabContent(
                             )
                         }
                     }
-                    is RequestState.Error -> {
-                        item {
-                            ErrorSection(
-                                message = state.message,
-                                onRetry = { viewModel.retry() }
-                            )
+                } else {
+                    // No data, handle loading/error states
+                    when (loadState) {
+                        is LoadState.Loading -> {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LoadingIndicator(color = ButtonPrimary)
+                                }
+                            }
                         }
+                        is LoadState.Error -> {
+                            item {
+                                ErrorSection(
+                                    message = loadState.error.localizedMessage ?: "Failed to load recommendations",
+                                    onRetry = { aiPagingItems.retry() }
+                                )
+                            }
+                        }
+                        else -> {} // Not loading, no error, no items (empty)
                     }
-                    else -> {}
                 }
             }
         }
