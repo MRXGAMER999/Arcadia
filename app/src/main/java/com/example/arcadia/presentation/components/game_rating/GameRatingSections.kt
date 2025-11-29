@@ -580,7 +580,8 @@ fun SlideToRateSection(
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
     sliderValue: Float,
-    onSliderChange: (Float) -> Unit
+    onSliderChange: (Float) -> Unit,
+    onClearRating: (() -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
     var lastHapticValue by remember { mutableFloatStateOf(-1f) }
@@ -785,7 +786,7 @@ fun SlideToRateSection(
                 )
 
                 Slider(
-                    value = sliderValue,
+                    value = if (sliderValue == 0f) 0.1f else sliderValue,
                     onValueChange = { newValue ->
                         // Trigger haptic feedback when crossing integer boundaries
                         val roundedValue = (newValue * 2).roundToInt() / 2f // Round to nearest 0.5
@@ -795,7 +796,7 @@ fun SlideToRateSection(
                         }
                         onSliderChange(newValue)
                     },
-                    valueRange = 0f..10f,
+                    valueRange = 0.1f..10f,
                     modifier = Modifier.fillMaxWidth(),
                     colors = SliderDefaults.colors(
                         thumbColor = animatedThumbColor,
@@ -806,13 +807,35 @@ fun SlideToRateSection(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "0",
+                        text = "0.1",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary.copy(alpha = 0.6f)
                     )
+                    
+                    // Clear rating text - only show when there's a rating
+                    AnimatedVisibility(
+                        visible = sliderValue > 0,
+                        enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.8f),
+                        exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.8f)
+                    ) {
+                        Text(
+                            text = "Clear Rating",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFE57373),
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .combinedClickable(
+                                    onClick = { onClearRating?.invoke() ?: onSliderChange(0f) }
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    
                     Text(
                         text = "10",
                         style = MaterialTheme.typography.bodySmall,

@@ -190,7 +190,28 @@ fun GameRatingSheet(
                     gameName = game.name,
                     rating = if (sliderValue > 0) String.format("%.1f", sliderValue) else "Not Rated",
                     ratingDescription = getRatingDescription(sliderValue),
-                    onClose = onDismiss
+                    onClose = {
+                        // Same behavior as dismissing the sheet
+                        if (saveClicked || isRemovalInProgress) {
+                            onDismiss()
+                            return@SheetTitle
+                        }
+                        
+                        val currentHasChanges = hasChanges()
+                        
+                        if (!isInLibrary) {
+                            if (currentHasChanges && onDismissWithUnsavedChanges != null) {
+                                onDismissWithUnsavedChanges(buildCurrentEntry())
+                            }
+                            onDismiss()
+                            return@SheetTitle
+                        }
+                        
+                        if (currentHasChanges && onDismissWithUnsavedChanges != null) {
+                            onDismissWithUnsavedChanges(buildCurrentEntry())
+                        }
+                        onDismiss()
+                    }
                 )
 
                 // Hide Playtime and Aspects sections for "Want to Play" games
@@ -252,7 +273,8 @@ fun GameRatingSheet(
                     isExpanded = isSlideToRateExpanded,
                     onToggleExpanded = { isSlideToRateExpanded = !isSlideToRateExpanded },
                     sliderValue = sliderValue,
-                    onSliderChange = { sliderValue = it }
+                    onSliderChange = { sliderValue = it },
+                    onClearRating = { sliderValue = 0f }
                 )
                 
                 Spacer(modifier = Modifier.height(24.dp))
