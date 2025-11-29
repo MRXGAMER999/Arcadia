@@ -1,6 +1,7 @@
 package com.example.arcadia.presentation.screens.home
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
@@ -144,6 +145,13 @@ class HomeViewModel(
     
     // Track game IDs that came from AI recommendations (for feedback)
     private val aiRecommendedGameIds = mutableSetOf<Int>()
+
+    // Scroll states for Paging 3 tabs (Home and Discover)
+    // We store them in ViewModel to ensure they survive navigation even if rememberSaveable fails
+    var homeScrollIndex by mutableIntStateOf(0)
+    var homeScrollOffset by mutableIntStateOf(0)
+    var discoverScrollIndex by mutableIntStateOf(0)
+    var discoverScrollOffset by mutableIntStateOf(0)
 
     init {
         // Load saved discovery filter preferences

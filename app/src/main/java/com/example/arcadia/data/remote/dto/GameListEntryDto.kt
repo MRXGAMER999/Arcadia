@@ -18,5 +18,6 @@ data class GameListEntryDto(
     val review: String = "",
     val hoursPlayed: Int = 0,
     val aspects: List<String> = emptyList(),
-    val releaseDate: String? = null
+    val releaseDate: String? = null,
+    val importance: Int = 0 // Custom ordering within same rating tier
 )

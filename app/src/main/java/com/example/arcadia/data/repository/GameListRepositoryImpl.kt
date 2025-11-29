@@ -417,8 +417,13 @@ class GameListRepositoryImpl : GameListRepository {
                 return RequestState.Error("Rating must be between $MIN_RATING and $MAX_RATING")
             }
             
+            // Round to one decimal place (e.g., 8.976 -> 9.0)
+            val roundedRating = rating?.let { 
+                (it * 10).toInt() / 10f 
+            }
+            
             val updates = mapOf(
-                "rating" to rating,
+                "rating" to roundedRating,
                 "updatedAt" to System.currentTimeMillis()
             )
             
@@ -512,6 +517,38 @@ class GameListRepositoryImpl : GameListRepository {
         } catch (e: Exception) {
             Log.e(TAG, "Error updating game entry: ${e.message}", e)
             RequestState.Error("Failed to update game: ${e.message}")
+        }
+    }
+    
+    override suspend fun updateGamesImportance(updates: Map<String, Int>): RequestState<Unit> {
+        return try {
+            val userId = getCurrentUserId()
+                ?: return RequestState.Error("User not authenticated")
+            
+            if (updates.isEmpty()) {
+                return RequestState.Success(Unit)
+            }
+            
+            // Use batch write for efficiency
+            val batch = firestore.batch()
+            val collection = getUserGameListCollection(userId)
+            
+            updates.forEach { (entryId, importance) ->
+                val docRef = collection.document(entryId)
+                batch.update(docRef, mapOf(
+                    "importance" to importance,
+                    "updatedAt" to System.currentTimeMillis()
+                ))
+            }
+            
+            batch.commit().await()
+            
+            Log.d(TAG, "Updated importance for ${updates.size} games")
+            RequestState.Success(Unit)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating games importance: ${e.message}", e)
+            RequestState.Error("Failed to update game order: ${e.message}")
         }
     }
     

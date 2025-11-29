@@ -3,12 +3,15 @@ package com.example.arcadia.navigation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.example.arcadia.presentation.screens.authScreen.AuthScreen
 import com.example.arcadia.presentation.screens.detailsScreen.DetailsScreen
@@ -27,7 +30,6 @@ object AuthScreenKey : NavKey
 
 @Serializable
 object HomeScreenKey : NavKey
-
 @Serializable
 object EditProfileScreenKey : NavKey
 
@@ -70,6 +72,11 @@ fun NavigationRoot(
             .fillMaxSize()
             .background(Surface), // Set dark blue background to prevent white flash
         backStack = backStack,
+        // Add the decorator that preserves saveable state (including scroll positions)
+        // for each NavEntry while it's on the back stack
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator()
+        ),
         entryProvider = { key ->
             when (key) {
                 is AuthScreenKey -> {

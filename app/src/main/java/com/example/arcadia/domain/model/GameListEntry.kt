@@ -22,7 +22,8 @@ data class GameListEntry(
     val review: String = "", // User's review/notes
     val hoursPlayed: Int = 0, // Hours played
     val aspects: List<String> = emptyList(), // List of best aspects tags
-    val releaseDate: String? = null // Release date from RAWG API (YYYY-MM-DD format)
+    val releaseDate: String? = null, // Release date from RAWG API (YYYY-MM-DD format)
+    val importance: Int = 0 // Custom ordering within same rating tier (higher = more important, shows first)
 )
 
 /**

@@ -33,6 +33,9 @@ data class MyGamesScreenState(
     val showUnsavedChangesSnackbar: Boolean = false,
     val unsavedChangesGame: GameListEntry? = null,
     val originalGameBeforeEdit: GameListEntry? = null, // For reopening the sheet with unsaved data
+    // Reorder mode - only enabled when sorting by rating and user has 5+ games with 10/10 rating
+    val isReorderModeEnabled: Boolean = false,
+    val canReorder: Boolean = false, // Whether reordering is possible (5+ 10/10 games + rating sort)
 )
 
 /**
@@ -190,7 +193,7 @@ class MyGamesViewModel(
     /**
      * Applies current filter and sort settings to allGames and updates the displayed list.
      * Uses FilterGamesUseCase and SortGamesUseCase for business logic.
-     * Also persists filter preferences.
+     * Also persists filter preferences and checks if reordering is possible.
      */
     private fun applyCurrentFilters() {
         val filteredGames = filterGamesUseCase(
@@ -199,7 +202,24 @@ class MyGamesViewModel(
             statuses = screenState.quickSettingsState.selectedStatuses
         )
         val sortedGames = sortGamesUseCase(filteredGames, screenState.sortOrder)
-        screenState = screenState.copy(games = RequestState.Success(sortedGames))
+        
+        // Check if reordering is possible (2+ games with the same rating AND sorting by rating)
+        val isRatingSorted = screenState.sortOrder == SortOrder.RATING_HIGH || screenState.sortOrder == SortOrder.RATING_LOW
+        // Group games by rating and check if any rating has 2+ games
+        val hasReorderableGames = sortedGames
+            .filter { it.rating != null }
+            .groupBy { it.rating }
+            .any { (_, games) -> games.size >= 2 }
+        val canReorder = isRatingSorted && hasReorderableGames
+        
+        android.util.Log.d("MyGamesVM", "applyCurrentFilters: isRatingSorted=$isRatingSorted, hasReorderableGames=$hasReorderableGames, canReorder=$canReorder")
+        
+        screenState = screenState.copy(
+            games = RequestState.Success(sortedGames),
+            canReorder = canReorder,
+            // Disable reorder mode if no longer valid
+            isReorderModeEnabled = if (!canReorder) false else screenState.isReorderModeEnabled
+        )
         
         // Persist filter preferences
         with(screenState.quickSettingsState) {
@@ -577,6 +597,108 @@ class MyGamesViewModel(
      */
     fun isGamePendingDeletion(gameId: String): Boolean {
         return undoState.value.item?.id == gameId
+    }
+    
+    /**
+     * Toggle reorder mode on/off.
+     * Only works when canReorder is true (5+ games with 10/10 rating and rating sort active).
+     */
+    fun toggleReorderMode() {
+        if (screenState.canReorder) {
+            screenState = screenState.copy(isReorderModeEnabled = !screenState.isReorderModeEnabled)
+        }
+    }
+    
+    /**
+     * Exit reorder mode.
+     */
+    fun exitReorderMode() {
+        screenState = screenState.copy(isReorderModeEnabled = false)
+    }
+    
+    /**
+     * Handle reordering of games with the same rating.
+     * This method is called when a user drags a game to a new position within games that have the same rating.
+     * It recalculates importance values and saves them to Firebase.
+     * 
+     * @param fromIndex The original index of the game being moved
+     * @param toIndex The new index where the game should be placed
+     */
+    fun onGameReorder(fromIndex: Int, toIndex: Int) {
+        val currentGames = (screenState.games as? RequestState.Success)?.data ?: return
+        if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0) return
+        if (fromIndex >= currentGames.size || toIndex >= currentGames.size) return
+        
+        val movedGame = currentGames[fromIndex]
+        
+        // Only allow reordering rated games
+        if (movedGame.rating == null) return
+        
+        val targetRating = movedGame.rating
+        
+        // Create new list with reordered games
+        val mutableGames = currentGames.toMutableList()
+        mutableGames.removeAt(fromIndex)
+        val adjustedToIndex = toIndex.coerceIn(0, mutableGames.size)
+        mutableGames.add(adjustedToIndex, movedGame)
+        
+        // Recalculate importance for ALL games with the SAME rating based on their new positions
+        // This ensures games stay in the order the user set when sorted by rating
+        val gamesWithSameRating = mutableGames.filter { it.rating == targetRating }
+        val importanceUpdates = mutableMapOf<String, Int>()
+        
+        val updatedGames = mutableGames.map { game ->
+            if (game.rating == targetRating) {
+                // Calculate new importance: higher index in same-rating group = lower importance
+                val positionInGroup = gamesWithSameRating.indexOf(game)
+                val newImportance = (gamesWithSameRating.size - positionInGroup) * 1000
+                importanceUpdates[game.id] = newImportance
+                game.copy(importance = newImportance)
+            } else {
+                game
+            }
+        }
+        
+        // Update UI immediately (optimistic update)
+        screenState = screenState.copy(
+            games = RequestState.Success(updatedGames),
+            allGames = screenState.allGames.map { existing ->
+                updatedGames.find { it.id == existing.id } ?: existing
+            }
+        )
+        
+        // Save to Firebase
+        saveImportanceUpdates(importanceUpdates)
+    }
+    
+    /**
+     * Save importance updates to Firebase.
+     */
+    private fun saveImportanceUpdates(updates: Map<String, Int>) {
+        launchWithKey("save_importance") {
+            when (val result = gameListRepository.updateGamesImportance(updates)) {
+                is RequestState.Success -> {
+                    // Success - UI already updated
+                }
+                is RequestState.Error -> {
+                    // Revert on error by reloading
+                    loadGames()
+                    showTemporaryNotification(
+                        setNotification = {
+                            screenState = screenState.copy(
+                                showSuccessNotification = true,
+                                notificationMessage = "Failed to save order"
+                            )
+                        },
+                        clearNotification = {
+                            screenState = screenState.copy(showSuccessNotification = false)
+                        },
+                        duration = NOTIFICATION_DURATION_MS
+                    )
+                }
+                else -> {}
+            }
+        }
     }
     
     /**

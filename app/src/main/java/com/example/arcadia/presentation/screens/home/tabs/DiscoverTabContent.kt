@@ -56,6 +56,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.ui.theme.TextSecondary
 
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filter
+
 /**
  * Discover tab content displaying New Releases and Recommended games with filters.
  * Extracted from HomeTabsNavigation for better separation of concerns.
@@ -77,6 +86,35 @@ fun DiscoverTabContent(
     
     // Collect Paging 3 items at composable scope (must be called unconditionally)
     val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
+
+    // Manage scroll state manually for Paging 3 using ViewModel state
+    // This ensures persistence even if the View is destroyed/recreated
+    
+    // Track if we are currently restoring the scroll position
+    var isRestoring by remember { mutableStateOf(viewModel.discoverScrollIndex > 0) }
+    
+    // Cancel restoration if user manually scrolls
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.isScrollInProgress }
+            .filter { it }
+            .collect { isRestoring = false }
+    }
+    
+    // Restore scroll position when items are available
+    LaunchedEffect(aiPagingItems.itemCount) {
+        if (isRestoring && aiPagingItems.itemCount > viewModel.discoverScrollIndex) {
+            listState.scrollToItem(viewModel.discoverScrollIndex, viewModel.discoverScrollOffset)
+            isRestoring = false
+        }
+    }
+    
+    // Save scroll position to ViewModel
+    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        if (!isRestoring) {
+            viewModel.discoverScrollIndex = listState.firstVisibleItemIndex
+            viewModel.discoverScrollOffset = listState.firstVisibleItemScrollOffset
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
