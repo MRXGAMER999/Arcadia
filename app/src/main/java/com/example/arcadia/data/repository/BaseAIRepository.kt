@@ -164,6 +164,21 @@ abstract class BaseAIRepository(
         val recommendations: String
     )
     
+    /**
+     * DTO for the new hybrid profile analysis format.
+     * Only the recommendations section is JSON.
+     */
+    @Serializable
+    protected data class ProfileRecommendationDto(
+        val games: List<ProfileGameRecommendation> = emptyList()
+    )
+    
+    @Serializable
+    protected data class ProfileGameRecommendation(
+        val name: String,
+        val reason: String = ""
+    )
+    
     @Serializable
     protected data class StudioExpansionResponse(
         val studios: List<StudioInfo>
@@ -1151,8 +1166,16 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             .take(3)
             .map { it.first }
 
+        // Try new hybrid format first (section markers with JSON recommendations)
+        val hybridResult = parseHybridProfileFormat(response, topGenres)
+        if (hybridResult != null) {
+            Log.d(TAG, "Successfully parsed hybrid profile format")
+            return hybridResult
+        }
+        
+        // Fallback to legacy full-JSON format
         try {
-            // Clean up response - robustly extract JSON from markdown or text
+            Log.d(TAG, "Hybrid parsing failed, trying legacy JSON format")
             var cleanJson = response.trim()
             val jsonStart = cleanJson.indexOf("{")
             val jsonEnd = cleanJson.lastIndexOf("}")
@@ -1171,7 +1194,7 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
                 recommendations = parsed.recommendations
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error parsing AI response", e)
+            Log.e(TAG, "Error parsing AI response (both formats failed)", e)
             
             return GameInsights(
                 personalityAnalysis = "You're building your gaming journey! Keep adding games to discover your unique gaming identity.",
@@ -1181,6 +1204,125 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
                 recommendations = "Keep adding games to your library for personalized recommendations!"
             )
         }
+    }
+    
+    /**
+     * Parse the new hybrid profile format with section markers.
+     * Format:
+     * ===PERSONALITY===
+     * text...
+     * ===PLAY_STYLE===
+     * text...
+     * ===INSIGHTS===
+     * - bullet point
+     * - bullet point
+     * ===RECOMMENDATIONS===
+     * {"games":[...]}
+     */
+    private fun parseHybridProfileFormat(response: String, topGenres: List<String>): GameInsights? {
+        try {
+            // Extract sections using markers
+            val personalityMatch = Regex("===PERSONALITY===\\s*([\\s\\S]*?)(?====|$)").find(response)
+            val playStyleMatch = Regex("===PLAY_STYLE===\\s*([\\s\\S]*?)(?====|$)").find(response)
+            val insightsMatch = Regex("===INSIGHTS===\\s*([\\s\\S]*?)(?====|$)").find(response)
+            val recommendationsMatch = Regex("===RECOMMENDATIONS===\\s*([\\s\\S]*?)$").find(response)
+            
+            // Need at least personality and play_style
+            if (personalityMatch == null || playStyleMatch == null) {
+                Log.d(TAG, "Hybrid format: missing required sections (personality=${personalityMatch != null}, playStyle=${playStyleMatch != null})")
+                return null
+            }
+            
+            val personality = personalityMatch.groupValues[1].trim()
+            val playStyle = playStyleMatch.groupValues[1].trim()
+            
+            // Parse insights as bullet points
+            val insightsText = insightsMatch?.groupValues?.get(1)?.trim() ?: ""
+            val insights = insightsText
+                .split("\n")
+                .map { it.trim().removePrefix("-").removePrefix("•").trim() }
+                .filter { it.isNotBlank() }
+                .ifEmpty { listOf("Your gaming patterns are unique!", "Keep playing to discover more insights.") }
+            
+            // Parse recommendations JSON
+            val recommendationsText = recommendationsMatch?.groupValues?.get(1)?.trim() ?: ""
+            val recommendations = parseRecommendationsJson(recommendationsText)
+            
+            Log.d(TAG, "Hybrid format parsed: personality=${personality.take(50)}..., insights=${insights.size}, recs=${recommendations.size}")
+            
+            // Format recommendations with <<GAME:Title>> tags for clickable display
+            val formattedRecommendations = if (recommendations.isNotEmpty()) {
+                recommendations.joinToString("\n\n") { rec ->
+                    "<<GAME:${rec.name}>> - ${rec.reason}"
+                }
+            } else {
+                "Keep adding games to your library for personalized recommendations!"
+            }
+            
+            return GameInsights(
+                personalityAnalysis = personality,
+                preferredGenres = topGenres,
+                playStyle = playStyle,
+                funFacts = insights,
+                recommendations = formattedRecommendations
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing hybrid profile format", e)
+            return null
+        }
+    }
+    
+    /**
+     * Parse the JSON recommendations from the hybrid format.
+     * Handles various edge cases like markdown code blocks.
+     */
+    private fun parseRecommendationsJson(text: String): List<ProfileGameRecommendation> {
+        if (text.isBlank()) return emptyList()
+        
+        try {
+            // Remove markdown code blocks if present
+            var cleanJson = text
+                .replace("```json", "")
+                .replace("```", "")
+                .trim()
+            
+            // Find the JSON object
+            val jsonStart = cleanJson.indexOf("{")
+            val jsonEnd = cleanJson.lastIndexOf("}")
+            
+            if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                cleanJson = cleanJson.substring(jsonStart, jsonEnd + 1)
+            }
+            
+            val parsed = json.decodeFromString<ProfileRecommendationDto>(cleanJson)
+            return parsed.games
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse recommendations JSON: ${e.message}")
+            
+            // Try to extract game names even if JSON is malformed
+            return extractGameNamesFromText(text)
+        }
+    }
+    
+    /**
+     * Fallback: extract game names from malformed JSON or plain text.
+     */
+    private fun extractGameNamesFromText(text: String): List<ProfileGameRecommendation> {
+        val games = mutableListOf<ProfileGameRecommendation>()
+        
+        // Try to find "name": "..." patterns
+        val namePattern = Regex("\"name\"\\s*:\\s*\"([^\"]+)\"")
+        val reasonPattern = Regex("\"reason\"\\s*:\\s*\"([^\"]+)\"")
+        
+        val names = namePattern.findAll(text).map { it.groupValues[1] }.toList()
+        val reasons = reasonPattern.findAll(text).map { it.groupValues[1] }.toList()
+        
+        names.forEachIndexed { index, name ->
+            val reason = reasons.getOrNull(index) ?: "A great match for your taste!"
+            games.add(ProfileGameRecommendation(name, reason))
+        }
+        
+        return games
     }
 
     companion object {

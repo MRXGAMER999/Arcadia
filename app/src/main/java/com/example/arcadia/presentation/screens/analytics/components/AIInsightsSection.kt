@@ -50,9 +50,13 @@ import com.example.arcadia.ui.theme.YellowAccent
 
 /**
  * AI Insights section containing the main AI analysis card.
+ * @param onGameClick Callback when a game name is clicked, navigates to search with that game name
  */
 @Composable
-fun AIInsightsSection(state: AnalyticsState) {
+fun AIInsightsSection(
+    state: AnalyticsState,
+    onGameClick: (String) -> Unit = {}
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -119,7 +123,10 @@ fun AIInsightsSection(state: AnalyticsState) {
                         ErrorInsightsState(error = state.insightsError)
                     }
                     state.aiInsights != null -> {
-                        AIInsightsContent(insights = state.aiInsights)
+                        AIInsightsContent(
+                            insights = state.aiInsights,
+                            onGameClick = onGameClick
+                        )
                     }
                     state.totalGames == 0 -> {
                         EmptyInsightsState()
@@ -314,7 +321,10 @@ fun ErrorInsightsState(error: String) {
 }
 
 @Composable
-fun AIInsightsContent(insights: GameInsights) {
+fun AIInsightsContent(
+    insights: GameInsights,
+    onGameClick: (String) -> Unit = {}
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -390,13 +400,10 @@ fun AIInsightsContent(insights: GameInsights) {
             }
         }
 
-        // Recommendations
-        MagicalInsightCard(
-            icon = R.drawable.ai_analysis,
-            title = "Recommended For You",
-            content = insights.recommendations,
-            backgroundColor = Color(0xFF2E7D32).copy(alpha = 0.3f),
-            accentColor = Color(0xFF66BB6A)
+        // Recommendations - with clickable game names
+        ClickableRecommendationsCard(
+            recommendations = insights.recommendations,
+            onGameClick = onGameClick
         )
     }
 }
@@ -536,4 +543,132 @@ private fun parseGameNames(text: String): List<TextPart> {
     }
 
     return parts
+}
+
+/**
+ * Recommendations card with clickable game names.
+ * Game names wrapped in <<GAME:Title>> tags become clickable buttons
+ * that navigate to search with that game name.
+ */
+@Composable
+fun ClickableRecommendationsCard(
+    recommendations: String,
+    onGameClick: (String) -> Unit
+) {
+    val accentColor = Color(0xFF66BB6A)
+    val backgroundColor = Color(0xFF2E7D32).copy(alpha = 0.3f)
+    
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = backgroundColor
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Box {
+            // Magical glow effect
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = 0.2f),
+                                Color.Transparent
+                            ),
+                            radius = 400f
+                        )
+                    )
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ai_analysis),
+                        contentDescription = "Recommendations",
+                        modifier = Modifier.size(20.dp),
+                        tint = accentColor
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Recommended For You",
+                        color = TextSecondary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Parse and display recommendations with clickable game names
+                ClickableGameText(
+                    text = recommendations,
+                    onGameClick = onGameClick
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Text component that makes game names (wrapped in <<GAME:Title>>) clickable.
+ */
+@Composable
+private fun ClickableGameText(
+    text: String,
+    onGameClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val gameNameColor = ButtonPrimary
+    val parts = remember(text) { parseGameNames(text) }
+    
+    // Build annotated string with clickable annotations
+    val annotatedString = buildAnnotatedString {
+        parts.forEach { part ->
+            when (part) {
+                is TextPart.Normal -> {
+                    withStyle(
+                        style = SpanStyle(
+                            color = TextSecondary.copy(alpha = 0.9f),
+                            fontSize = 13.sp
+                        )
+                    ) {
+                        append(part.text)
+                    }
+                }
+                is TextPart.GameName -> {
+                    // Add clickable annotation
+                    pushStringAnnotation(tag = "GAME", annotation = part.text)
+                    withStyle(
+                        style = SpanStyle(
+                            color = gameNameColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                        )
+                    ) {
+                        append(part.text)
+                    }
+                    pop()
+                }
+            }
+        }
+    }
+    
+    androidx.compose.foundation.text.ClickableText(
+        text = annotatedString,
+        modifier = modifier,
+        style = androidx.compose.ui.text.TextStyle(
+            lineHeight = 20.sp
+        ),
+        onClick = { offset ->
+            annotatedString.getStringAnnotations(tag = "GAME", start = offset, end = offset)
+                .firstOrNull()?.let { annotation ->
+                    onGameClick(annotation.item)
+                }
+        }
+    )
 }

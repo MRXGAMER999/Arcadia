@@ -189,6 +189,27 @@ class SearchViewModel(
             }
         }
     }
+    
+    /**
+     * Immediately perform search without debounce.
+     * Used when navigating to search with an initial query (e.g., from AI recommendations).
+     */
+    fun performSearch() {
+        val query = screenState.query
+        if (query.isBlank()) return
+        
+        launchWithKey("search") {
+            saveSearchToHistory(query)
+            
+            if (screenState.isAIMode) {
+                performAISearch(query)
+            } else {
+                searchGamesUseCase(query, page = 1, pageSize = 40).collect { state ->
+                    screenState = screenState.copy(results = state)
+                }
+            }
+        }
+    }
 
     private suspend fun performAISearch(query: String) {
         lastAIQuery = query

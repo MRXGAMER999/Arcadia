@@ -36,6 +36,9 @@ OUTPUT FORMAT (JSON ONLY):
     /**
      * Generates a prompt for gaming profile analysis.
      * Persona: Gaming Psychologist / Profiler.
+     * 
+     * Uses a hybrid format: plain text sections followed by JSON recommendations.
+     * This is more reliable than full JSON since LLMs handle prose better.
      */
     fun profileAnalysisPrompt(gameData: String): String = """
 Act as a "Gaming Psychologist" and analyze the user's gaming history below.
@@ -49,17 +52,27 @@ ANALYSIS GOALS:
 3.  **Avoid Generic Advice**: Don't say "try new genres". Be specific based on their actual behavior.
 4.  **STRICTLY EXCLUDE OWNED GAMES**: NEVER recommend a game that appears in the user's history above. This is critical.
 
-OUTPUT FORMAT (JSON ONLY):
-{
-  "personality": "A warm, insightful description of their gaming identity (2-3 sentences). Focus on 'why' they play.",
-  "play_style": "Describe how they approach games (e.g., 'You're a completionist who...', 'You prefer short, intense experiences...').",
-  "insights": [
-    "A surprising observation about their habits.",
-    "A specific strength or quirk in their gaming history.",
-    "A pattern they might not have noticed themselves."
-  ],
-  "recommendations": "Recommend 3 specific games they DO NOT own. Wrap titles in <<GAME:Title>> tags (e.g. 'You should try <<GAME:Elden Ring>> because...'). Explain why for each."
-}
+OUTPUT FORMAT (Use EXACTLY this structure with section markers):
+
+===PERSONALITY===
+Write 2-3 warm, insightful sentences about their gaming identity. Focus on 'why' they play.
+
+===PLAY_STYLE===
+Describe how they approach games (e.g., 'You're a completionist who...', 'You prefer short, intense experiences...').
+
+===INSIGHTS===
+- A surprising observation about their habits.
+- A specific strength or quirk in their gaming history.
+- A pattern they might not have noticed themselves.
+
+===RECOMMENDATIONS===
+{"games":[{"name":"Exact Game Title","reason":"Why this game fits them"},{"name":"Another Title","reason":"Why this fits"},{"name":"Third Title","reason":"Why this fits"}]}
+
+RULES:
+- Write naturally in the text sections, no JSON there
+- The RECOMMENDATIONS section MUST be valid JSON on a single line
+- Recommend exactly 3 games they DO NOT own
+- Game names must be exact titles that exist in game databases
 """.trimIndent()
 
     /**

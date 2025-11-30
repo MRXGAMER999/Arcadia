@@ -2,6 +2,7 @@ package com.example.arcadia.presentation.screens.searchScreen
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -73,10 +74,19 @@ import com.example.arcadia.util.RequestState
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchScreen(
+    initialQuery: String? = null,
     onBackClick: (() -> Unit)? = null,
     onGameClick: (Int) -> Unit = {},
     viewModel: SearchViewModel = org.koin.androidx.compose.koinViewModel()
 ) {
+    // Handle initial query from navigation (e.g., from AI recommendations)
+    LaunchedEffect(initialQuery) {
+        if (!initialQuery.isNullOrBlank()) {
+            viewModel.updateQuery(initialQuery)
+            viewModel.performSearch()
+        }
+    }
+    
     val state = viewModel.screenState
     val gamesInLibrary by viewModel.gamesInLibrary.collectAsState()
     val snackbarState by viewModel.snackbarState.collectAsState()

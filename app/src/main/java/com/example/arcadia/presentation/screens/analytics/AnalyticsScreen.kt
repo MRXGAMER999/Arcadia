@@ -53,6 +53,7 @@ import java.util.Locale
 @Composable
 fun AnalyticsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToSearch: (String) -> Unit = {},
     viewModel: AnalyticsViewModel = koinViewModel()
 ) {
     val state = viewModel.state
@@ -102,7 +103,10 @@ fun AnalyticsScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            AnalyticsContent(state = state)
+            AnalyticsContent(
+                state = state,
+                onGameClick = onNavigateToSearch
+            )
         }
     }
 }
@@ -110,6 +114,7 @@ fun AnalyticsScreen(
 @Composable
 fun AnalyticsContent(
     state: AnalyticsState,
+    onGameClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -143,7 +148,10 @@ fun AnalyticsContent(
         }
 
         // AI Insights Section
-        AIInsightsSection(state = state)
+        AIInsightsSection(
+            state = state,
+            onGameClick = onGameClick
+        )
 
         // Genre Analysis
         Card(

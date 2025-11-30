@@ -57,7 +57,7 @@ private val LazyGridStateSaver = listSaver<LazyGridState, Int>(
 fun NewHomeScreen(
     onNavigateToProfile: () -> Unit = {},
     onNavigateToMyGames: () -> Unit = {},
-    onNavigateToSearch: () -> Unit = {},
+    onNavigateToSearch: (String?) -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
     onGameClick: (Int) -> Unit = {},
     viewModel: HomeViewModel = org.koin.androidx.compose.koinViewModel()
@@ -84,7 +84,7 @@ fun NewHomeScreen(
             topBar = {
                 HomeTopBar(
                     selectedIndex = selectedTab,
-                    onSearchClick = { onNavigateToSearch() },
+                    onSearchClick = { onNavigateToSearch(null) },
                     onNotificationsClick = { /* TODO: Notifications */ },
                     onSettingsClick = { onNavigateToProfile() }
                 )
