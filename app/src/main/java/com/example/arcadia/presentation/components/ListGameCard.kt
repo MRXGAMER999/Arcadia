@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -76,20 +77,25 @@ fun ListGameCard(
     val context = LocalPlatformContext.current
     val density = LocalDensity.current
 
-    Card(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(140.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF0F1B41)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .padding(end = 6.dp, bottom = 12.dp) // Add padding to make room for the edit icon
     ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF0F1B41)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -235,64 +241,59 @@ fun ListGameCard(
                 }
             }
             
-            // Right side: Status Badge and Edit button
-            Column(
-                modifier = Modifier.fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.End
+            // Right side: Status Badge only (Edit button moved outside)
+            // Status Badge with Icon and Text - aligned to top right
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(getStatusColor(game.status))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Status Badge with Icon and Text - aligned to top right
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(getStatusColor(game.status))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    // Status Text
-                    Text(
-                        text = game.status.displayName,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        ),
-                        color = Color.Black
-                    )
+                // Status Text
+                Text(
+                    text = game.status.displayName,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    ),
+                    color = Color.Black
+                )
 
-                    // Status Icon
+                // Status Icon
+                Icon(
+                    painter = painterResource(id = getStatusIcon(game.status)),
+                    contentDescription = game.status.displayName,
+                    tint = Color.Black,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+        
+        // Edit icon button - positioned at bottom end, above the card
+        if (onEditClick != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 0.dp, y = 12.dp)
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1E2A47))
+            ) {
+                IconButton(
+                    onClick = onEditClick,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                ) {
                     Icon(
-                        painter = painterResource(id = getStatusIcon(game.status)),
-                        contentDescription = game.status.displayName,
-                        tint = Color.Black,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit game",
+                        tint = Color.White,
+                        modifier = Modifier.size(17.dp)
                     )
-                }
-                
-                // Edit icon button - positioned at bottom right with circular background
-                if (onEditClick != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF1E2A47))
-                    ) {
-                        IconButton(
-                            onClick = onEditClick,
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit game",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                } else {
-                    Spacer(modifier = Modifier.height(28.dp))
                 }
             }
         }

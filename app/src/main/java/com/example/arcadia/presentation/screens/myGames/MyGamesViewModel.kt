@@ -36,6 +36,8 @@ data class MyGamesScreenState(
     // Reorder mode - only enabled when sorting by rating and user has 5+ games with 10/10 rating
     val isReorderModeEnabled: Boolean = false,
     val canReorder: Boolean = false, // Whether reordering is possible (5+ 10/10 games + rating sort)
+    // Drag state for Firebase listener management
+    val isDragging: Boolean = false,
 )
 
 /**
@@ -55,6 +57,7 @@ class MyGamesViewModel(
     companion object {
         private const val NOTIFICATION_DURATION_MS = 2000L
         private const val UNSAVED_CHANGES_TIMEOUT_MS = 5000L
+        private const val REORDER_INACTIVITY_TIMEOUT_MS = 15000L // 15 seconds
     }
     
     var screenState by mutableStateOf(MyGamesScreenState())
@@ -62,6 +65,16 @@ class MyGamesViewModel(
     
     // Job for unsaved changes snackbar auto-dismiss
     private var unsavedChangesJob: kotlinx.coroutines.Job? = null
+    
+    // Job for reorder mode inactivity timeout
+    private var reorderInactivityJob: kotlinx.coroutines.Job? = null
+    
+    // Flag to pause Firebase listener during drag
+    private var isFirebaseListenerPaused = false
+    
+    // Pending importance updates to batch save
+    private var pendingImportanceUpdates = mutableMapOf<String, Int>()
+    private var saveImportanceJob: kotlinx.coroutines.Job? = null
 
     init {
         // Load saved filter preferences
@@ -205,10 +218,10 @@ class MyGamesViewModel(
         
         // Check if reordering is possible (2+ games with the same rating AND sorting by rating)
         val isRatingSorted = screenState.sortOrder == SortOrder.RATING_HIGH || screenState.sortOrder == SortOrder.RATING_LOW
-        // Group games by rating and check if any rating has 2+ games
+        // Group games by rating (rounded to 1 decimal) and check if any rating has 2+ games
         val hasReorderableGames = sortedGames
             .filter { it.rating != null }
-            .groupBy { it.rating }
+            .groupBy { it.rating?.let { r -> (r * 10).toInt() / 10f } }
             .any { (_, games) -> games.size >= 2 }
         val canReorder = isRatingSorted && hasReorderableGames
         
@@ -254,14 +267,24 @@ class MyGamesViewModel(
             loadGames()
         }
     }
+
     
     private fun loadGames() {
+        // Don't reload if Firebase listener is paused during drag
+        if (isFirebaseListenerPaused) {
+            android.util.Log.d("MyGamesVM", "loadGames: Skipping - Firebase listener paused")
+            return
+        }
+        
         launchWithKey("load_games") {
             val sortOrder = screenState.sortOrder
 
             // Fetch all games without genre filtering (client-side filtering will be applied)
             gameListRepository.getGameList(sortOrder)
                 .collect { state ->
+                    // Skip updates if listener is paused
+                    if (isFirebaseListenerPaused) return@collect
+                    
                     when (state) {
                         is RequestState.Success -> {
                             // Store unfiltered games
@@ -615,26 +638,43 @@ class MyGamesViewModel(
     fun exitReorderMode() {
         screenState = screenState.copy(isReorderModeEnabled = false)
     }
+
     
     /**
-     * Handle reordering of games with the same rating.
-     * This method is called when a user drags a game to a new position within games that have the same rating.
-     * It recalculates importance values and saves them to Firebase.
-     * 
-     * @param fromIndex The original index of the game being moved
-     * @param toIndex The new index where the game should be placed
+     * Called when drag starts. Pauses Firebase listener to prevent
+     * external updates from disrupting the drag operation.
      */
-    fun onGameReorder(fromIndex: Int, toIndex: Int) {
+    fun onDragStart() {
+        android.util.Log.d("MyGamesVM", "onDragStart: Pausing Firebase listener")
+        isFirebaseListenerPaused = true
+        screenState = screenState.copy(isDragging = true)
+        
+        // Cancel any pending inactivity timeout
+        reorderInactivityJob?.cancel()
+    }
+    
+    /**
+     * Called when drag ends. Starts the inactivity timer.
+     * Firebase listener will resume after 15 seconds of inactivity.
+     */
+    fun onDragEnd() {
+        android.util.Log.d("MyGamesVM", "onDragEnd: Starting inactivity timer")
+        screenState = screenState.copy(isDragging = false)
+        
+        // Start inactivity timer
+        startReorderInactivityTimer()
+    }
+    
+    /**
+     * Called when reorder is complete (item dropped at new position).
+     * Updates importance values and queues batch save.
+     */
+    fun onReorderComplete(fromIndex: Int, toIndex: Int) {
         val currentGames = (screenState.games as? RequestState.Success)?.data ?: return
         if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0) return
         if (fromIndex >= currentGames.size || toIndex >= currentGames.size) return
         
         val movedGame = currentGames[fromIndex]
-        
-        // Only allow reordering rated games
-        if (movedGame.rating == null) return
-        
-        val targetRating = movedGame.rating
         
         // Create new list with reordered games
         val mutableGames = currentGames.toMutableList()
@@ -642,21 +682,15 @@ class MyGamesViewModel(
         val adjustedToIndex = toIndex.coerceIn(0, mutableGames.size)
         mutableGames.add(adjustedToIndex, movedGame)
         
-        // Recalculate importance for ALL games with the SAME rating based on their new positions
-        // This ensures games stay in the order the user set when sorted by rating
-        val gamesWithSameRating = mutableGames.filter { it.rating == targetRating }
+        // Recalculate importance for ALL games based on their new positions
         val importanceUpdates = mutableMapOf<String, Int>()
         
-        val updatedGames = mutableGames.map { game ->
-            if (game.rating == targetRating) {
-                // Calculate new importance: higher index in same-rating group = lower importance
-                val positionInGroup = gamesWithSameRating.indexOf(game)
-                val newImportance = (gamesWithSameRating.size - positionInGroup) * 1000
+        val updatedGames = mutableGames.mapIndexed { index, game ->
+            val newImportance = (mutableGames.size - index) * 1000
+            if (game.importance != newImportance) {
                 importanceUpdates[game.id] = newImportance
-                game.copy(importance = newImportance)
-            } else {
-                game
             }
+            game.copy(importance = newImportance)
         }
         
         // Update UI immediately (optimistic update)
@@ -667,38 +701,81 @@ class MyGamesViewModel(
             }
         )
         
-        // Save to Firebase
-        saveImportanceUpdates(importanceUpdates)
+        // Queue importance updates for batch save
+        if (importanceUpdates.isNotEmpty()) {
+            pendingImportanceUpdates.putAll(importanceUpdates)
+            android.util.Log.d("MyGamesVM", "onReorderComplete: Queued ${importanceUpdates.size} importance updates")
+        }
     }
     
     /**
-     * Save importance updates to Firebase.
+     * Starts the inactivity timer. After 15 seconds of no drag activity,
+     * resumes Firebase listener and batch saves pending importance updates.
      */
-    private fun saveImportanceUpdates(updates: Map<String, Int>) {
-        launchWithKey("save_importance") {
-            when (val result = gameListRepository.updateGamesImportance(updates)) {
-                is RequestState.Success -> {
-                    // Success - UI already updated
-                }
-                is RequestState.Error -> {
-                    // Revert on error by reloading
-                    loadGames()
-                    showTemporaryNotification(
-                        setNotification = {
-                            screenState = screenState.copy(
-                                showSuccessNotification = true,
-                                notificationMessage = "Failed to save order"
-                            )
-                        },
-                        clearNotification = {
-                            screenState = screenState.copy(showSuccessNotification = false)
-                        },
-                        duration = NOTIFICATION_DURATION_MS
-                    )
-                }
-                else -> {}
+    private fun startReorderInactivityTimer() {
+        reorderInactivityJob?.cancel()
+        reorderInactivityJob = launchWithKey("reorder_inactivity") {
+            kotlinx.coroutines.delay(REORDER_INACTIVITY_TIMEOUT_MS)
+            
+            android.util.Log.d("MyGamesVM", "Inactivity timeout: Resuming Firebase listener and saving changes")
+            
+            // Batch save pending importance updates
+            if (pendingImportanceUpdates.isNotEmpty()) {
+                savePendingImportanceUpdates()
             }
+            
+            // Resume Firebase listener
+            isFirebaseListenerPaused = false
+            
+            // Reload games to sync with Firebase
+            loadGames()
         }
+    }
+    
+    /**
+     * Saves all pending importance updates to Firebase in a single batch.
+     */
+    private suspend fun savePendingImportanceUpdates() {
+        val updatesToSave = pendingImportanceUpdates.toMap()
+        pendingImportanceUpdates.clear()
+        
+        if (updatesToSave.isEmpty()) return
+        
+        android.util.Log.d("MyGamesVM", "savePendingImportanceUpdates: Saving ${updatesToSave.size} updates")
+        
+        when (val result = gameListRepository.updateGamesImportance(updatesToSave)) {
+            is RequestState.Success -> {
+                android.util.Log.d("MyGamesVM", "savePendingImportanceUpdates: Success")
+            }
+            is RequestState.Error -> {
+                android.util.Log.e("MyGamesVM", "savePendingImportanceUpdates: Error - ${result.message}")
+                showTemporaryNotification(
+                    setNotification = {
+                        screenState = screenState.copy(
+                            showSuccessNotification = true,
+                            notificationMessage = "Failed to save order"
+                        )
+                    },
+                    clearNotification = {
+                        screenState = screenState.copy(showSuccessNotification = false)
+                    },
+                    duration = NOTIFICATION_DURATION_MS
+                )
+            }
+            else -> {}
+        }
+    }
+    
+    /**
+     * Handle reordering of games with the same rating (legacy method for compatibility).
+     * This method is called when a user drags a game to a new position within games that have the same rating.
+     * It recalculates importance values and saves them to Firebase.
+     * 
+     * @param fromIndex The original index of the game being moved
+     * @param toIndex The new index where the game should be placed
+     */
+    fun onGameReorder(fromIndex: Int, toIndex: Int) {
+        onReorderComplete(fromIndex, toIndex)
     }
     
     /**
@@ -706,7 +783,18 @@ class MyGamesViewModel(
      */
     override fun onCleared() {
         super.onCleared()
-        // Cancel games loading job
-        // gamesJob?.cancel() // Handled by BaseViewModel
+        
+        // Save any pending importance updates before clearing
+        if (pendingImportanceUpdates.isNotEmpty()) {
+            // Note: This is a best-effort save since we're being cleared
+            // In production, you might want to use a WorkManager for guaranteed delivery
+            launchWithKey("final_save") {
+                savePendingImportanceUpdates()
+            }
+        }
+        
+        reorderInactivityJob?.cancel()
+        unsavedChangesJob?.cancel()
+        saveImportanceJob?.cancel()
     }
 }

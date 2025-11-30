@@ -118,16 +118,16 @@ fun MyGameCard(
                 )
             }
             
-            // Rating Badge - Small and clean
+            // Rating Badge - positioned outside the card in top right corner
             if (game.rating != null && game.rating > 0f) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .offset(x = (-6).dp, y = 6.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xFF1E2A47).copy(alpha = 0.8f))
+                        .offset(x = 6.dp, y = (-6).dp) // Offset outside the card bounds
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF1E2A47))
                         .wrapContentSize()
-                        .padding(horizontal = 5.dp, vertical = 3.dp)
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -137,14 +137,14 @@ fun MyGameCard(
                             imageVector = Icons.Default.Star,
                             contentDescription = "Rating",
                             tint = YellowAccent,
-                            modifier = Modifier.size(10.dp)
+                            modifier = Modifier.size(12.dp)
                         )
                         Text(
                             text = String.format("%.1f", game.rating),
                             color = YellowAccent,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 2.dp)
+                            modifier = Modifier.padding(start = 3.dp)
                         )
                     }
                 }

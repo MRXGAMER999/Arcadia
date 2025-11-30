@@ -119,6 +119,9 @@ dependencies {
     implementation(libs.koin.core)
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
+    
+    // Reorderable - drag and drop for LazyColumn/LazyVerticalGrid
+    implementation("sh.calvin.reorderable:reorderable:2.4.0")
 
     // Retrofit
     implementation(libs.retrofit)

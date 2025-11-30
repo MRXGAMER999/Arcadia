@@ -11,25 +11,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
@@ -55,16 +49,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -73,14 +64,15 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.unit.LayoutDirection
 import com.example.arcadia.presentation.base.UndoableViewModel
-import com.example.arcadia.presentation.components.DraggableGameItem
-import com.example.arcadia.presentation.components.DraggableGridItem
 import com.example.arcadia.presentation.components.LibraryEmptyState
 import com.example.arcadia.presentation.components.ListGameCard
 import com.example.arcadia.presentation.components.MediaLayout
@@ -88,8 +80,6 @@ import com.example.arcadia.presentation.components.QuickRateDialog
 import com.example.arcadia.presentation.components.QuickSettingsDialog
 import com.example.arcadia.presentation.components.ScrollToTopFAB
 import com.example.arcadia.presentation.components.SwipeToDeleteItem
-import com.example.arcadia.presentation.components.rememberReorderState
-
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
 import com.example.arcadia.presentation.screens.myGames.components.GameStatsCard
@@ -99,10 +89,10 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.util.RequestState
 import org.koin.androidx.compose.koinViewModel
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.foundation.lazy.items as lazyItems
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import sh.calvin.reorderable.rememberReorderableLazyGridState
+import sh.calvin.reorderable.ReorderableCollectionItemScope
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -413,191 +403,28 @@ fun MyGamesScreen(
                                 },
                                 label = "viewModeTransition"
                             ) { layout ->
-                                // Reorder state for drag-and-drop
-                                val reorderState = rememberReorderState()
-                                val density = LocalDensity.current
-                                val listItemHeight = with(density) { 156.dp.toPx() } // List item height (140dp card + 16dp spacing)
-                                val gridItemHeight = with(density) { 200.dp.toPx() } // Approximate grid item height
-                                val gridItemWidth = with(density) { 120.dp.toPx() } // Approximate grid item width
-                                var containerHeight by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-                                
                                 if (layout == MediaLayout.LIST) {
-                                    // List View
-                                    Column(modifier = Modifier.fillMaxSize()) {
-                                        LazyColumn(
-                                            state = listState,
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .onGloballyPositioned { coordinates ->
-                                                    containerHeight = coordinates.size.height.toFloat()
-                                                },
-                                            userScrollEnabled = !reorderState.isDragging
-                                        ) {
-                                            // Stats Card as first item (with animation)
-                                            item {
-                                                AnimatedVisibility(
-                                                    visible = showStats,
-                                                    enter = expandVertically() + fadeIn(),
-                                                    exit = shrinkVertically() + fadeOut()
-                                                ) {
-                                                    GameStatsCard(
-                                                        games = visibleGames,
-                                                        onSeeMoreClick = onNavigateToAnalytics
-                                                    )
-                                                }
-                                            }
-                                            
-                                            // Games List items with reorder support (always enabled via long press)
-                                            itemsIndexed(
-                                                items = visibleGames,
-                                                key = { _, game -> game.id },
-                                                contentType = { _, _ -> "game_list_item" }
-                                            ) { index, game ->
-                                                // Always allow reordering via long press
-                                                val isDragging = reorderState.isDragging && reorderState.draggedItemIndex == index
-                                            
-                                            DraggableGameItem(
-                                                game = game,
-                                                index = index,
-                                                isReorderMode = true,
-                                                isDragging = isDragging,
-                                                dragOffset = if (isDragging) reorderState.dragOffset else 0f,
-                                                currentIndex = if (isDragging) reorderState.currentTargetIndex else index,
-                                                onDragStart = { idx ->
-                                                    reorderState.startDrag(idx, listItemHeight)
-                                                },
-                                                onDrag = { offsetY ->
-                                                    reorderState.updateDrag(offsetY)
-                                                },
-                                                onDragEnd = {
-                                                    val result = reorderState.endDrag()
-                                                    if (result != null) {
-                                                        viewModel.onGameReorder(result.first, result.second)
-                                                    }
-                                                },
-                                                onIndexChange = { newIndex ->
-                                                    reorderState.updateTargetIndex(newIndex.coerceIn(0, visibleGames.size - 1))
-                                                },
-                                                listState = listState,
-                                                containerHeight = containerHeight,
-                                                itemHeight = listItemHeight,
-                                                modifier = if (!isDragging) Modifier.animateItem(
-                                                    placementSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioLowBouncy,
-                                                        stiffness = Spring.StiffnessMediumLow
-                                                    )
-                                                ) else Modifier
-                                            ) {
-                                                SwipeToDeleteItem(
-                                                    onDelete = { 
-                                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        viewModel.removeGameWithUndo(game) 
-                                                    }
-                                                ) {
-                                                    ListGameCard(
-                                                        game = game,
-                                                        showDateAdded = screenState.quickSettingsState.showDateAdded,
-                                                        showReleaseDate = screenState.quickSettingsState.showReleaseDate,
-                                                        onClick = { onGameClick(game.rawgId) },
-                                                        onEditClick = { viewModel.selectGameToEdit(game) },
-                                                        onLongClick = null
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        }
-                                    } // End Column for List View
+                                    ReorderableListView(
+                                        games = visibleGames,
+                                        listState = listState,
+                                        showStats = showStats,
+                                        screenState = screenState,
+                                        viewModel = viewModel,
+                                        onGameClick = onGameClick,
+                                        onNavigateToAnalytics = onNavigateToAnalytics,
+                                        hapticFeedback = hapticFeedback
+                                    )
                                 } else {
-                                    // Grid View with reorder support (always enabled via long press)
-                                    val gridReorderState = rememberReorderState()
-                                    var gridContainerHeight by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-                                    
-                                    LazyVerticalGrid(
-                                        state = gridState,
-                                        columns = GridCells.Fixed(3),
-                                        contentPadding = PaddingValues(16.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .onGloballyPositioned { coordinates ->
-                                                gridContainerHeight = coordinates.size.height.toFloat()
-                                            },
-                                        userScrollEnabled = !gridReorderState.isDragging
-                                    ) {
-                                        // Stats Card as first item (with animation)
-                                        item(
-                                            span = { GridItemSpan(3) },
-                                            contentType = "stats_card"
-                                        ) {
-                                            AnimatedVisibility(
-                                                visible = showStats,
-                                                enter = expandVertically() + fadeIn(),
-                                                exit = shrinkVertically() + fadeOut()
-                                            ) {
-                                                GameStatsCard(
-                                                    games = visibleGames,
-                                                    onSeeMoreClick = onNavigateToAnalytics
-                                                )
-                                            }
-                                        }
-                                        
-                                        // Games Grid items with reorder support (always enabled via long press)
-                                        itemsIndexed(
-                                            items = visibleGames,
-                                            key = { _, game -> game.id },
-                                            contentType = { _, _ -> "game_grid_item" }
-                                        ) { index, game ->
-                                            val isDragging = gridReorderState.isDragging && gridReorderState.draggedItemIndex == index
-                                            
-                                            DraggableGridItem(
-                                                game = game,
-                                                index = index,
-                                                isReorderMode = true,
-                                                isDragging = isDragging,
-                                                dragOffsetX = if (isDragging) gridReorderState.dragOffsetX else 0f,
-                                                dragOffsetY = if (isDragging) gridReorderState.dragOffsetY else 0f,
-                                                currentIndex = if (isDragging) gridReorderState.currentTargetIndex else index,
-                                                onDragStart = { idx ->
-                                                    gridReorderState.startDrag(idx, gridItemHeight, gridItemWidth, 3)
-                                                },
-                                                onDrag = { offsetX, offsetY ->
-                                                    gridReorderState.updateGridDrag(offsetX, offsetY)
-                                                },
-                                                onDragEnd = {
-                                                    val result = gridReorderState.endDrag()
-                                                    if (result != null) {
-                                                        viewModel.onGameReorder(result.first, result.second)
-                                                    }
-                                                },
-                                                onIndexChange = { newIndex ->
-                                                    gridReorderState.updateTargetIndex(newIndex.coerceIn(0, visibleGames.size - 1))
-                                                },
-                                                gridState = gridState,
-                                                containerHeight = gridContainerHeight,
-                                                itemHeight = gridItemHeight,
-                                                itemWidth = gridItemWidth,
-                                                columns = 3,
-                                                modifier = if (!isDragging) Modifier.animateItem(
-                                                    placementSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioLowBouncy,
-                                                        stiffness = Spring.StiffnessMediumLow
-                                                    )
-                                                ) else Modifier
-                                            ) {
-                                                MyGameCard(
-                                                    game = game,
-                                                    showDateAdded = screenState.quickSettingsState.showDateAdded,
-                                                    showReleaseDate = screenState.quickSettingsState.showReleaseDate,
-                                                    onClick = { onGameClick(game.rawgId) },
-                                                    onEditClick = { viewModel.selectGameToEdit(game) },
-                                                    onLongClick = null
-                                                )
-                                            }
-                                        }
-                                    } // End LazyVerticalGrid for Grid View
+                                    ReorderableGridView(
+                                        games = visibleGames,
+                                        gridState = gridState,
+                                        showStats = showStats,
+                                        screenState = screenState,
+                                        viewModel = viewModel,
+                                        onGameClick = onGameClick,
+                                        onNavigateToAnalytics = onNavigateToAnalytics,
+                                        hapticFeedback = hapticFeedback
+                                    )
                                 }
                             }
                         }
@@ -687,6 +514,234 @@ fun MyGamesScreen(
                 onClearGenres = { viewModel.clearGenreFilters() },
                 onClearStatuses = { viewModel.clearStatusFilters() }
             )
+        }
+    }
+}
+
+
+@Composable
+private fun ReorderableListView(
+    games: List<com.example.arcadia.domain.model.GameListEntry>,
+    listState: LazyListState,
+    showStats: Boolean,
+    screenState: MyGamesScreenState,
+    viewModel: MyGamesViewModel,
+    onGameClick: (Int) -> Unit,
+    onNavigateToAnalytics: () -> Unit,
+    hapticFeedback: androidx.compose.ui.hapticfeedback.HapticFeedback
+) {
+    // Local mutable list for live reordering
+    var localGames by remember(games) { mutableStateOf(games) }
+    
+    val reorderableState = rememberReorderableLazyListState(
+        lazyListState = listState,
+        onMove = { from, to ->
+            // Adjust indices to account for stats header item
+            val fromIndex = from.index - 1
+            val toIndex = to.index - 1
+            
+            if (fromIndex >= 0 && toIndex >= 0 && fromIndex < localGames.size && toIndex < localGames.size) {
+                localGames = localGames.toMutableList().apply {
+                    add(toIndex, removeAt(fromIndex))
+                }
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        }
+    )
+    
+    // Notify ViewModel when drag starts/ends
+    LaunchedEffect(reorderableState.isAnyItemDragging) {
+        if (reorderableState.isAnyItemDragging) {
+            viewModel.onDragStart()
+        } else {
+            // Drag ended - commit changes
+            val currentGames = (screenState.games as? RequestState.Success)?.data
+            if (currentGames != null && localGames != currentGames) {
+                // Find what changed
+                for (i in localGames.indices) {
+                    if (i >= currentGames.size || localGames[i].id != currentGames[i].id) {
+                        // Find original index
+                        val originalIndex = currentGames.indexOfFirst { it.id == localGames[i].id }
+                        if (originalIndex >= 0 && originalIndex != i) {
+                            viewModel.onReorderComplete(originalIndex, i)
+                            break
+                        }
+                    }
+                }
+            }
+            viewModel.onDragEnd()
+        }
+    }
+    
+    LazyColumn(
+        state = listState,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Stats Card as first item (not reorderable)
+        item(key = "stats_header") {
+            AnimatedVisibility(
+                visible = showStats,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                GameStatsCard(
+                    games = games,
+                    onSeeMoreClick = onNavigateToAnalytics
+                )
+            }
+        }
+        
+        // Games List items
+        itemsIndexed(
+            items = localGames,
+            key = { _, game -> game.id }
+        ) { index, game ->
+            ReorderableItem(
+                state = reorderableState,
+                key = game.id
+            ) { isDragging ->
+                val elevation by animateDpAsState(
+                    targetValue = if (isDragging) 16.dp else 0.dp,
+                    label = "elevation"
+                )
+                
+                Box(
+                    modifier = Modifier
+                        .longPressDraggableHandle()
+                        .shadow(elevation, RoundedCornerShape(12.dp))
+                        .background(
+                            if (isDragging) Color(0xFF1E2A47) else Color.Transparent,
+                            RoundedCornerShape(12.dp)
+                        )
+                ) {
+                    SwipeToDeleteItem(
+                        onDelete = { 
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.removeGameWithUndo(game) 
+                        }
+                    ) {
+                        ListGameCard(
+                            game = game,
+                            showDateAdded = screenState.quickSettingsState.showDateAdded,
+                            showReleaseDate = screenState.quickSettingsState.showReleaseDate,
+                            onClick = { onGameClick(game.rawgId) },
+                            onEditClick = { viewModel.selectGameToEdit(game) },
+                            onLongClick = null
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReorderableGridView(
+    games: List<com.example.arcadia.domain.model.GameListEntry>,
+    gridState: LazyGridState,
+    showStats: Boolean,
+    screenState: MyGamesScreenState,
+    viewModel: MyGamesViewModel,
+    onGameClick: (Int) -> Unit,
+    onNavigateToAnalytics: () -> Unit,
+    hapticFeedback: androidx.compose.ui.hapticfeedback.HapticFeedback
+) {
+    // Local mutable list for live reordering
+    var localGames by remember(games) { mutableStateOf(games) }
+    
+    val reorderableState = rememberReorderableLazyGridState(
+        lazyGridState = gridState,
+        onMove = { from, to ->
+            // Adjust indices to account for stats header item (spans 3 columns)
+            val fromIndex = from.index - 1
+            val toIndex = to.index - 1
+            
+            if (fromIndex >= 0 && toIndex >= 0 && fromIndex < localGames.size && toIndex < localGames.size) {
+                localGames = localGames.toMutableList().apply {
+                    add(toIndex, removeAt(fromIndex))
+                }
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        }
+    )
+    
+    // Notify ViewModel when drag starts/ends
+    LaunchedEffect(reorderableState.isAnyItemDragging) {
+        if (reorderableState.isAnyItemDragging) {
+            viewModel.onDragStart()
+        } else {
+            // Drag ended - commit changes
+            val currentGames = (screenState.games as? RequestState.Success)?.data
+            if (currentGames != null && localGames != currentGames) {
+                // Find what changed
+                for (i in localGames.indices) {
+                    if (i >= currentGames.size || localGames[i].id != currentGames[i].id) {
+                        // Find original index
+                        val originalIndex = currentGames.indexOfFirst { it.id == localGames[i].id }
+                        if (originalIndex >= 0 && originalIndex != i) {
+                            viewModel.onReorderComplete(originalIndex, i)
+                            break
+                        }
+                    }
+                }
+            }
+            viewModel.onDragEnd()
+        }
+    }
+    
+    LazyVerticalGrid(
+        state = gridState,
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Stats header (spans full width)
+        item(key = "stats_header", span = { GridItemSpan(3) }) {
+            AnimatedVisibility(
+                visible = showStats,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                GameStatsCard(
+                    games = games,
+                    onSeeMoreClick = onNavigateToAnalytics
+                )
+            }
+        }
+        
+        // Games Grid items
+        itemsIndexed(
+            items = localGames,
+            key = { _, game -> game.id }
+        ) { index, game ->
+            ReorderableItem(
+                state = reorderableState,
+                key = game.id
+            ) { isDragging ->
+                val elevation by animateDpAsState(
+                    targetValue = if (isDragging) 16.dp else 0.dp,
+                    label = "elevation"
+                )
+                
+                Box(
+                    modifier = Modifier
+                        .longPressDraggableHandle()
+                        .shadow(elevation, RoundedCornerShape(12.dp))
+                ) {
+                    MyGameCard(
+                        game = game,
+                        showDateAdded = screenState.quickSettingsState.showDateAdded,
+                        showReleaseDate = screenState.quickSettingsState.showReleaseDate,
+                        onClick = { onGameClick(game.rawgId) },
+                        onEditClick = { viewModel.selectGameToEdit(game) },
+                        onLongClick = null
+                    )
+                }
+            }
         }
     }
 }

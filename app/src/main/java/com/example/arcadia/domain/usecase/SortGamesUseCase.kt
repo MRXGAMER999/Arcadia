@@ -30,9 +30,11 @@ class SortGamesUseCase {
                 // Separate rated and unrated games
                 val (rated, unrated) = games.partition { it.rating != null }
                 // Sort rated games by rating (highest first), then by importance (highest first) for same rating
+                // We bucket ratings by rounding to 1 decimal place to allow reordering of games with slightly different float values
                 rated.sortedWith(
-                    compareByDescending<GameListEntry> { it.rating!! }
+                    compareByDescending<GameListEntry> { (it.rating!! * 10).toInt() / 10f }
                         .thenByDescending { it.importance }
+                        .thenByDescending { it.rating!! } // Tie-breaker for exact same importance
                 ) + unrated
             }
             SortOrder.RATING_LOW -> {
@@ -40,8 +42,9 @@ class SortGamesUseCase {
                 val (rated, unrated) = games.partition { it.rating != null }
                 // Sort rated games by rating (lowest first), then by importance (highest first) for same rating
                 rated.sortedWith(
-                    compareBy<GameListEntry> { it.rating!! }
+                    compareBy<GameListEntry> { (it.rating!! * 10).toInt() / 10f }
                         .thenByDescending { it.importance }
+                        .thenBy { it.rating!! } // Tie-breaker
                 ) + unrated
             }
             SortOrder.RELEASE_NEW -> games.sortedWith(
