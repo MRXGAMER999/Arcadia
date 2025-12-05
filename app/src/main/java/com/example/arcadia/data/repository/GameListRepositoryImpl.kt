@@ -145,6 +145,54 @@ class GameListRepositoryImpl : GameListRepository {
             close()
         }
     }
+
+    override fun getGameListForUser(
+        userId: String,
+        sortOrder: SortOrder
+    ): Flow<RequestState<List<GameListEntry>>> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+        
+        try {
+            send(RequestState.Loading)
+            
+            val useFirestore = usesFirestoreSort(sortOrder)
+            val direction = getFirestoreDirection(sortOrder)
+            
+            listenerRegistration = getUserGameListCollection(userId)
+                .let { query ->
+                    if (useFirestore) query.orderBy(FIELD_ADDED_AT, direction) else query
+                }
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e(TAG, "Error fetching game list for user $userId: ${error.message}", error)
+                        trySend(RequestState.Error("Failed to fetch games: ${error.message}"))
+                        return@addSnapshotListener
+                    }
+                    
+                    val games = snapshot?.documents?.let { parseGameEntries(it) } ?: emptyList()
+                    val sortedGames = games.applySorting(sortOrder)
+                    trySend(RequestState.Success(sortedGames))
+                }
+            
+            awaitClose { 
+                listenerRegistration?.remove()
+                Log.d(TAG, "Game list listener removed for user $userId")
+            }
+            
+        } catch (e: CancellationException) {
+            Log.d(TAG, "getGameListForUser flow cancelled")
+            listenerRegistration?.remove()
+            throw e
+        } catch (e: Exception) {
+            if (e.toString().contains("AbortFlowException")) {
+                Log.d(TAG, "getGameListForUser flow aborted (expected)")
+            } else {
+                Log.e(TAG, "Error in getGameListForUser: ${e.message}", e)
+            }
+            listenerRegistration?.remove()
+            close()
+        }
+    }
     
     override fun getGameListByStatus(
         status: GameStatus,

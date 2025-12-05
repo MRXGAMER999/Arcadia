@@ -24,7 +24,10 @@ data class EditProfileScreenState(
     val gender: String = "",
     val description: String = "",
     val profileImageUrl: String? = null,
-    val profileComplete: Boolean = false
+    val profileComplete: Boolean = false,
+    val steamId: String = "",
+    val xboxGamertag: String = "",
+    val psnId: String = ""
 )
 
 // Local editing state (not yet saved)
@@ -35,7 +38,10 @@ data class EditProfileLocalState(
     val city: String = "",
     val gender: String = "",
     val description: String = "",
-    val profileImageUrl: String? = null
+    val profileImageUrl: String? = null,
+    val steamId: String = "",
+    val xboxGamertag: String = "",
+    val psnId: String = ""
 )
 
 class EditProfileViewModel(
@@ -119,7 +125,10 @@ class EditProfileViewModel(
                         gender = fetchedGamer.gender ?: "",
                         description = fetchedGamer.description ?: "",
                         profileImageUrl = fetchedGamer.profileImageUrl,
-                        profileComplete = fetchedGamer.profileComplete
+                        profileComplete = fetchedGamer.profileComplete,
+                        steamId = fetchedGamer.steamId ?: "",
+                        xboxGamertag = fetchedGamer.xboxGamertag ?: "",
+                        psnId = fetchedGamer.psnId ?: ""
                     )
                     
                     // Initialize local state with saved values
@@ -130,7 +139,10 @@ class EditProfileViewModel(
                         city = fetchedGamer.city ?: "",
                         gender = fetchedGamer.gender ?: "",
                         description = fetchedGamer.description ?: "",
-                        profileImageUrl = fetchedGamer.profileImageUrl
+                        profileImageUrl = fetchedGamer.profileImageUrl,
+                        steamId = fetchedGamer.steamId ?: "",
+                        xboxGamertag = fetchedGamer.xboxGamertag ?: "",
+                        psnId = fetchedGamer.psnId ?: ""
                     )
                     
                     screenReady = RequestState.Success(Unit)
@@ -164,6 +176,18 @@ class EditProfileViewModel(
     
     fun updateLocalDescription(value: String) {
         localState = localState.copy(description = value)
+    }
+    
+    fun updateLocalSteamId(value: String) {
+        localState = localState.copy(steamId = value)
+    }
+    
+    fun updateLocalXboxGamertag(value: String) {
+        localState = localState.copy(xboxGamertag = value)
+    }
+    
+    fun updateLocalPsnId(value: String) {
+        localState = localState.copy(psnId = value)
     }
     
     // Handle profile image selection and upload
@@ -207,7 +231,10 @@ class EditProfileViewModel(
                     gender = localState.gender,
                     description = localState.description,
                     profileImageUrl = localState.profileImageUrl,
-                    profileComplete = true
+                    profileComplete = true,
+                    steamId = localState.steamId.takeIf { it.isNotEmpty() },
+                    xboxGamertag = localState.xboxGamertag.takeIf { it.isNotEmpty() },
+                    psnId = localState.psnId.takeIf { it.isNotEmpty() }
                 ),
                 onSuccess = {
                     // Update saved state with local state after successful save
@@ -219,7 +246,10 @@ class EditProfileViewModel(
                         gender = localState.gender,
                         description = localState.description,
                         profileImageUrl = localState.profileImageUrl,
-                        profileComplete = true
+                        profileComplete = true,
+                        steamId = localState.steamId,
+                        xboxGamertag = localState.xboxGamertag,
+                        psnId = localState.psnId
                     )
                     onSuccess()
                 },
@@ -237,7 +267,10 @@ class EditProfileViewModel(
             city = screenState.city,
             gender = screenState.gender,
             description = screenState.description,
-            profileImageUrl = screenState.profileImageUrl
+            profileImageUrl = screenState.profileImageUrl,
+            steamId = screenState.steamId,
+            xboxGamertag = screenState.xboxGamertag,
+            psnId = screenState.psnId
         )
     }
 }

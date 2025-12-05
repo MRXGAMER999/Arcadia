@@ -2,6 +2,7 @@ package com.example.arcadia.domain.repository
 
 import android.net.Uri
 import com.example.arcadia.domain.model.Gamer
+import com.example.arcadia.domain.model.ProfileSection
 import com.example.arcadia.util.RequestState
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.Flow
@@ -16,11 +17,18 @@ interface GamerRepository {
 
     fun readCustomerFlow(): Flow<RequestState<Gamer>>
     
+    fun getGamer(userId: String): Flow<RequestState<Gamer>>
+    
     suspend fun updateGamer(
         gamer: Gamer,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     )
+    
+    suspend fun updateGamer(
+        customSections: List<ProfileSection>? = null,
+        isProfilePublic: Boolean? = null
+    ): RequestState<Unit>
     
     suspend fun uploadProfileImage(
         imageUri: Uri,

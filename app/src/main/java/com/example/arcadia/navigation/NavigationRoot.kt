@@ -18,9 +18,11 @@ import com.example.arcadia.presentation.screens.detailsScreen.DetailsScreen
 import com.example.arcadia.presentation.screens.home.NewHomeScreen
 import com.example.arcadia.presentation.screens.myGames.MyGamesScreen
 import com.example.arcadia.presentation.screens.onBoarding.OnBoardingScreen
+import com.example.arcadia.presentation.screens.profile.ProfileScreen
 import com.example.arcadia.presentation.screens.profile.update_profile.EditProfileScreen
 import com.example.arcadia.presentation.screens.searchScreen.SearchScreen
 import com.example.arcadia.ui.theme.Surface
+import android.app.Activity
 import com.example.arcadia.util.PreferencesManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.serialization.Serializable
@@ -30,6 +32,10 @@ object AuthScreenKey : NavKey
 
 @Serializable
 object HomeScreenKey : NavKey
+
+@Serializable
+data class ProfileScreenKey(val userId: String? = null) : NavKey
+
 @Serializable
 object EditProfileScreenKey : NavKey
 
@@ -48,6 +54,8 @@ object AnalyticsScreenKey : NavKey
 @Serializable
 data class DetailsScreenKey(val gameId: Int) : NavKey
 
+
+
 @Composable
 fun NavigationRoot(
     modifier: Modifier = Modifier,
@@ -58,8 +66,28 @@ fun NavigationRoot(
     val isUserAuthenticated = FirebaseAuth.getInstance().currentUser != null
     val isOnBoardingCompleted = preferencesManager.isOnBoardingCompleted()
     
+    // Handle Deep Link (arcadia://profile/{userId} or https://mrxgamer999.github.io/Arcadia/profile?id={userId})
+    val activity = context as? Activity
+    val intent = activity?.intent
+    val deepLinkUserId = remember(intent) {
+        intent?.data?.let { uri ->
+            when {
+                // Custom scheme: arcadia://profile/{userId}
+                uri.scheme == "arcadia" && uri.host == "profile" -> {
+                    uri.pathSegments.firstOrNull()
+                }
+                // GitHub Pages: https://mrxgamer999.github.io/Arcadia/profile?id={userId}
+                uri.host == "mrxgamer999.github.io" && uri.path?.startsWith("/Arcadia/profile") == true -> {
+                    uri.getQueryParameter("id")
+                }
+                else -> null
+            }
+        }
+    }
+    
     // Determine the starting screen based on onboarding and authentication status
     val startDestination = when {
+        deepLinkUserId != null -> ProfileScreenKey(deepLinkUserId)
         !isOnBoardingCompleted -> OnboardingScreenKey
         !isUserAuthenticated -> AuthScreenKey
         else -> HomeScreenKey
@@ -101,7 +129,7 @@ fun NavigationRoot(
                     ) {
                         NewHomeScreen(
                             onNavigateToProfile = {
-                                backStack.add(EditProfileScreenKey)
+                                backStack.add(ProfileScreenKey())
                             },
                             onNavigateToMyGames = {
                                 backStack.add(MyGamesScreenKey)
@@ -111,6 +139,24 @@ fun NavigationRoot(
                             },
                             onNavigateToAnalytics = {
                                 backStack.add(AnalyticsScreenKey)
+                            },
+                            onGameClick = { gameId ->
+                                backStack.add(DetailsScreenKey(gameId))
+                            }
+                        )
+                    }
+                }
+                is ProfileScreenKey -> {
+                    NavEntry(
+                        key = key,
+                    ) {
+                        ProfileScreen(
+                            userId = key.userId,
+                            onNavigateBack = {
+                                backStack.remove(key)
+                            },
+                            onNavigateToEditProfile = {
+                                backStack.add(EditProfileScreenKey)
                             },
                             onGameClick = { gameId ->
                                 backStack.add(DetailsScreenKey(gameId))

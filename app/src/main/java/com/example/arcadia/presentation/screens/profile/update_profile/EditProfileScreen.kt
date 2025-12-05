@@ -296,6 +296,44 @@ fun EditProfileScreen(
                             isError = showValidationErrors && viewModel.validateDescription().isNotEmpty(),
                             errorMessage = if (showValidationErrors) viewModel.validateDescription() else null
                         )
+
+                        // Gaming Platforms Section Header
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "GAMING PLATFORMS",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            ),
+                            color = ButtonPrimary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        )
+
+                        // Steam ID Field (Optional)
+                        ProfileTextField(
+                            value = localState.steamId,
+                            onValueChange = viewModel::updateLocalSteamId,
+                            label = "Steam ID (Optional)",
+                            placeholder = "Your Steam username or ID"
+                        )
+
+                        // Xbox Gamertag Field (Optional)
+                        ProfileTextField(
+                            value = localState.xboxGamertag,
+                            onValueChange = viewModel::updateLocalXboxGamertag,
+                            label = "Xbox Gamertag (Optional)",
+                            placeholder = "Your Xbox Gamertag"
+                        )
+
+                        // PSN ID Field (Optional)
+                        ProfileTextField(
+                            value = localState.psnId,
+                            onValueChange = viewModel::updateLocalPsnId,
+                            label = "PSN ID (Optional)",
+                            placeholder = "Your PlayStation Network ID"
+                        )
                     }
 
                     // Update Button Section

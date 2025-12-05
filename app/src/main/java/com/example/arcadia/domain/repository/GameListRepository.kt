@@ -14,7 +14,8 @@ interface GameListRepository {
 
     fun getGameList(sortOrder: SortOrder = SortOrder.NEWEST_FIRST): Flow<RequestState<List<GameListEntry>>>
     
-
+    fun getGameListForUser(userId: String, sortOrder: SortOrder = SortOrder.NEWEST_FIRST): Flow<RequestState<List<GameListEntry>>>
+    
     fun getGameListByStatus(
         status: GameStatus,
         sortOrder: SortOrder = SortOrder.NEWEST_FIRST

@@ -15,5 +15,28 @@ data class Gamer(
     val description: String? = "",
     val profileImageUrl: String? = null,
     val profileComplete: Boolean = false,
-
+    // Gaming platform IDs
+    val steamId: String? = null,
+    val xboxGamertag: String? = null,
+    val psnId: String? = null,
+    // Custom profile sections
+    val customSections: List<ProfileSection> = emptyList(),
+    // Profile visibility settings
+    val isProfilePublic: Boolean = true
 )
+
+@Serializable
+data class ProfileSection(
+    val id: String = "",
+    val title: String = "",  // e.g., "Favorite Game of All Time", "Top 5 FPS Games"
+    val type: ProfileSectionType = ProfileSectionType.SINGLE_GAME,
+    val gameIds: List<Int> = emptyList(),  // RAWG game IDs
+    val order: Int = 0
+)
+
+@Serializable
+enum class ProfileSectionType {
+    SINGLE_GAME,      // For "Favorite Game" type sections
+    GAME_LIST,        // For "Top 5 FPS Games" type sections
+    CURRENTLY_PLAYING // Shows current playing games
+}

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcadia - View Profile</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2744 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            max-width: 400px;
+        }
+        .logo { font-size: 64px; margin-bottom: 20px; }
+        h1 { font-size: 28px; margin-bottom: 10px; color: #00d4ff; }
+        p { color: #a0aec0; margin-bottom: 30px; line-height: 1.6; }
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+        .fallback {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #718096;
+        }
+        .fallback a { color: #00d4ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🎮</div>
+        <h1>Arcadia</h1>
+        <p>Opening profile in the Arcadia app...</p>
+        <a href="#" id="openApp" class="btn">Open in Arcadia</a>
+        <p class="fallback">
+            Don't have the app? <br>
+            <a href="https://play.google.com/store/apps/details?id=com.example.arcadia">Download from Play Store</a>
+        </p>
+    </div>
+
+    <script>
+        // Get the user ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('id');
+        
+        if (userId) {
+            // Create the deep link
+            const appLink = `arcadia://profile/${userId}`;
+            
+            // Update button href
+            document.getElementById('openApp').href = appLink;
+            
+            // Try to open app automatically
+            setTimeout(() => {
+                window.location.href = appLink;
+            }, 500);
+        } else {
+            document.querySelector('p').textContent = 'Invalid profile link.';
+        }
+    </script>
+</body>
+</html>

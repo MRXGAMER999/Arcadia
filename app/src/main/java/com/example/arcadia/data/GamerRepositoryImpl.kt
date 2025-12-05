@@ -2,6 +2,7 @@ package com.example.arcadia.data
 
 import android.net.Uri
 import com.example.arcadia.domain.model.Gamer
+import com.example.arcadia.domain.model.ProfileSection
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.util.RequestState
 import com.google.firebase.Firebase
@@ -136,6 +137,33 @@ class GamerRepositoryImpl: GamerRepository {
         }
     }
 
+    override fun getGamer(userId: String): Flow<RequestState<Gamer>> = callbackFlow {
+        val database = Firebase.firestore
+        val listenerRegistration = database.collection("users")
+            .document(userId)
+            .addSnapshotListener { documentSnapshot, error ->
+                if (error != null) {
+                    trySend(RequestState.Error("Error: ${error.message}"))
+                    return@addSnapshotListener
+                }
+
+                if (documentSnapshot != null && documentSnapshot.exists()) {
+                    val gamer = documentSnapshot.toObject(Gamer::class.java)
+                    if (gamer != null) {
+                        trySend(RequestState.Success(gamer))
+                    } else {
+                        trySend(RequestState.Error("Error parsing user data"))
+                    }
+                } else {
+                    trySend(RequestState.Error("User not found"))
+                }
+            }
+
+        awaitClose {
+            listenerRegistration.remove()
+        }
+    }
+
     override suspend fun updateGamer(
         gamer: Gamer,
         onSuccess: () -> Unit,
@@ -158,7 +186,10 @@ class GamerRepositoryImpl: GamerRepository {
                         "city" to gamer.city,
                         "gender" to gamer.gender,
                         "description" to gamer.description,
-                        "profileComplete" to gamer.profileComplete
+                        "profileComplete" to gamer.profileComplete,
+                        "steamId" to gamer.steamId,
+                        "xboxGamertag" to gamer.xboxGamertag,
+                        "psnId" to gamer.psnId
                     )
                     
                     // Only update profileImageUrl if it's not null
@@ -179,6 +210,50 @@ class GamerRepositoryImpl: GamerRepository {
             }
         } catch (e: Exception) {
             onError(e.message ?: "Error updating user")
+        }
+    }
+
+    override suspend fun updateGamer(
+        customSections: List<ProfileSection>?,
+        isProfilePublic: Boolean?
+    ): RequestState<Unit> {
+        return try {
+            val userId = getCurrentUserId()
+            if (userId != null) {
+                val firestore = Firebase.firestore
+                val userCollection = firestore.collection("users")
+                
+                val updates = mutableMapOf<String, Any?>()
+                
+                customSections?.let {
+                    updates["customSections"] = it.map { section ->
+                        mapOf(
+                            "id" to section.id,
+                            "title" to section.title,
+                            "type" to section.type.name,
+                            "gameIds" to section.gameIds,
+                            "order" to section.order
+                        )
+                    }
+                }
+                
+                isProfilePublic?.let {
+                    updates["isProfilePublic"] = it
+                }
+                
+                if (updates.isNotEmpty()) {
+                    userCollection
+                        .document(userId)
+                        .update(updates)
+                        .await()
+                }
+                
+                RequestState.Success(Unit)
+            } else {
+                RequestState.Error("User is not available")
+            }
+        } catch (e: Exception) {
+            RequestState.Error(e.message ?: "Error updating user")
         }
     }
 
