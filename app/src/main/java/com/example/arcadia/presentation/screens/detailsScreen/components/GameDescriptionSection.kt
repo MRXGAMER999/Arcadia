@@ -19,8 +19,17 @@ import com.example.arcadia.domain.model.Game
 import com.example.arcadia.presentation.components.PlatformIcons
 import com.example.arcadia.ui.theme.ButtonPrimary
 
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
+
 @Composable
 fun GameDescriptionSection(game: Game) {
+    var isExpanded by remember { mutableStateOf(false) }
+    
     Column(
         modifier = Modifier.padding(horizontal = 16.dp)
     ) {
@@ -34,13 +43,28 @@ fun GameDescriptionSection(game: Game) {
 
         game.description?.let { description ->
             if (description.isNotBlank()) {
-                Text(
-                    text = description,
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                Column(modifier = Modifier.padding(bottom = 16.dp)) {
+                    Text(
+                        text = description,
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        maxLines = if (isExpanded) Int.MAX_VALUE else 4,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    
+                    if (description.length > 200) { // Arbitrary length check
+                        Text(
+                            text = if (isExpanded) "Read Less" else "Read More",
+                            color = ButtonPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable { isExpanded = !isExpanded }
+                        )
+                    }
+                }
             }
         }
 

@@ -72,6 +72,7 @@ class ProfileViewModel(
     }
 
     fun loadProfile(userId: String? = null) {
+        screenReady = RequestState.Loading
         val currentUserId = gamerRepository.getCurrentUserId()
         isCurrentUser = userId == null || userId == currentUserId
         
@@ -141,8 +142,9 @@ class ProfileViewModel(
                         ratedGames.mapNotNull { it.rating }.average().toFloat()
                     } else 0f
                     
-                    val completionRate = if (totalGames > 0) {
-                        (finishedGames.toFloat() / totalGames) * 100
+                    val totalGamesForCompletion = totalGames - wantToPlayGames
+                    val completionRate = if (totalGamesForCompletion > 0) {
+                        (finishedGames.toFloat() / totalGamesForCompletion) * 100
                     } else 0f
 
                     statsState = ProfileStatsState(
@@ -191,7 +193,11 @@ class ProfileViewModel(
 
     private fun saveCustomSections() {
         launchWithKey("save_sections") {
-            gamerRepository.updateGamer(customSections = customSections)
+            val result = gamerRepository.updateGamer(customSections = customSections)
+            if (result.isError()) {
+                // Reload profile to revert to server state on error
+                loadProfileData(null)
+            }
         }
     }
 

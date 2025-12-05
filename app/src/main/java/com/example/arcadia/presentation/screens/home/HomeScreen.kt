@@ -1,5 +1,6 @@
 package com.example.arcadia.presentation.screens.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -16,6 +17,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -38,8 +42,10 @@ import com.example.arcadia.presentation.screens.home.tabs.DiscoverTabContent
 import com.example.arcadia.presentation.screens.home.tabs.HomeTabContent
 import com.example.arcadia.presentation.screens.home.tabs.LibraryTabContent
 import com.example.arcadia.ui.theme.Surface
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 // Custom Saver for LazyListState to ensure scroll position is preserved
 private val LazyListStateSaver = listSaver<LazyListState, Int>(
@@ -66,6 +72,30 @@ fun NewHomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val screenState = viewModel.screenState
     val snackbarState by viewModel.snackbarState.collectAsState()
+    val scope = rememberCoroutineScope()
+    
+    // Double back to exit logic
+    var backPressedOnce by remember { mutableStateOf(false) }
+    
+    BackHandler {
+        if (backPressedOnce) {
+            // Exit app (default behavior if not handled, but here we need to finish activity)
+            // Since we can't easily finish activity from here without context, we can let the system handle it
+            // by disabling the BackHandler or using a side effect.
+            // However, BackHandler captures the back press. 
+            // A common pattern is to just let it bubble up if we don't want to handle it, 
+            // but BackHandler is enabled by default.
+            // We can use System.exit(0) or (context as Activity).finish()
+            android.os.Process.killProcess(android.os.Process.myPid())
+        } else {
+            backPressedOnce = true
+            scope.launch {
+                snackbarHostState.showSnackbar("Press back again to exit", duration = SnackbarDuration.Short)
+                delay(2000)
+                backPressedOnce = false
+            }
+        }
+    }
     
     // For Paging tabs (Home, Discover), scroll state is managed internally by the tab content
     // to handle the async loading nature of Paging 3
@@ -94,6 +124,28 @@ fun NewHomeScreen(
                     selectedItemIndex = selectedTab,
                     onSelectedItemIndexChange = { selectedTab = it }
                 )
+            },
+            snackbarHost = {
+                // We use a custom snackbar host to display our custom AddGameSnackbar
+                // But we anchor it to the Scaffold
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Standard SnackbarHost for system messages (like "Press back again")
+                    SnackbarHost(
+                        hostState = snackbarHostState,
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                    
+                    // Custom Snackbar for Game Added
+                    AddGameSnackbar(
+                        visible = snackbarState.show,
+                        gameName = snackbarState.gameName,
+                        onUndo = { viewModel.undoAddGame() },
+                        onDismiss = { viewModel.dismissSnackbar() },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 90.dp) // Slightly above standard snackbar/bottom bar
+                    )
+                }
             }
         ) { paddingValues ->
             Column(
@@ -144,18 +196,6 @@ fun NewHomeScreen(
                 }
             }
         }
-
-        // Snackbar with undo for game additions - positioned above bottom bar
-        // Placed at the screen level so it shows consistently across all tabs
-        AddGameSnackbar(
-            visible = snackbarState.show,
-            gameName = snackbarState.gameName,
-            onUndo = { viewModel.undoAddGame() },
-            onDismiss = { viewModel.dismissSnackbar() },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 80.dp) // Above bottom navigation bar
-        )
     }
 }
 

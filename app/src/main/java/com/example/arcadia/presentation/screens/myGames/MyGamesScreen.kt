@@ -89,6 +89,7 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.util.RequestState
 import org.koin.androidx.compose.koinViewModel
+import org.koin.core.parameter.parametersOf
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import sh.calvin.reorderable.rememberReorderableLazyGridState
@@ -97,6 +98,8 @@ import sh.calvin.reorderable.ReorderableCollectionItemScope
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MyGamesScreen(
+    userId: String? = null,
+    username: String? = null,
     onNavigateBack: () -> Unit = {},
     onGameClick: (Int) -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
@@ -104,16 +107,26 @@ fun MyGamesScreen(
     listState: LazyListState = rememberLazyListState(),
     gridState: LazyGridState = rememberLazyGridState()
 ) {
-    val viewModel: MyGamesViewModel = koinViewModel()
+    val viewModel: MyGamesViewModel = koinViewModel { parametersOf(userId) }
     val screenState = viewModel.screenState
     val undoState by viewModel.undoState.collectAsState()
     var showStats by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val hapticFeedback = LocalHapticFeedback.current
     
-    // Show undo snackbar
+    // Determine if viewing another user's library (read-only mode)
+    val isReadOnly = userId != null
+    val screenTitle = if (isReadOnly && username != null) {
+        "${username}'s Library"
+    } else if (isReadOnly) {
+        "User's Library"
+    } else {
+        "My Game List"
+    }
+    
+    // Show undo snackbar (only for own library)
     LaunchedEffect(undoState.showSnackbar) {
-        if (undoState.showSnackbar) {
+        if (undoState.showSnackbar && !isReadOnly) {
             snackbarHostState.showSnackbar("")
         }
     }
@@ -121,60 +134,63 @@ fun MyGamesScreen(
     Scaffold(
         containerColor = Surface,
         snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState) {
-                // Undo deletion snackbar
-                if (undoState.showSnackbar) {
-                    Snackbar(
-                        modifier = Modifier.padding(16.dp),
-                        containerColor = Color(0xFF1E2A47),
-                        contentColor = TextSecondary,
-                        action = {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Circular progress indicator showing time remaining
-                                Box(contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(
-                                        progress = { undoState.timeRemaining },
-                                        modifier = Modifier.size(24.dp),
-                                        color = ButtonPrimary,
-                                        strokeWidth = 2.dp,
-                                        trackColor = Color.White.copy(alpha = 0.2f)
-                                    )
-                                    Text(
-                                        text = "${(undoState.timeRemaining * (UndoableViewModel.UNDO_TIMEOUT_MS / 1000)).toInt()}",
-                                        color = ButtonPrimary,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+            // Only show snackbar host for own library (not read-only)
+            if (!isReadOnly) {
+                SnackbarHost(hostState = snackbarHostState) {
+                    // Undo deletion snackbar
+                    if (undoState.showSnackbar) {
+                        Snackbar(
+                            modifier = Modifier.padding(16.dp),
+                            containerColor = Color(0xFF1E2A47),
+                            contentColor = TextSecondary,
+                            action = {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Circular progress indicator showing time remaining
+                                    Box(contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(
+                                            progress = { undoState.timeRemaining },
+                                            modifier = Modifier.size(24.dp),
+                                            color = ButtonPrimary,
+                                            strokeWidth = 2.dp,
+                                            trackColor = Color.White.copy(alpha = 0.2f)
+                                        )
+                                        Text(
+                                            text = "${(undoState.timeRemaining * (UndoableViewModel.UNDO_TIMEOUT_MS / 1000)).toInt()}",
+                                            color = ButtonPrimary,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    TextButton(onClick = { 
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.undoDeletion() 
+                                    }) {
+                                        Text(
+                                            text = "UNDO",
+                                            color = ButtonPrimary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
-                                TextButton(onClick = { 
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.undoDeletion() 
+                            },
+                            dismissAction = {
+                                IconButton(onClick = { 
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.dismissUndoSnackbar() 
                                 }) {
                                     Text(
-                                        text = "UNDO",
-                                        color = ButtonPrimary,
-                                        fontWeight = FontWeight.Bold
+                                        text = "✕",
+                                        color = TextSecondary,
+                                        fontSize = 18.sp
                                     )
                                 }
                             }
-                        },
-                        dismissAction = {
-                            IconButton(onClick = { 
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                viewModel.dismissUndoSnackbar() 
-                            }) {
-                                Text(
-                                    text = "✕",
-                                    color = TextSecondary,
-                                    fontSize = 18.sp
-                                )
-                            }
+                        ) {
+                            Text("${undoState.item?.name} removed")
                         }
-                    ) {
-                        Text("${undoState.item?.name} removed")
                     }
                 }
             }
@@ -184,7 +200,7 @@ fun MyGamesScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = "My Game List",
+                            text = screenTitle,
                             color = TextSecondary,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
@@ -200,12 +216,15 @@ fun MyGamesScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { /* TODO: More options */ }) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More options",
-                                tint = ButtonPrimary
-                            )
+                        // Only show more options for own library
+                        if (!isReadOnly) {
+                            IconButton(onClick = { /* TODO: More options */ }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More options",
+                                    tint = ButtonPrimary
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -220,6 +239,7 @@ fun MyGamesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
+                    top = paddingValues.calculateTopPadding(),
                     start = paddingValues.calculateLeftPadding(LayoutDirection.Ltr),
                     end = paddingValues.calculateRightPadding(LayoutDirection.Ltr)
                 )
@@ -412,7 +432,8 @@ fun MyGamesScreen(
                                         viewModel = viewModel,
                                         onGameClick = onGameClick,
                                         onNavigateToAnalytics = onNavigateToAnalytics,
-                                        hapticFeedback = hapticFeedback
+                                        hapticFeedback = hapticFeedback,
+                                        isReadOnly = isReadOnly
                                     )
                                 } else {
                                     ReorderableGridView(
@@ -423,7 +444,8 @@ fun MyGamesScreen(
                                         viewModel = viewModel,
                                         onGameClick = onGameClick,
                                         onNavigateToAnalytics = onNavigateToAnalytics,
-                                        hapticFeedback = hapticFeedback
+                                        hapticFeedback = hapticFeedback,
+                                        isReadOnly = isReadOnly
                                     )
                                 }
                             }
@@ -528,7 +550,8 @@ private fun ReorderableListView(
     viewModel: MyGamesViewModel,
     onGameClick: (Int) -> Unit,
     onNavigateToAnalytics: () -> Unit,
-    hapticFeedback: androidx.compose.ui.hapticfeedback.HapticFeedback
+    hapticFeedback: androidx.compose.ui.hapticfeedback.HapticFeedback,
+    isReadOnly: Boolean = false
 ) {
     // Local mutable list for live reordering
     var localGames by remember(games) { mutableStateOf(games) }
@@ -536,6 +559,9 @@ private fun ReorderableListView(
     val reorderableState = rememberReorderableLazyListState(
         lazyListState = listState,
         onMove = { from, to ->
+            // Skip reordering in read-only mode
+            if (isReadOnly) return@rememberReorderableLazyListState
+            
             // Adjust indices to account for stats header item
             val fromIndex = from.index - 1
             val toIndex = to.index - 1
@@ -549,8 +575,10 @@ private fun ReorderableListView(
         }
     )
     
-    // Notify ViewModel when drag starts/ends
+    // Notify ViewModel when drag starts/ends (only for own library)
     LaunchedEffect(reorderableState.isAnyItemDragging) {
+        if (isReadOnly) return@LaunchedEffect
+        
         if (reorderableState.isAnyItemDragging) {
             viewModel.onDragStart()
         } else {
@@ -608,28 +636,44 @@ private fun ReorderableListView(
                 )
                 
                 Box(
-                    modifier = Modifier
-                        .longPressDraggableHandle()
-                        .shadow(elevation, RoundedCornerShape(12.dp))
-                        .background(
-                            if (isDragging) Color(0xFF1E2A47) else Color.Transparent,
-                            RoundedCornerShape(12.dp)
-                        )
+                    modifier = if (!isReadOnly) {
+                        Modifier
+                            .longPressDraggableHandle()
+                            .shadow(elevation, RoundedCornerShape(12.dp))
+                            .background(
+                                if (isDragging) Color(0xFF1E2A47) else Color.Transparent,
+                                RoundedCornerShape(12.dp)
+                            )
+                    } else {
+                        Modifier
+                    }
                 ) {
-                    SwipeToDeleteItem(
-                        onDelete = { 
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.removeGameWithUndo(game) 
-                        }
-                    ) {
+                    if (isReadOnly) {
+                        // Read-only mode: no swipe-to-delete, no edit
                         ListGameCard(
                             game = game,
                             showDateAdded = screenState.quickSettingsState.showDateAdded,
                             showReleaseDate = screenState.quickSettingsState.showReleaseDate,
                             onClick = { onGameClick(game.rawgId) },
-                            onEditClick = { viewModel.selectGameToEdit(game) },
+                            onEditClick = null,
                             onLongClick = null
                         )
+                    } else {
+                        SwipeToDeleteItem(
+                            onDelete = { 
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.removeGameWithUndo(game) 
+                            }
+                        ) {
+                            ListGameCard(
+                                game = game,
+                                showDateAdded = screenState.quickSettingsState.showDateAdded,
+                                showReleaseDate = screenState.quickSettingsState.showReleaseDate,
+                                onClick = { onGameClick(game.rawgId) },
+                                onEditClick = { viewModel.selectGameToEdit(game) },
+                                onLongClick = null
+                            )
+                        }
                     }
                 }
             }
@@ -646,7 +690,8 @@ private fun ReorderableGridView(
     viewModel: MyGamesViewModel,
     onGameClick: (Int) -> Unit,
     onNavigateToAnalytics: () -> Unit,
-    hapticFeedback: androidx.compose.ui.hapticfeedback.HapticFeedback
+    hapticFeedback: androidx.compose.ui.hapticfeedback.HapticFeedback,
+    isReadOnly: Boolean = false
 ) {
     // Local mutable list for live reordering
     var localGames by remember(games) { mutableStateOf(games) }
@@ -654,6 +699,9 @@ private fun ReorderableGridView(
     val reorderableState = rememberReorderableLazyGridState(
         lazyGridState = gridState,
         onMove = { from, to ->
+            // Skip reordering in read-only mode
+            if (isReadOnly) return@rememberReorderableLazyGridState
+            
             // Adjust indices to account for stats header item (spans 3 columns)
             val fromIndex = from.index - 1
             val toIndex = to.index - 1
@@ -667,8 +715,10 @@ private fun ReorderableGridView(
         }
     )
     
-    // Notify ViewModel when drag starts/ends
+    // Notify ViewModel when drag starts/ends (only for own library)
     LaunchedEffect(reorderableState.isAnyItemDragging) {
+        if (isReadOnly) return@LaunchedEffect
+        
         if (reorderableState.isAnyItemDragging) {
             viewModel.onDragStart()
         } else {
@@ -728,16 +778,20 @@ private fun ReorderableGridView(
                 )
                 
                 Box(
-                    modifier = Modifier
-                        .longPressDraggableHandle()
-                        .shadow(elevation, RoundedCornerShape(12.dp))
+                    modifier = if (!isReadOnly) {
+                        Modifier
+                            .longPressDraggableHandle()
+                            .shadow(elevation, RoundedCornerShape(12.dp))
+                    } else {
+                        Modifier
+                    }
                 ) {
                     MyGameCard(
                         game = game,
                         showDateAdded = screenState.quickSettingsState.showDateAdded,
                         showReleaseDate = screenState.quickSettingsState.showReleaseDate,
                         onClick = { onGameClick(game.rawgId) },
-                        onEditClick = { viewModel.selectGameToEdit(game) },
+                        onEditClick = if (isReadOnly) null else { { viewModel.selectGameToEdit(game) } },
                         onLongClick = null
                     )
                 }

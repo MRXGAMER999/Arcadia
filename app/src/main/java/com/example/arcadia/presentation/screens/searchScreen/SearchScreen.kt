@@ -2,7 +2,6 @@ package com.example.arcadia.presentation.screens.searchScreen
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -20,11 +19,12 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,35 +41,43 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.arcadia.data.remote.mapper.toGameListEntry
 import com.example.arcadia.presentation.components.AddGameSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
-
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchField
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchResultCard
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchSuggestions
 import com.example.arcadia.ui.theme.ButtonPrimary
-import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
+import com.example.arcadia.ui.theme.Surface as SurfaceColor
 import com.example.arcadia.util.DisplayResult
 import com.example.arcadia.util.RequestState
-
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -95,24 +103,49 @@ fun SearchScreen(
     
     // Remember LazyListState at this level to preserve scroll position across recompositions
     val searchResultsListState = rememberLazyListState()
+    
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    
+    // Auto-focus if no initial query
+    LaunchedEffect(Unit) {
+        if (initialQuery.isNullOrBlank()) {
+            focusRequester.requestFocus()
+        }
+    }
+
+    // Hide keyboard on scroll
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): Offset {
+                keyboardController?.hide()
+                return super.onPreScroll(available, source)
+            }
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
         Scaffold(
-            containerColor = Surface,
+            containerColor = SurfaceColor,
             topBar = {}
         ) { paddingValues ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .background(Surface)
+                    .background(SurfaceColor)
+                    .nestedScroll(nestedScrollConnection) // Detect scroll to hide keyboard
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { keyboardController?.hide() })
+                    }
             ) {
                 // Search Field
                 SearchField(
                     query = state.query,
                     onQueryChange = { viewModel.updateQuery(it) },
+                    focusRequester = focusRequester,
                     placeholder = if (state.isAIMode) 
                         "Describe what you're looking for..." 
                         else "Search games..."
@@ -748,7 +781,7 @@ private fun LoadingSearchState(isAIMode: Boolean) {
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Surface),
+                            .background(SurfaceColor),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

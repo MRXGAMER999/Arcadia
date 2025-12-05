@@ -22,8 +22,8 @@ val viewModelModule = module {
     // HomeViewModel: gameRepository, gameListRepository, aiRepository, preferencesManager, addGameToLibraryUseCase, parallelGameFilter, pagedGameRepository
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { DiscoveryViewModel(get(), get(), get(), get()) }
-    // MyGamesViewModel: gameListRepository, preferencesManager, addGameToLibraryUseCase, removeGameFromLibraryUseCase, filterGamesUseCase, sortGamesUseCase
-    viewModel { MyGamesViewModel(get(), get(), get(), get(), get(), get()) }
+    // MyGamesViewModel: gameListRepository, preferencesManager, addGameToLibraryUseCase, removeGameFromLibraryUseCase, filterGamesUseCase, sortGamesUseCase, userId (optional)
+    viewModel { (userId: String?) -> MyGamesViewModel(get(), get(), get(), get(), get(), get(), userId) }
     // DetailsScreenViewModel: gameRepository, gameListRepository, addGameToLibraryUseCase, removeGameFromLibraryUseCase
     viewModel { DetailsScreenViewModel(get(), get(), get(), get()) }
     // SearchViewModel: gameRepository, gameListRepository, preferencesManager, addGameToLibraryUseCase, searchGamesUseCase, getAIGameSuggestionsUseCase, getPopularGamesUseCase

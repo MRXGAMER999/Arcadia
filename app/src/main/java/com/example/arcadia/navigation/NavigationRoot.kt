@@ -43,7 +43,10 @@ object EditProfileScreenKey : NavKey
 object OnboardingScreenKey : NavKey
 
 @Serializable
-object MyGamesScreenKey : NavKey
+data class MyGamesScreenKey(
+    val userId: String? = null,
+    val username: String? = null
+) : NavKey
 
 @Serializable
 data class SearchScreenKey(val initialQuery: String? = null) : NavKey
@@ -132,7 +135,7 @@ fun NavigationRoot(
                                 backStack.add(ProfileScreenKey())
                             },
                             onNavigateToMyGames = {
-                                backStack.add(MyGamesScreenKey)
+                                backStack.add(MyGamesScreenKey())
                             },
                             onNavigateToSearch = { query ->
                                 backStack.add(SearchScreenKey(query))
@@ -153,10 +156,18 @@ fun NavigationRoot(
                         ProfileScreen(
                             userId = key.userId,
                             onNavigateBack = {
-                                backStack.remove(key)
+                                if (backStack.size <= 1) {
+                                    backStack.add(HomeScreenKey)
+                                    backStack.remove(key)
+                                } else {
+                                    backStack.remove(key)
+                                }
                             },
                             onNavigateToEditProfile = {
                                 backStack.add(EditProfileScreenKey)
+                            },
+                            onNavigateToMyGames = { navUserId, navUsername ->
+                                backStack.add(MyGamesScreenKey(navUserId, navUsername))
                             },
                             onGameClick = { gameId ->
                                 backStack.add(DetailsScreenKey(gameId))
@@ -199,6 +210,8 @@ fun NavigationRoot(
                         key = key,
                     ) {
                         MyGamesScreen(
+                            userId = key.userId,
+                            username = key.username,
                             onNavigateBack = {
                                 backStack.remove(key)
                             },

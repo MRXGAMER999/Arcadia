@@ -44,6 +44,9 @@ data class MyGamesScreenState(
  * ViewModel for My Games screen.
  * Uses FilterGamesUseCase, SortGamesUseCase, and RemoveGameFromLibraryUseCase 
  * to avoid duplicating business logic.
+ * 
+ * @param userId Optional user ID for viewing another user's library (read-only mode).
+ *               If null, shows the current user's library with full edit capabilities.
  */
 class MyGamesViewModel(
     gameListRepository: GameListRepository,
@@ -51,7 +54,8 @@ class MyGamesViewModel(
     addGameToLibraryUseCase: AddGameToLibraryUseCase,
     removeGameFromLibraryUseCase: RemoveGameFromLibraryUseCase,
     private val filterGamesUseCase: FilterGamesUseCase,
-    private val sortGamesUseCase: SortGamesUseCase
+    private val sortGamesUseCase: SortGamesUseCase,
+    private val userId: String? = null
 ) : UndoableViewModel(gameListRepository, addGameToLibraryUseCase, removeGameFromLibraryUseCase) {
     
     companion object {
@@ -59,6 +63,9 @@ class MyGamesViewModel(
         private const val UNSAVED_CHANGES_TIMEOUT_MS = 5000L
         private const val REORDER_INACTIVITY_TIMEOUT_MS = 15000L // 15 seconds
     }
+    
+    /** Whether viewing another user's library (read-only mode) */
+    val isReadOnly: Boolean = userId != null
     
     var screenState by mutableStateOf(MyGamesScreenState())
         private set
@@ -270,8 +277,8 @@ class MyGamesViewModel(
 
     
     private fun loadGames() {
-        // Don't reload if Firebase listener is paused during drag
-        if (isFirebaseListenerPaused) {
+        // Don't reload if Firebase listener is paused during drag (only for own library)
+        if (isFirebaseListenerPaused && !isReadOnly) {
             android.util.Log.d("MyGamesVM", "loadGames: Skipping - Firebase listener paused")
             return
         }
@@ -279,11 +286,16 @@ class MyGamesViewModel(
         launchWithKey("load_games") {
             val sortOrder = screenState.sortOrder
 
-            // Fetch all games without genre filtering (client-side filtering will be applied)
-            gameListRepository.getGameList(sortOrder)
-                .collect { state ->
-                    // Skip updates if listener is paused
-                    if (isFirebaseListenerPaused) return@collect
+            // Fetch games - use getGameListForUser for another user's library, getGameList for own library
+            val gamesFlow = if (userId != null) {
+                gameListRepository.getGameListForUser(userId, sortOrder)
+            } else {
+                gameListRepository.getGameList(sortOrder)
+            }
+            
+            gamesFlow.collect { state ->
+                    // Skip updates if listener is paused (only for own library)
+                    if (isFirebaseListenerPaused && !isReadOnly) return@collect
                     
                     when (state) {
                         is RequestState.Success -> {

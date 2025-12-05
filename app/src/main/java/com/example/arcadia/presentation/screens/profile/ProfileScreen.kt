@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -56,6 +58,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ModalBottomSheet
+import com.example.arcadia.presentation.screens.searchScreen.components.SearchField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -79,6 +82,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -117,6 +121,7 @@ fun ProfileScreen(
     userId: String? = null,
     onNavigateBack: () -> Unit,
     onNavigateToEditProfile: () -> Unit,
+    onNavigateToMyGames: (userId: String?, username: String?) -> Unit = { _, _ -> },
     onGameClick: (Int) -> Unit = {},
     viewModel: ProfileViewModel = koinViewModel()
 ) {
@@ -239,9 +244,9 @@ fun ProfileScreen(
                             name = profileState.name,
                             username = profileState.username,
                             location = buildString {
-                                profileState.city?.let { append(it) }
-                                if (profileState.city != null && profileState.country != null) append(", ")
-                                profileState.country?.let { append(it) }
+                                if (!profileState.city.isNullOrEmpty()) append(profileState.city)
+                                if (!profileState.city.isNullOrEmpty() && !profileState.country.isNullOrEmpty()) append(", ")
+                                if (!profileState.country.isNullOrEmpty()) append(profileState.country)
                             }.takeIf { it.isNotEmpty() }
                         )
 
@@ -266,8 +271,8 @@ fun ProfileScreen(
                                 section = section,
                                 games = libraryGames.filter { it.rawgId in section.gameIds },
                                 onGameClick = onGameClick,
-                                onEditClick = { sectionToEdit = section },
-                                onDeleteClick = { viewModel.deleteCustomSection(section.id) }
+                                onEditClick = if (isCurrentUser) { { sectionToEdit = section } } else null,
+                                onDeleteClick = if (isCurrentUser) { { viewModel.deleteCustomSection(section.id) } } else null
                             )
                         }
 
@@ -276,6 +281,14 @@ fun ProfileScreen(
                             games = libraryGames.take(10),
                             totalGames = statsState.totalGames,
                             onGameClick = onGameClick,
+                            onSeeAllClick = { 
+                                // Pass userId and username only if viewing another user's profile
+                                if (isCurrentUser) {
+                                    onNavigateToMyGames(null, null)
+                                } else {
+                                    onNavigateToMyGames(userId, profileState.username)
+                                }
+                            },
                             expanded = showLibrarySection,
                             onExpandClick = { showLibrarySection = !showLibrarySection }
                         )
@@ -393,7 +406,9 @@ private fun ProfileHeader(
                         model = imageUrl,
                         contentDescription = "Profile Picture",
                         modifier = Modifier.size(132.dp).clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
+                        error = rememberVectorPainter(Icons.Default.Person),
+                        placeholder = rememberVectorPainter(Icons.Default.Person)
                     )
                 } else {
                     Text(
@@ -478,6 +493,14 @@ private fun GamingStatsCard(statsState: ProfileStatsState) {
                 StatItem(value = statsState.totalGames.toString(), label = "Games", color = ButtonPrimary, modifier = Modifier.weight(1f))
                 StatItem(value = statsState.finishedGames.toString(), label = "Finished", color = YellowAccent, modifier = Modifier.weight(1f))
                 StatItem(value = statsState.playingGames.toString(), label = "Playing", color = NeonPink, modifier = Modifier.weight(1f))
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                StatItem(value = statsState.droppedGames.toString(), label = "Dropped", color = Color(0xFFFF5555), modifier = Modifier.weight(1f))
+                StatItem(value = statsState.onHoldGames.toString(), label = "On Hold", color = Color(0xFFFFB74D), modifier = Modifier.weight(1f))
+                StatItem(value = statsState.wantToPlayGames.toString(), label = "Want to Play", color = Color(0xFF64B5F6), modifier = Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -605,8 +628,8 @@ private fun CustomSectionCard(
     section: ProfileSection,
     games: List<GameListEntry>,
     onGameClick: (Int) -> Unit,
-    onEditClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onEditClick: (() -> Unit)? = null,
+    onDeleteClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -626,11 +649,16 @@ private fun CustomSectionCard(
                     letterSpacing = 2.sp,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onEditClick, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextSecondary.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                // Only show edit/delete icons if callbacks are provided (own profile)
+                if (onEditClick != null) {
+                    IconButton(onClick = onEditClick, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextSecondary.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                    }
                 }
-                IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFFF5555).copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                if (onDeleteClick != null) {
+                    IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFFF5555).copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                    }
                 }
             }
 
@@ -719,6 +747,7 @@ private fun LibraryPreviewCard(
     games: List<GameListEntry>,
     totalGames: Int,
     onGameClick: (Int) -> Unit,
+    onSeeAllClick: () -> Unit,
     expanded: Boolean,
     onExpandClick: () -> Unit
 ) {
@@ -737,7 +766,9 @@ private fun LibraryPreviewCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(text = "MY LIBRARY", fontSize = 18.sp, fontFamily = BebasNeueFont, color = YellowAccent, letterSpacing = 2.sp)
                 Spacer(modifier = Modifier.weight(1f))
-                Text(text = "$totalGames games", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.6f))
+                TextButton(onClick = onSeeAllClick) {
+                    Text(text = "See All ($totalGames)", fontSize = 14.sp, color = ButtonPrimary)
+                }
             }
 
             AnimatedVisibility(
@@ -777,103 +808,139 @@ private fun AddSectionBottomSheet(
     var title by remember { mutableStateOf(existingSection?.title ?: "") }
     var selectedType by remember { mutableStateOf(existingSection?.type ?: ProfileSectionType.SINGLE_GAME) }
     var selectedGameIds by remember { mutableStateOf(existingSection?.gameIds ?: emptyList()) }
+    var searchQuery by remember { mutableStateOf("") }
+    
+    // Filter games based on search query
+    val filteredGames = remember(libraryGames, searchQuery) {
+        if (searchQuery.isBlank()) {
+            libraryGames
+        } else {
+            libraryGames.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
-        Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
-            Text(
-                text = if (existingSection != null) "EDIT SECTION" else "ADD NEW SECTION",
-                fontSize = 28.sp,
-                fontFamily = BebasNeueFont,
-                color = TextSecondary,
-                letterSpacing = 2.sp
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Section Title") },
-                placeholder = { Text("e.g., Favorite Game of All Time") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ButtonPrimary,
-                    unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
-                    focusedLabelColor = ButtonPrimary,
-                    unfocusedLabelColor = TextSecondary.copy(alpha = 0.6f),
-                    focusedTextColor = TextSecondary,
-                    unfocusedTextColor = TextSecondary
-                ),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(text = "Section Type", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionTypeChip(
-                    text = "Single Game",
-                    selected = selectedType == ProfileSectionType.SINGLE_GAME,
-                    onClick = {
-                        selectedType = ProfileSectionType.SINGLE_GAME
-                        if (selectedGameIds.size > 1) selectedGameIds = selectedGameIds.take(1)
-                    }
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(24.dp)
+        ) {
+            item {
+                Text(
+                    text = if (existingSection != null) "EDIT SECTION" else "ADD NEW SECTION",
+                    fontSize = 28.sp,
+                    fontFamily = BebasNeueFont,
+                    color = TextSecondary,
+                    letterSpacing = 2.sp
                 )
-                SectionTypeChip(
-                    text = "Game List",
-                    selected = selectedType == ProfileSectionType.GAME_LIST,
-                    onClick = { selectedType = ProfileSectionType.GAME_LIST }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Section Title") },
+                    placeholder = { Text("e.g., Favorite Game of All Time") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = ButtonPrimary,
+                        unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                        focusedLabelColor = ButtonPrimary,
+                        unfocusedLabelColor = TextSecondary.copy(alpha = 0.6f),
+                        focusedTextColor = TextSecondary,
+                        unfocusedTextColor = TextSecondary
+                    ),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(text = "Section Type", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SectionTypeChip(
+                        text = "Single Game",
+                        selected = selectedType == ProfileSectionType.SINGLE_GAME,
+                        onClick = {
+                            selectedType = ProfileSectionType.SINGLE_GAME
+                            if (selectedGameIds.size > 1) selectedGameIds = selectedGameIds.take(1)
+                        }
+                    )
+                    SectionTypeChip(
+                        text = "Game List",
+                        selected = selectedType == ProfileSectionType.GAME_LIST,
+                        onClick = { selectedType = ProfileSectionType.GAME_LIST }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(text = "Select Games from Your Library", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Search field for filtering library games
+                SearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholder = "Search your library...",
+                    modifier = Modifier.padding(horizontal = 0.dp, vertical = 0.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(text = "Select Games from Your Library", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
-            Spacer(modifier = Modifier.height(12.dp))
-
             if (libraryGames.isEmpty()) {
-                Text(text = "Add games to your library first", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 16.dp))
+                item {
+                    Text(text = "Add games to your library first", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 16.dp))
+                }
+            } else if (filteredGames.isEmpty() && searchQuery.isNotBlank()) {
+                item {
+                    Text(
+                        text = "No games found matching \"$searchQuery\"",
+                        fontSize = 14.sp,
+                        color = TextSecondary.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    libraryGames.chunked(3).forEach { rowGames ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            rowGames.forEach { game ->
-                                val isSelected = game.rawgId in selectedGameIds
-                                GameSelectionCard(
-                                    game = game,
-                                    isSelected = isSelected,
-                                    onClick = {
-                                        selectedGameIds = if (isSelected) {
-                                            selectedGameIds - game.rawgId
-                                        } else {
-                                            if (selectedType == ProfileSectionType.SINGLE_GAME) listOf(game.rawgId)
-                                            else selectedGameIds + game.rawgId
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                            repeat(3 - rowGames.size) { Spacer(modifier = Modifier.weight(1f)) }
+                items(filteredGames.chunked(3)) { rowGames ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                        rowGames.forEach { game ->
+                            val isSelected = game.rawgId in selectedGameIds
+                            GameSelectionCard(
+                                game = game,
+                                isSelected = isSelected,
+                                onClick = {
+                                    selectedGameIds = if (isSelected) {
+                                        selectedGameIds - game.rawgId
+                                    } else {
+                                        if (selectedType == ProfileSectionType.SINGLE_GAME) listOf(game.rawgId)
+                                        else selectedGameIds + game.rawgId
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
+                        repeat(3 - rowGames.size) { Spacer(modifier = Modifier.weight(1f)) }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
 
-            Button(
-                onClick = { if (title.isNotBlank() && selectedGameIds.isNotEmpty()) onSave(title, selectedType, selectedGameIds) },
-                enabled = title.isNotBlank() && selectedGameIds.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, disabledContainerColor = ButtonPrimary.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(text = if (existingSection != null) "UPDATE SECTION" else "ADD SECTION", fontFamily = BebasNeueFont, fontSize = 20.sp, letterSpacing = 1.sp)
+                Button(
+                    onClick = { if (title.isNotBlank() && selectedGameIds.isNotEmpty()) onSave(title, selectedType, selectedGameIds) },
+                    enabled = title.isNotBlank() && selectedGameIds.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, disabledContainerColor = ButtonPrimary.copy(alpha = 0.3f)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(text = if (existingSection != null) "UPDATE SECTION" else "ADD SECTION", fontFamily = BebasNeueFont, fontSize = 20.sp, letterSpacing = 1.sp)
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

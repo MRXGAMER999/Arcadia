@@ -14,29 +14,33 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,8 +59,15 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.util.RequestState
 import org.koin.androidx.compose.koinViewModel
 
-private val HEADER_HEIGHT = 350.dp
+private val HEADER_HEIGHT_PORTRAIT = 350.dp
+private val HEADER_HEIGHT_LANDSCAPE = 200.dp
 private val TOOLBAR_HEIGHT = 64.dp
+
+// Custom Saver for LazyListState
+private val LazyListStateSaver = listSaver<LazyListState, Int>(
+    save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
+    restore = { LazyListState(it[0], it[1]) }
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,10 +76,17 @@ fun DetailsScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     val viewModel: DetailsScreenViewModel = koinViewModel()
-    val listState = rememberLazyListState()
+    val listState = rememberSaveable(saver = LazyListStateSaver) { LazyListState() }
     val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
     
-    val headerHeightPx = with(density) { HEADER_HEIGHT.toPx() }
+    val headerHeight = if (configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+        HEADER_HEIGHT_LANDSCAPE
+    } else {
+        HEADER_HEIGHT_PORTRAIT
+    }
+    
+    val headerHeightPx = with(density) { headerHeight.toPx() }
     val toolbarHeightPx = with(density) { TOOLBAR_HEIGHT.toPx() }
 
     // Calculate scroll progress for collapse effect
@@ -114,7 +132,7 @@ fun DetailsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(HEADER_HEIGHT)
+                        .height(headerHeight)
                         .graphicsLayer {
                             translationY = -scrollOffset * 0.5f // Parallax effect
                             alpha = 1f - collapseProgress // Fade out as it collapses
@@ -133,7 +151,7 @@ fun DetailsScreen(
                 ) {
                     // Transparent spacer for header
                     item { 
-                        Spacer(modifier = Modifier.height(HEADER_HEIGHT)) 
+                        Spacer(modifier = Modifier.height(headerHeight)) 
                     }
                     
                     // Content Body
@@ -149,7 +167,7 @@ fun DetailsScreen(
                                             Surface,
                                             Surface
                                         ),
-                                        startY = -100f,
+                                        startY = 0f,
                                         endY = 100f
                                     )
                                 )
@@ -183,7 +201,14 @@ fun DetailsScreen(
                             .padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onNavigateBack) {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier
+                                .background(
+                                    color = Surface.copy(alpha = 0.5f * (1f - collapseProgress)),
+                                    shape = CircleShape
+                                )
+                        ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
