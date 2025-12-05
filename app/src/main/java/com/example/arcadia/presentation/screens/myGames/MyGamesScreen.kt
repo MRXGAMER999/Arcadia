@@ -319,31 +319,33 @@ fun MyGamesScreen(
                     
                     Spacer(modifier = Modifier.weight(1f))
                     
-                    // Full Analysis button - More prominent
-                    FilterChip(
-                        selected = false,
-                        onClick = onNavigateToAnalytics,
-                        label = { 
-                            Text(
-                                text = "Analysis",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Analytics,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            containerColor = ButtonPrimary,
-                            labelColor = Color.White,
-                            iconColor = Color.White
-                        ),
-                        border = null
-                    )
+                    // Full Analysis button - More prominent (only show for own library)
+                    if (!isReadOnly) {
+                        FilterChip(
+                            selected = false,
+                            onClick = onNavigateToAnalytics,
+                            label = { 
+                                Text(
+                                    text = "Analysis",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Analytics,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = ButtonPrimary,
+                                labelColor = Color.White,
+                                iconColor = Color.White
+                            ),
+                            border = null
+                        )
+                    }
                 }
                 
                 // Games Grid
@@ -616,7 +618,7 @@ private fun ReorderableListView(
             ) {
                 GameStatsCard(
                     games = games,
-                    onSeeMoreClick = onNavigateToAnalytics
+                    onSeeMoreClick = if (isReadOnly) null else onNavigateToAnalytics
                 )
             }
         }
@@ -758,7 +760,7 @@ private fun ReorderableGridView(
             ) {
                 GameStatsCard(
                     games = games,
-                    onSeeMoreClick = onNavigateToAnalytics
+                    onSeeMoreClick = if (isReadOnly) null else onNavigateToAnalytics
                 )
             }
         }

@@ -59,7 +59,7 @@ import java.util.Locale
 fun GameStatsCard(
     games: List<GameListEntry>,
     modifier: Modifier = Modifier,
-    onSeeMoreClick: () -> Unit = {}
+    onSeeMoreClick: (() -> Unit)? = null
 ) {
     val totalGames = games.size
     val totalHours = games.sumOf { it.hoursPlayed }
@@ -111,13 +111,16 @@ fun GameStatsCard(
                     fontWeight = FontWeight.Bold
                 )
                 
-                androidx.compose.material3.TextButton(onClick = onSeeMoreClick) {
-                    Text(
-                        text = "Full Analytics",
-                        color = ButtonPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                // Only show Full Analytics button if callback is provided
+                if (onSeeMoreClick != null) {
+                    androidx.compose.material3.TextButton(onClick = onSeeMoreClick) {
+                        Text(
+                            text = "Full Analytics",
+                            color = ButtonPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
