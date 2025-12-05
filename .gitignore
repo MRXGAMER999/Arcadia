@@ -23,3 +23,21 @@ google-services.json
 
 # Kiro folder
 .kiro/
+
+# Release files - DO NOT UPLOAD
+*.apk
+*.aab
+app/release/
+releasemy-release-key
+*.jks
+*.keystore
+
+# Documentation (keep local only)
+docs/ARCADIA_*.md
+docs/PROFILE_SHARING_IMPLEMENTATION.md
+
+# Copilot instructions
+.github/copilot-instructions.md
+
+# Misc
+et --hard*
