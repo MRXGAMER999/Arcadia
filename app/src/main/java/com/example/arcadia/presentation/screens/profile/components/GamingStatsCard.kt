@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -44,68 +46,93 @@ fun GamingStatsCard(statsState: ProfileStatsState) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(painter = painterResource(id = R.drawable.controller), contentDescription = null, tint = YellowAccent, modifier = Modifier.size(24.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(text = "GAMING STATS", fontSize = 18.sp, fontFamily = BebasNeueFont, color = YellowAccent, letterSpacing = 2.sp)
+                Icon(painter = painterResource(id = R.drawable.controller), contentDescription = null, tint = YellowAccent, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "GAMING STATS", fontSize = 16.sp, fontFamily = BebasNeueFont, color = YellowAccent, letterSpacing = 1.5.sp)
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // Main Stats Row
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                StatItem(value = statsState.totalGames.toString(), label = "Games", color = ButtonPrimary, modifier = Modifier.weight(1f))
-                StatItem(value = statsState.finishedGames.toString(), label = "Finished", color = YellowAccent, modifier = Modifier.weight(1f))
-                StatItem(value = statsState.playingGames.toString(), label = "Playing", color = NeonPink, modifier = Modifier.weight(1f))
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                StatItem(value = statsState.droppedGames.toString(), label = "Dropped", color = Color(0xFFFF5555), modifier = Modifier.weight(1f))
-                StatItem(value = statsState.onHoldGames.toString(), label = "On Hold", color = Color(0xFFFFB74D), modifier = Modifier.weight(1f))
-                StatItem(value = statsState.wantToPlayGames.toString(), label = "Want to Play", color = Color(0xFF64B5F6), modifier = Modifier.weight(1f))
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Divider
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
-            
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                StatItem(value = "${statsState.hoursPlayed}h", label = "Hours", color = NeonBlue, modifier = Modifier.weight(1f))
-                StatItem(
+                MainStatItem(value = statsState.totalGames.toString(), label = "Games", color = ButtonPrimary)
+                MainStatItem(value = "${statsState.hoursPlayed}h", label = "Hours", color = NeonBlue)
+                MainStatItem(
                     value = if (statsState.avgRating > 0) String.format("%.1f", statsState.avgRating) else "-",
-                    label = "Avg Rating",
-                    color = Color(0xFF4ADE80),
-                    modifier = Modifier.weight(1f)
+                    label = "Rating",
+                    color = Color(0xFF4ADE80)
                 )
-                StatItem(value = "${statsState.completionRate.toInt()}%", label = "Completion", color = NeonPurple, modifier = Modifier.weight(1f))
+                MainStatItem(value = "${statsState.completionRate.toInt()}%", label = "Comp.", color = NeonPurple)
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Distribution Bar
+            val total = statsState.finishedGames + statsState.playingGames + statsState.wantToPlayGames + statsState.droppedGames + statsState.onHoldGames
+            if (total > 0) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Black.copy(alpha = 0.3f))
+                ) {
+                    if (statsState.finishedGames > 0) Box(modifier = Modifier.weight(statsState.finishedGames.toFloat()).fillMaxHeight().background(YellowAccent))
+                    if (statsState.playingGames > 0) Box(modifier = Modifier.weight(statsState.playingGames.toFloat()).fillMaxHeight().background(NeonPink))
+                    if (statsState.wantToPlayGames > 0) Box(modifier = Modifier.weight(statsState.wantToPlayGames.toFloat()).fillMaxHeight().background(Color(0xFF64B5F6)))
+                    if (statsState.onHoldGames > 0) Box(modifier = Modifier.weight(statsState.onHoldGames.toFloat()).fillMaxHeight().background(Color(0xFFFFB74D)))
+                    if (statsState.droppedGames > 0) Box(modifier = Modifier.weight(statsState.droppedGames.toFloat()).fillMaxHeight().background(Color(0xFFFF5555)))
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Legend
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        LegendItem(count = statsState.finishedGames, label = "Finished", color = YellowAccent)
+                        LegendItem(count = statsState.playingGames, label = "Playing", color = NeonPink)
+                        LegendItem(count = statsState.wantToPlayGames, label = "Backlog", color = Color(0xFF64B5F6))
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                        LegendItem(count = statsState.onHoldGames, label = "On Hold", color = Color(0xFFFFB74D), modifier = Modifier.padding(end = 16.dp))
+                        LegendItem(count = statsState.droppedGames, label = "Dropped", color = Color(0xFFFF5555))
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StatItem(value: String, label: String, color: Color, modifier: Modifier = Modifier) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+private fun MainStatItem(value: String, label: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value, 
-            fontSize = 32.sp, 
+            fontSize = 24.sp, 
             fontFamily = BebasNeueFont, 
             color = color,
             style = TextStyle(
                 shadow = androidx.compose.ui.graphics.Shadow(
                     color = color.copy(alpha = 0.5f),
-                    blurRadius = 10f
+                    blurRadius = 8f
                 )
             )
         )
-        Text(text = label, fontSize = 13.sp, color = TextSecondary.copy(alpha = 0.7f), textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+        Text(text = label, fontSize = 12.sp, color = TextSecondary.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun LegendItem(count: Int, label: String, color: Color, modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
+        Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(text = "$count $label", fontSize = 12.sp, color = TextSecondary.copy(alpha = 0.9f), fontWeight = FontWeight.Medium)
     }
 }

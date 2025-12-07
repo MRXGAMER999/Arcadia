@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -80,7 +81,7 @@ fun ProfileHeader(
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(160.dp)
+                .size(120.dp)
                 .drawBehind {
                     drawCircle(
                         brush = Brush.radialGradient(
@@ -97,10 +98,10 @@ fun ProfileHeader(
         ) {
             Box(
                 modifier = Modifier
-                    .size(140.dp)
+                    .size(100.dp)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(colors = listOf(ButtonPrimary, NeonPurple)))
-                    .padding(4.dp)
+                    .padding(3.dp)
                     .clip(CircleShape)
                     .background(Surface),
                 contentAlignment = Alignment.Center
@@ -109,7 +110,9 @@ fun ProfileHeader(
                     AsyncImage(
                         model = imageUrl,
                         contentDescription = "Profile Picture",
-                        modifier = Modifier.size(132.dp).clip(CircleShape),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
                         contentScale = ContentScale.Crop,
                         error = rememberVectorPainter(Icons.Default.Person),
                         placeholder = rememberVectorPainter(Icons.Default.Person)
@@ -117,7 +120,7 @@ fun ProfileHeader(
                 } else {
                     Text(
                         text = name.firstOrNull()?.uppercase() ?: "?",
-                        fontSize = 56.sp,
+                        fontSize = 48.sp,
                         fontFamily = BebasNeueFont,
                         color = ButtonPrimary
                     )
@@ -125,22 +128,22 @@ fun ProfileHeader(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = name, 
-            fontSize = 32.sp, 
+            fontSize = 28.sp, 
             fontFamily = BebasNeueFont, 
             color = TextSecondary, 
-            letterSpacing = 1.5.sp
+            letterSpacing = 1.sp
         )
 
         if (username.isNotEmpty()) {
             Text(
                 text = "@$username", 
-                fontSize = 18.sp, 
+                fontSize = 16.sp, 
                 color = ButtonPrimary, 
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
 
@@ -148,13 +151,13 @@ fun ProfileHeader(
             Row(
                 verticalAlignment = Alignment.CenterVertically, 
                 modifier = Modifier
-                    .padding(top = 12.dp)
-                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .padding(top = 8.dp)
+                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                Icon(Icons.Default.LocationOn, contentDescription = null, tint = TextSecondary.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(text = location, fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.8f))
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = TextSecondary.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = location, fontSize = 12.sp, color = TextSecondary.copy(alpha = 0.8f))
             }
         }
     }

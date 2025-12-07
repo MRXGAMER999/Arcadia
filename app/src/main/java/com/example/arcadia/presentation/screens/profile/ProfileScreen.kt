@@ -180,10 +180,11 @@ fun ProfileScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        Spacer(modifier = Modifier.height(16.dp))
                         // Profile Header
                         ProfileHeader(
                             imageUrl = profileState.profileImageUrl,

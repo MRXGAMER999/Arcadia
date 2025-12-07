@@ -47,20 +47,20 @@ fun GamingPlatformsCard(steamId: String?, xboxGamertag: String?, psnId: String?)
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(painter = painterResource(id = R.drawable.controller), contentDescription = null, tint = NeonBlue, modifier = Modifier.size(24.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(text = "GAMING PLATFORMS", fontSize = 18.sp, fontFamily = BebasNeueFont, color = NeonBlue, letterSpacing = 2.sp)
+                Icon(painter = painterResource(id = R.drawable.controller), contentDescription = null, tint = NeonBlue, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "GAMING PLATFORMS", fontSize = 16.sp, fontFamily = BebasNeueFont, color = NeonBlue, letterSpacing = 1.5.sp)
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             if (hasAnyPlatform) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!steamId.isNullOrEmpty()) {
                         PlatformBadge("Steam", steamId, SteamColor, R.drawable.pc_ic)
                     }
@@ -75,13 +75,13 @@ fun GamingPlatformsCard(steamId: String?, xboxGamertag: String?, psnId: String?)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 24.dp)
+                        .padding(vertical = 16.dp)
                         .border(1.dp, TextSecondary.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                        .padding(24.dp), 
+                        .padding(16.dp), 
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "No gaming platforms linked", fontSize = 16.sp, color = TextSecondary.copy(alpha = 0.5f))
+                        Text(text = "No gaming platforms linked", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.5f))
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(text = "Add your Steam, Xbox, or PSN ID", fontSize = 14.sp, color = ButtonPrimary.copy(alpha = 0.8f))
                     }
@@ -96,26 +96,26 @@ private fun PlatformBadge(platformName: String, gamertag: String, platformColor:
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(platformColor.copy(alpha = 0.15f))
-            .border(1.dp, platformColor.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .border(1.dp, platformColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(platformColor)
                 .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape), 
             contentAlignment = Alignment.Center
         ) {
-            Icon(painter = painterResource(id = iconRes), contentDescription = platformName, tint = Color.White, modifier = Modifier.size(28.dp))
+            Icon(painter = painterResource(id = iconRes), contentDescription = platformName, tint = Color.White, modifier = Modifier.size(24.dp))
         }
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = platformName, fontSize = 13.sp, color = TextSecondary.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
-            Text(text = gamertag, fontSize = 18.sp, color = TextSecondary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = platformName, fontSize = 12.sp, color = TextSecondary.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
+            Text(text = gamertag, fontSize = 16.sp, color = TextSecondary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

@@ -53,20 +53,20 @@ fun LibraryPreviewCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().clickable(onClick = onExpandClick)
             ) {
-                Icon(painter = painterResource(id = R.drawable.controller), contentDescription = null, tint = YellowAccent, modifier = Modifier.size(24.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(text = "MY LIBRARY", fontSize = 18.sp, fontFamily = BebasNeueFont, color = YellowAccent, letterSpacing = 2.sp)
+                Icon(painter = painterResource(id = R.drawable.controller), contentDescription = null, tint = YellowAccent, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "MY LIBRARY", fontSize = 16.sp, fontFamily = BebasNeueFont, color = YellowAccent, letterSpacing = 1.5.sp)
                 Spacer(modifier = Modifier.weight(1f))
                 TextButton(onClick = onSeeAllClick) {
-                    Text(text = "See All ($totalGames)", fontSize = 14.sp, color = ButtonPrimary)
+                    Text(text = "See All ($totalGames)", fontSize = 13.sp, color = ButtonPrimary)
                 }
             }
 
@@ -76,12 +76,12 @@ fun LibraryPreviewCard(
                 exit = fadeOut() + shrinkVertically()
             ) {
                 Column {
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     if (games.isEmpty()) {
-                        Text(text = "Your library is empty", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 16.dp))
+                        Text(text = "Your library is empty", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 12.dp))
                     } else {
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp), 
+                            horizontalArrangement = Arrangement.spacedBy(12.dp), 
                             contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
                             items(games) { game ->

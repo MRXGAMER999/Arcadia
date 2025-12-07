@@ -26,13 +26,13 @@ fun BioCard(bio: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(text = "ABOUT", fontSize = 16.sp, fontFamily = BebasNeueFont, color = ButtonPrimary, letterSpacing = 2.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(text = bio, fontSize = 15.sp, color = TextSecondary.copy(alpha = 0.9f), lineHeight = 24.sp)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = "ABOUT", fontSize = 16.sp, fontFamily = BebasNeueFont, color = ButtonPrimary, letterSpacing = 1.5.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = bio, fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.9f), lineHeight = 20.sp)
         }
     }
 }

@@ -61,41 +61,41 @@ fun CustomSectionCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(painter = painterResource(id = R.drawable.controller), contentDescription = null, tint = NeonPurple, modifier = Modifier.size(24.dp))
-                Spacer(modifier = Modifier.width(12.dp))
+                Icon(painter = painterResource(id = R.drawable.controller), contentDescription = null, tint = NeonPurple, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = section.title.uppercase(),
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                     fontFamily = BebasNeueFont,
                     color = NeonPurple,
-                    letterSpacing = 2.sp,
+                    letterSpacing = 1.5.sp,
                     modifier = Modifier.weight(1f)
                 )
                 // Only show edit/delete icons if callbacks are provided (own profile)
                 if (onEditClick != null) {
-                    IconButton(onClick = onEditClick, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextSecondary.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                    IconButton(onClick = onEditClick, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextSecondary.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                     }
                 }
                 if (onDeleteClick != null) {
-                    IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFFF5555).copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                    IconButton(onClick = onDeleteClick, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFFF5555).copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             if (games.isEmpty()) {
-                Text(text = "No games added yet", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 16.dp))
+                Text(text = "No games added yet", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 12.dp))
             } else {
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp), 
+                    horizontalArrangement = Arrangement.spacedBy(12.dp), 
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
                     items(games) { game ->
@@ -161,6 +161,7 @@ fun GameCardBig(game: GameListEntry, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                     color = TextSecondary,
                     maxLines = 2,
+                    minLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 18.sp
                 )
