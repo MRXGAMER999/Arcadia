@@ -56,6 +56,10 @@ import com.example.arcadia.presentation.screens.roast.util.RoastShareHelper
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+
 /**
  * Main Roast Screen composable with empty state, loading state, results state, 
  * error state, and regenerate confirmation dialog.
@@ -78,10 +82,22 @@ fun RoastScreen(
 ) {
     val state = viewModel.state
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
     
     // Check motion preferences
     LaunchedEffect(Unit) {
         viewModel.checkMotionPreferences(context)
+    }
+
+    // Handle badge save notifications
+    LaunchedEffect(state.badgeSaveError, state.badgesSaved) {
+        if (state.badgeSaveError != null) {
+            snackbarHostState.showSnackbar(state.badgeSaveError!!)
+            viewModel.clearBadgeSaveState()
+        } else if (state.badgesSaved) {
+            snackbarHostState.showSnackbar("Badges saved to profile!")
+            viewModel.clearBadgeSaveState()
+        }
     }
 
     Scaffold(
@@ -91,6 +107,7 @@ fun RoastScreen(
                 onNavigateBack = onNavigateBack
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent,
         modifier = modifier
             .shake(enabled = state.isShaking)
@@ -135,9 +152,14 @@ fun RoastScreen(
                 
                 // Results state
                 state.roast != null -> {
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    val scrollState = rememberScrollState()
+                    LaunchedEffect(state.roast) {
+                        scrollState.scrollTo(0)
+                    }
+                    Column(modifier = Modifier.verticalScroll(scrollState)) {
                         AnimatedRoastResultCard(
                             roast = state.roast!!,
+                            generatedAt = state.generatedAt ?: 0L,
                             revealPhase = state.revealPhase,
                             reduceMotion = state.reduceMotion,
                             onRegenerate = { viewModel.regenerateRoast() },
@@ -166,6 +188,7 @@ fun RoastScreen(
                 else -> {
                     RoastEmptyState(
                         hasInsufficientStats = state.hasInsufficientStats,
+                        isFriendRoast = targetUserId != null,
                         onRoastMeClick = { viewModel.generateRoast() }
                     )
                 }
@@ -219,6 +242,7 @@ private fun RoastTopBar(
 @Composable
 private fun RoastEmptyState(
     hasInsufficientStats: Boolean,
+    isFriendRoast: Boolean,
     onRoastMeClick: () -> Unit
 ) {
     Column(
@@ -237,7 +261,7 @@ private fun RoastEmptyState(
         Spacer(modifier = Modifier.height(24.dp))
         
         Text(
-            text = "Ready to Get Roasted?",
+            text = if (isFriendRoast) "Ready to Roast Them?" else "Ready to Get Roasted?",
             color = Color.White,
             fontSize = 28.sp,
             fontWeight = FontWeight.ExtraBold,
@@ -249,9 +273,17 @@ private fun RoastEmptyState(
         
         Text(
             text = if (hasInsufficientStats) {
-                "Add more games to your library first! You need at least 3 games and 5 hours played to unlock your personalized roast."
+                if (isFriendRoast) {
+                    "This user needs at least 3 games and 5 hours played to unlock their personalized roast."
+                } else {
+                    "Add more games to your library first! You need at least 3 games and 5 hours played to unlock your personalized roast."
+                }
             } else {
-                "Let our AI analyze your gaming habits and deliver a personalized roast you'll never forget. Prepare for the truth!"
+                if (isFriendRoast) {
+                    "Let our AI analyze their gaming habits and deliver a personalized roast they'll never forget. Prepare for the truth!"
+                } else {
+                    "Let our AI analyze your gaming habits and deliver a personalized roast you'll never forget. Prepare for the truth!"
+                }
             },
             color = Color.White.copy(alpha = 0.85f),
             fontSize = 16.sp,
@@ -274,7 +306,7 @@ private fun RoastEmptyState(
                 .height(56.dp)
         ) {
             Text(
-                text = "🔥 Roast Me Now",
+                text = if (isFriendRoast) "🔥 Roast Them Now" else "🔥 Roast Me Now",
                 color = Color.White,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 18.sp,

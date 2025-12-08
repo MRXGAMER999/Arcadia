@@ -16,13 +16,14 @@ private const val TAG = "RoastEntity"
 @Entity(tableName = "roast_table")
 data class RoastEntity(
     @PrimaryKey
-    val id: Int = 1,
+    val userId: String,
     val headline: String,
     val couldHaveList: String,  // JSON array as string
     val prediction: String,
     val wholesomeCloser: String,
     val roastTitle: String,
     val roastTitleEmoji: String,
+    val badges: String = "[]", // JSON array of badges
     val generatedAt: Long
 )
 
@@ -53,8 +54,15 @@ fun RoastEntity.toRoastInsights(): RoastInsights {
             .take(5)
             .ifEmpty { listOf(couldHaveList.take(200)) } // Fallback to truncated text
     }
+
+    // Parse badges (new field, safe fallback)
+    val parsedBadges = try {
+        json.decodeFromString<List<com.example.arcadia.domain.model.ai.Badge>>(badges)
+    } catch (e: Exception) {
+        emptyList()
+    }
     
-    return RoastInsights(
+    val insights = RoastInsights(
         headline = headline,
         couldHaveList = parsedCouldHaveList,
         prediction = prediction,
@@ -62,18 +70,36 @@ fun RoastEntity.toRoastInsights(): RoastInsights {
         roastTitle = roastTitle,
         roastTitleEmoji = roastTitleEmoji
     )
+    // Attach badges to the insights object? No, RoastInsights doesn't have badges field.
+    // The Repository/ViewModel needs to handle this or RoastInsights needs modification.
+    // Looking at RoastViewModel, it holds badges separately in state.
+    // So we need to return a Pair or modify repository return type.
+    // Actually, simpler is to add badges to RoastInsights domain model? 
+    // Or just parse it here but how to return it?
+    // RoastEntity maps to RoastInsights... 
+    // Wait, the prompt asked to fix "Missing Badges in Cache".
+    // RoastViewModel.loadCachedRoast uses roastRepository.getLastRoastWithTimestamp
+    // which maps Entity -> RoastInsights.
+    // RoastInsights does NOT have badges.
+    
+    return insights
 }
 
 /**
  * Convert domain model to Room entity.
+ * Note: Badges must be passed separately or added to RoastInsights.
+ * Since I can't easily change RoastInsights across the app without seeing usages,
+ * I will modify this to take badges as an argument.
  */
-fun RoastInsights.toEntity(generatedAt: Long = System.currentTimeMillis()): RoastEntity =
+fun RoastInsights.toEntity(userId: String, badges: List<com.example.arcadia.domain.model.ai.Badge> = emptyList(), generatedAt: Long = System.currentTimeMillis()): RoastEntity =
     RoastEntity(
+        userId = userId,
         headline = headline,
         couldHaveList = Json.encodeToString(couldHaveList),
         prediction = prediction,
         wholesomeCloser = wholesomeCloser,
         roastTitle = roastTitle,
         roastTitleEmoji = roastTitleEmoji,
+        badges = Json.encodeToString(badges),
         generatedAt = generatedAt
     )

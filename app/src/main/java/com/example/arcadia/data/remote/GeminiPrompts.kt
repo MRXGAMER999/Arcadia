@@ -135,64 +135,7 @@ IMPORTANT:
 """.trimIndent()
     }
 
-    /**
-     * Generates a prompt for personalized gaming roasts.
-     * Persona: Savage but wholesome gaming roast comedian.
-     * 
-     * The roast uses specific user stats to create personalized, absurd comparisons
-     * while always ending on a positive note to make it shareable.
-     * 
-     * @param stats The user's gaming statistics for personalization.
-     * @return A prompt string that generates structured roast content.
-     * 
-     * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
-     */
-    fun gamingRoastPrompt(stats: RoastStats): String {
-        val topGenresFormatted = stats.topGenres.joinToString { "${it.first} (${it.second})" }
-        
-        return """
-You are a savage but ultimately wholesome gaming roast comedian. 
-Roast this gamer based on their stats, but end on a positive note.
 
-STATS:
-- Hours Played: ${stats.hoursPlayed}
-- Total Games: ${stats.totalGames}
-- Completion Rate: ${stats.completionRate}%
-- Completed: ${stats.completedGames}, Dropped: ${stats.droppedGames}
-- Top Genres: $topGenresFormatted
-- Gaming Personality: ${stats.gamingPersonality}
-- Average Rating: ${stats.averageRating}
-
-RULES:
-- Be SPECIFIC - use their actual numbers in jokes
-- Be ABSURD - funnier comparisons are better
-- NO mean-spirited personal attacks - only mock gaming habits
-- Calculate real-world comparisons based on actual hours
-- Always end wholesome - makes it shareable
-
-OUTPUT FORMAT (use EXACTLY these section markers):
-
-===HEADLINE===
-[One killer opening roast line - references their specific stats]
-
-===COULD_HAVE===
-[5 absurd/funny real-world things they could have accomplished]
-[Each on its own line, be specific and creative]
-[Mix practical and absurd comparisons]
-
-===PREDICTION===
-[Funny prediction about their gaming future based on current trajectory]
-
-===WHOLESOME===
-[Genuine positive closer - makes it shareable without feeling mean]
-
-===ROAST_TITLE===
-[Short funny title for their gamer profile - becomes a badge, 2-4 words]
-
-===ROAST_EMOJI===
-[Single emoji that represents their roast title]
-""".trimIndent()
-    }
 
     /**
      * Generates a prompt for AI badge generation based on gaming stats.

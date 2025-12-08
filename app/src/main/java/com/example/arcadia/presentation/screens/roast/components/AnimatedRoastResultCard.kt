@@ -49,6 +49,7 @@ import com.example.arcadia.presentation.screens.roast.RoastTheme
 @Composable
 fun AnimatedRoastResultCard(
     roast: RoastInsights,
+    generatedAt: Long,
     revealPhase: RevealPhase,
     reduceMotion: Boolean,
     onRegenerate: () -> Unit,
@@ -71,30 +72,44 @@ fun AnimatedRoastResultCard(
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
             ) + fadeIn()
         ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                modifier = Modifier
-                    .padding(bottom = 8.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                RoastTheme.emberRed,
-                                RoastTheme.fireOrange
-                            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    RoastTheme.emberRed,
+                                    RoastTheme.fireOrange
+                                )
+                            ),
+                            shape = RoundedCornerShape(20.dp)
                         ),
-                        shape = RoundedCornerShape(20.dp)
-                    ),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text(
-                    text = "${roast.roastTitleEmoji} ${roast.roastTitle}",
-                    style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.sp
-                    ),
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-                )
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Text(
+                        text = "${roast.roastTitleEmoji} ${roast.roastTitle}",
+                        style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.sp
+                        ),
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                    )
+                }
+                
+                // Timestamp
+                if (generatedAt > 0) {
+                    val date = java.text.SimpleDateFormat("MMM dd, yyyy • HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(generatedAt))
+                    Text(
+                        text = "Generated on $date",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
         }
 

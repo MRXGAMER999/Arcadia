@@ -20,6 +20,7 @@ import com.example.arcadia.data.mapper.RoastResponseMapper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.first
 
 /**
  * UI state for the Roast Screen.
@@ -98,11 +99,14 @@ class RoastViewModel(
     fun loadCachedRoast() {
         if (targetUserId != null) return // Don't load cache for friend roasts
 
+        val userId = gamerRepository.getCurrentUserId() ?: return
+
         launchWithKey("load_cached_roast") {
-            roastRepository.getLastRoastWithTimestamp().collect { roastWithTimestamp ->
+            roastRepository.getLastRoastWithTimestamp(userId).collect { roastWithTimestamp ->
                 if (roastWithTimestamp != null) {
                     state = state.copy(
                         roast = roastWithTimestamp.roast,
+                        badges = roastWithTimestamp.badges,
                         generatedAt = roastWithTimestamp.generatedAt,
                         error = null,
                         revealPhase = RevealPhase.COMPLETE
@@ -117,7 +121,7 @@ class RoastViewModel(
      * 
      * Requirements: 4.1, 10.3
      */
-    private fun loadStats() {
+    private fun loadStats(onSuccess: (() -> Unit)? = null) {
         launchWithKey("load_stats") {
             val gamesFlow = if (targetUserId != null) {
                 gameListRepository.getGameListForUser(targetUserId)
@@ -152,6 +156,8 @@ class RoastViewModel(
                         } ?: true
 
                         state = state.copy(hasInsufficientStats = hasInsufficientStats)
+                        
+                        onSuccess?.invoke()
                     }
                     is com.example.arcadia.util.RequestState.Error -> {
                         state = state.copy(
@@ -206,8 +212,15 @@ class RoastViewModel(
         
         badgesResult.onSuccess { badges ->
             state = state.copy(badges = badges)
-        }.onFailure {
-            // Badge generation failure is non-critical, just log
+            
+            // Save badges to cache if self-roast
+            if (targetUserId == null && state.roast != null) {
+                gamerRepository.getCurrentUserId()?.let { userId ->
+                    roastRepository.saveRoast(userId, state.roast!!, badges)
+                }
+            }
+        }.onFailure { error ->
+            android.util.Log.e("RoastViewModel", "Badge generation failed", error)
         }
     }
 
@@ -315,21 +328,53 @@ class RoastViewModel(
         launchWithKey("save_badges") {
             state = state.copy(isSavingBadges = true, badgeSaveError = null)
             
-            val result = featuredBadgesRepository.saveFeaturedBadges(userId, state.selectedBadges)
-            
-            result.onSuccess {
+            try {
+                // Fetch current badges to append instead of overwrite
+                val currentBadges = try {
+                    featuredBadgesRepository.getFeaturedBadges(userId).first()
+                } catch (e: Exception) {
+                    emptyList<Badge>()
+                }
+
+                // Merge: Existing + New, remove duplicates by title, take top 3
+                // Prefer new selections if we exceed limit? Or keep old?
+                // Usually "feature this" implies priority. So New + Old.
+                val mergedBadges = (state.selectedBadges + currentBadges)
+                    .distinctBy { it.title }
+                    .take(RoastScreenState.MAX_FEATURED_BADGES)
+
+                val result = featuredBadgesRepository.saveFeaturedBadges(userId, mergedBadges)
+                
+                result.onSuccess {
+                    state = state.copy(
+                        isSavingBadges = false,
+                        badgesSaved = true,
+                        badgeSaveError = null
+                    )
+                }.onFailure { error ->
+                    state = state.copy(
+                        isSavingBadges = false,
+                        badgeSaveError = error.message ?: "Failed to save badges. Please try again."
+                    )
+                }
+            } catch (e: Exception) {
                 state = state.copy(
                     isSavingBadges = false,
-                    badgesSaved = true,
-                    badgeSaveError = null
-                )
-            }.onFailure { error ->
-                state = state.copy(
-                    isSavingBadges = false,
-                    badgeSaveError = error.message ?: "Failed to save badges. Please try again."
+                    badgeSaveError = "An unexpected error occurred."
                 )
             }
         }
+    }
+
+    /**
+     * Clears the badge save state and error message.
+     * Should be called after the UI has handled the success/error notification.
+     */
+    fun clearBadgeSaveState() {
+        state = state.copy(
+            badgesSaved = false,
+            badgeSaveError = null
+        )
     }
 
     /**
@@ -339,7 +384,13 @@ class RoastViewModel(
      */
     fun retry() {
         state = state.copy(error = null)
-        generateRoast()
+        if (currentStats == null) {
+            loadStats {
+                generateRoast()
+            }
+        } else {
+            generateRoast()
+        }
     }
 
     /**
@@ -362,6 +413,9 @@ class RoastViewModel(
      */
     private fun generateRoastStreaming() {
         val stats = currentStats ?: return
+        
+        // Prevent race condition where cached roast loading overrides the new generation
+        cancelJob("load_cached_roast")
         
         launchWithKey("generate_roast_streaming") {
             state = state.copy(
@@ -400,7 +454,9 @@ class RoastViewModel(
                         val generatedAt = System.currentTimeMillis()
                         
                         if (targetUserId == null) {
-                            roastRepository.saveRoast(roast)
+                            gamerRepository.getCurrentUserId()?.let { userId ->
+                                roastRepository.saveRoast(userId, roast, emptyList())
+                            }
                         }
 
                         // Update roast data but keep streaming/loading true until reveal starts
@@ -410,6 +466,9 @@ class RoastViewModel(
                             generatedAt = generatedAt,
                             error = null
                         )
+                        
+                        // FIX: Stop loading messages loop before starting reveal sequence
+                        cancelJob("loading_messages")
                         
                         // Start reveal sequence
                         startRevealSequence()

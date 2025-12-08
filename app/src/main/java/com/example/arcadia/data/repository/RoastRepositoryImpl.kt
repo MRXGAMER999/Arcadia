@@ -25,8 +25,8 @@ class RoastRepositoryImpl(
      * 
      * @return Flow emitting the last saved RoastInsights or null
      */
-    override fun getLastRoast(): Flow<RoastInsights?> {
-        return roastDao.getLastRoast().map { entity ->
+    override fun getLastRoast(userId: String): Flow<RoastInsights?> {
+        return roastDao.getLastRoast(userId).map { entity ->
             entity?.toRoastInsights()
         }
     }
@@ -37,11 +37,20 @@ class RoastRepositoryImpl(
      * 
      * @return Flow emitting the last saved RoastWithTimestamp or null
      */
-    override fun getLastRoastWithTimestamp(): Flow<RoastWithTimestamp?> {
-        return roastDao.getLastRoast().map { entity ->
+    override fun getLastRoastWithTimestamp(userId: String): Flow<RoastWithTimestamp?> {
+        return roastDao.getLastRoast(userId).map { entity ->
             entity?.let {
+                // Parse badges manually here since we can't easily add it to toRoastInsights return
+                val badges = try {
+                    kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                        .decodeFromString<List<com.example.arcadia.domain.model.ai.Badge>>(it.badges)
+                } catch (e: Exception) {
+                    emptyList()
+                }
+
                 RoastWithTimestamp(
                     roast = it.toRoastInsights(),
+                    badges = badges,
                     generatedAt = it.generatedAt
                 )
             }
@@ -54,14 +63,14 @@ class RoastRepositoryImpl(
      * 
      * @param roast The RoastInsights to save
      */
-    override suspend fun saveRoast(roast: RoastInsights) {
-        roastDao.saveRoast(roast.toEntity())
+    override suspend fun saveRoast(userId: String, roast: RoastInsights, badges: List<com.example.arcadia.domain.model.ai.Badge>) {
+        roastDao.saveRoast(roast.toEntity(userId, badges))
     }
     
     /**
      * Clear the saved roast from local storage.
      */
-    override suspend fun clearRoast() {
-        roastDao.clearRoast()
+    override suspend fun clearRoast(userId: String) {
+        roastDao.clearRoast(userId)
     }
 }

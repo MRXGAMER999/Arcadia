@@ -31,7 +31,7 @@ import com.example.arcadia.data.local.entity.RoastEntity
         RecommendationFeedbackEntity::class,
         RoastEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class GameCacheDatabase : RoomDatabase() {

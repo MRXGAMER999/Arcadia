@@ -46,6 +46,7 @@ object RoastResponseMapper {
                         .replaceFirst(Regex("^\\d+\\.\\s*"), "")
                 }
                 .take(5)
+                .ifEmpty { listOf("Played more games instead of sleeping (probably)") }
 
             Result.success(
                 RoastInsights(
@@ -70,7 +71,7 @@ object RoastResponseMapper {
      * @return The extracted section content, or null if not found
      */
     private fun extractSection(text: String, section: String): String? {
-        val pattern = "===${section}===\\s*([\\s\\S]*?)(?====|$)".toRegex()
+        val pattern = "===${section}===\\s*([\\s\\S]*?)(?=\\n===|$)".toRegex()
         return pattern.find(text)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
     }
 }

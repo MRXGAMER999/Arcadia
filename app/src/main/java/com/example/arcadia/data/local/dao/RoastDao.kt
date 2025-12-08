@@ -20,8 +20,8 @@ interface RoastDao {
      * Get the last saved roast as a Flow for reactive updates.
      * Returns null if no roast has been saved.
      */
-    @Query("SELECT * FROM roast_table WHERE id = 1")
-    fun getLastRoast(): Flow<RoastEntity?>
+    @Query("SELECT * FROM roast_table WHERE userId = :userId")
+    fun getLastRoast(userId: String): Flow<RoastEntity?>
     
     /**
      * Save a roast, replacing any existing roast.
@@ -33,6 +33,6 @@ interface RoastDao {
     /**
      * Clear the saved roast.
      */
-    @Query("DELETE FROM roast_table")
-    suspend fun clearRoast()
+    @Query("DELETE FROM roast_table WHERE userId = :userId")
+    suspend fun clearRoast(userId: String)
 }
