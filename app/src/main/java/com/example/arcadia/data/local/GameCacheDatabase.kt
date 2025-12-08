@@ -6,9 +6,11 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.arcadia.data.local.dao.CachedGamesDao
 import com.example.arcadia.data.local.dao.RecommendationFeedbackDao
+import com.example.arcadia.data.local.dao.RoastDao
 import com.example.arcadia.data.local.entity.AIRecommendationRemoteKey
 import com.example.arcadia.data.local.entity.CachedGameEntity
 import com.example.arcadia.data.local.entity.RecommendationFeedbackEntity
+import com.example.arcadia.data.local.entity.RoastEntity
 
 /**
  * Room database for caching game data and recommendation feedback.
@@ -17,6 +19,7 @@ import com.example.arcadia.data.local.entity.RecommendationFeedbackEntity
  * - AI recommendations with full game details (for offline support)
  * - Remote keys for Paging 3 RemoteMediator state
  * - Recommendation feedback for AI improvement loop
+ * - User's last generated roast
  * 
  * Separate from StudioCacheDatabase to keep concerns separate and allow
  * independent versioning/migration strategies.
@@ -25,15 +28,17 @@ import com.example.arcadia.data.local.entity.RecommendationFeedbackEntity
     entities = [
         CachedGameEntity::class,
         AIRecommendationRemoteKey::class,
-        RecommendationFeedbackEntity::class
+        RecommendationFeedbackEntity::class,
+        RoastEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class GameCacheDatabase : RoomDatabase() {
     
     abstract fun cachedGamesDao(): CachedGamesDao
     abstract fun recommendationFeedbackDao(): RecommendationFeedbackDao
+    abstract fun roastDao(): RoastDao
     
     companion object {
         @Volatile

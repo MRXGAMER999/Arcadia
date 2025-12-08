@@ -4,6 +4,8 @@ import android.util.Log
 import android.util.LruCache
 import com.example.arcadia.data.local.HardcodedStudioMappings
 import com.example.arcadia.data.local.StudioCacheManager
+import com.example.arcadia.data.mapper.BadgeResponseMapper
+import com.example.arcadia.data.mapper.RoastResponseMapper
 import com.example.arcadia.data.remote.AIClient
 import com.example.arcadia.data.remote.AIClientException
 import com.example.arcadia.data.remote.GeminiPrompts
@@ -11,9 +13,12 @@ import com.example.arcadia.domain.model.AIError
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.model.ai.AIGameSuggestions
+import com.example.arcadia.domain.model.ai.Badge
 import com.example.arcadia.domain.model.ai.GameRecommendation
 import com.example.arcadia.domain.model.ai.MatchReason
 import com.example.arcadia.domain.model.ai.GameInsights
+import com.example.arcadia.domain.model.ai.RoastInsights
+import com.example.arcadia.domain.model.ai.RoastStats
 import com.example.arcadia.domain.model.ai.StreamingInsights
 import com.example.arcadia.domain.model.ai.StudioExpansionResult
 import com.example.arcadia.domain.model.ai.StudioMatch
@@ -1323,6 +1328,88 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
         }
         
         return games
+    }
+
+    // ==================== Roast Generation ====================
+
+    /**
+     * Generates a personalized roast based on the user's gaming statistics.
+     * Uses GeminiPrompts.gamingRoastPrompt() and RoastResponseMapper for parsing.
+     * 
+     * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+     */
+    override suspend fun generateRoast(stats: RoastStats): Result<RoastInsights> {
+        return try {
+            val prompt = GeminiPrompts.gamingRoastPrompt(stats)
+            
+            Log.d(TAG, "Generating roast with ${aiClient.providerName} for stats: ${stats.totalGames} games, ${stats.hoursPlayed} hours")
+            
+            val response = aiClient.generateTextContent(prompt)
+            
+            Log.d(TAG, "Roast response received: ${response.take(200)}...")
+            
+            val parseResult = RoastResponseMapper.parseRoastResponse(response)
+            
+            parseResult.fold(
+                onSuccess = { roastInsights ->
+                    Log.d(TAG, "Successfully parsed roast: ${roastInsights.headline.take(50)}...")
+                    Result.success(roastInsights)
+                },
+                onFailure = { error ->
+                    Log.e(TAG, "Failed to parse roast response", error)
+                    Result.failure(AIError.InvalidResponseError(
+                        message = "Failed to parse roast response: ${error.message}",
+                        rawResponse = response
+                    ))
+                }
+            )
+        } catch (e: AIClientException) {
+            Log.e(TAG, "AI client error generating roast", e)
+            Result.failure(AIError.from(e))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating roast", e)
+            Result.failure(AIError.from(e))
+        }
+    }
+
+    /**
+     * Generates AI-powered badges based on the user's gaming patterns.
+     * Uses GeminiPrompts.badgeGenerationPrompt() and BadgeResponseMapper for parsing.
+     * 
+     * Requirements: 7.1, 7.2
+     */
+    override suspend fun generateBadges(stats: RoastStats): Result<List<Badge>> {
+        return try {
+            val prompt = GeminiPrompts.badgeGenerationPrompt(stats)
+            
+            Log.d(TAG, "Generating badges with ${aiClient.providerName} for stats: ${stats.totalGames} games")
+            
+            val response = aiClient.generateJsonContent(prompt)
+            
+            Log.d(TAG, "Badge response received: ${response.take(200)}...")
+            
+            val parseResult = BadgeResponseMapper.parseBadgesResponse(response)
+            
+            parseResult.fold(
+                onSuccess = { badges ->
+                    Log.d(TAG, "Successfully parsed ${badges.size} badges")
+                    Result.success(badges)
+                },
+                onFailure = { error ->
+                    Log.e(TAG, "Failed to parse badge response", error)
+                    Result.failure(AIError.InvalidResponseError(
+                        message = "Failed to parse badge response: ${error.message}",
+                        rawResponse = response
+                    ))
+                }
+            )
+        } catch (e: AIClientException) {
+            Log.e(TAG, "AI client error generating badges", e)
+            Result.failure(AIError.from(e))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating badges", e)
+            Result.failure(AIError.from(e))
+        }
     }
 
     companion object {

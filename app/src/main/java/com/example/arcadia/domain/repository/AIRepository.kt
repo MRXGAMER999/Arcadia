@@ -2,7 +2,10 @@ package com.example.arcadia.domain.repository
 
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.ai.AIGameSuggestions
+import com.example.arcadia.domain.model.ai.Badge
 import com.example.arcadia.domain.model.ai.GameInsights
+import com.example.arcadia.domain.model.ai.RoastInsights
+import com.example.arcadia.domain.model.ai.RoastStats
 import com.example.arcadia.domain.model.ai.StreamingInsights
 import com.example.arcadia.domain.model.ai.StudioExpansionResult
 import com.example.arcadia.domain.model.ai.StudioMatch
@@ -139,4 +142,29 @@ interface AIRepository {
      * Clears all caches (suggestions, profile analysis, and studio expansion)
      */
     fun clearCache()
+    
+    // ==================== Roast Generation ====================
+    
+    /**
+     * Generates a personalized roast based on the user's gaming statistics.
+     * The roast includes a headline, list of things they could have done,
+     * a prediction, a wholesome closer, and a roast title with emoji.
+     *
+     * @param stats The user's gaming statistics for personalization
+     * @return Result containing RoastInsights on success, or an error
+     * 
+     * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+     */
+    suspend fun generateRoast(stats: RoastStats): Result<RoastInsights>
+    
+    /**
+     * Generates AI-powered badges based on the user's gaming patterns.
+     * Returns 5-7 unique badges with titles, emojis, and reasons.
+     *
+     * @param stats The user's gaming statistics for badge generation
+     * @return Result containing list of Badges on success, or an error
+     * 
+     * Requirements: 7.1, 7.2
+     */
+    suspend fun generateBadges(stats: RoastStats): Result<List<Badge>>
 }

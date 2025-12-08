@@ -7,6 +7,8 @@ import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.model.ProfileSection
 import com.example.arcadia.domain.model.ProfileSectionType
+import com.example.arcadia.domain.model.ai.Badge
+import com.example.arcadia.domain.repository.FeaturedBadgesRepository
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.presentation.base.BaseViewModel
@@ -29,7 +31,8 @@ data class ProfileState(
     val profileImageUrl: String? = null,
     val steamId: String? = null,
     val xboxGamertag: String? = null,
-    val psnId: String? = null
+    val psnId: String? = null,
+    val isProfilePublic: Boolean = true
 )
 
 data class ProfileStatsState(
@@ -46,7 +49,8 @@ data class ProfileStatsState(
 
 class ProfileViewModel(
     private val gamerRepository: GamerRepository,
-    private val gameListRepository: GameListRepository
+    private val gameListRepository: GameListRepository,
+    private val featuredBadgesRepository: FeaturedBadgesRepository
 ) : BaseViewModel() {
 
     var screenReady: RequestState<Unit> by mutableStateOf(RequestState.Loading)
@@ -64,6 +68,9 @@ class ProfileViewModel(
     private val _libraryGames = MutableStateFlow<List<GameListEntry>>(emptyList())
     val libraryGames: StateFlow<List<GameListEntry>> = _libraryGames.asStateFlow()
 
+    private val _featuredBadges = MutableStateFlow<List<Badge>>(emptyList())
+    val featuredBadges: StateFlow<List<Badge>> = _featuredBadges.asStateFlow()
+
     var customSections: List<ProfileSection> by mutableStateOf(emptyList())
         private set
 
@@ -78,6 +85,7 @@ class ProfileViewModel(
         
         loadProfileData(userId)
         loadGamingStats(userId)
+        loadFeaturedBadges(userId ?: currentUserId)
     }
 
     private fun loadProfileData(userId: String? = null) {
@@ -103,7 +111,8 @@ class ProfileViewModel(
                         profileImageUrl = gamer.profileImageUrl,
                         steamId = gamer.steamId,
                         xboxGamertag = gamer.xboxGamertag,
-                        psnId = gamer.psnId
+                        psnId = gamer.psnId,
+                        isProfilePublic = gamer.isProfilePublic
                     )
                     customSections = gamer.customSections
                     screenReady = RequestState.Success(Unit)
@@ -163,6 +172,23 @@ class ProfileViewModel(
         }
     }
 
+    /**
+     * Loads featured badges for the specified user.
+     * Requirements: 9.1, 9.3
+     */
+    private fun loadFeaturedBadges(userId: String?) {
+        if (userId == null) {
+            _featuredBadges.value = emptyList()
+            return
+        }
+        
+        launchWithKey("load_badges") {
+            featuredBadgesRepository.getFeaturedBadges(userId).collectLatest { badges ->
+                _featuredBadges.value = badges
+            }
+        }
+    }
+
     fun addCustomSection(title: String, type: ProfileSectionType, gameIds: List<Int>) {
         val newSection = ProfileSection(
             id = UUID.randomUUID().toString(),
@@ -204,5 +230,22 @@ class ProfileViewModel(
     fun refreshData(userId: String? = null) {
         screenReady = RequestState.Loading
         loadProfile(userId)
+    }
+
+    /**
+     * Determines if the roast button should be visible.
+     * The roast button is shown only when viewing a public profile of another user.
+     * 
+     * Requirements: 14.1, 14.2, 14.3
+     */
+    fun shouldShowRoastButton(): Boolean {
+        // Don't show on own profile (Requirement 14.1)
+        if (isCurrentUser) return false
+        
+        // Don't show on private profiles (Requirement 14.2)
+        if (!profileState.isProfilePublic) return false
+        
+        // Show on public profiles of other users (Requirement 14.3)
+        return true
     }
 }

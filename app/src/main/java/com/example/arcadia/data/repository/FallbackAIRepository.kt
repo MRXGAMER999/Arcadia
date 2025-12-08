@@ -4,7 +4,10 @@ package com.example.arcadia.data.repository
 import android.util.Log
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.ai.AIGameSuggestions
+import com.example.arcadia.domain.model.ai.Badge
 import com.example.arcadia.domain.model.ai.GameInsights
+import com.example.arcadia.domain.model.ai.RoastInsights
+import com.example.arcadia.domain.model.ai.RoastStats
 import com.example.arcadia.domain.model.ai.StreamingInsights
 import com.example.arcadia.domain.model.ai.StudioExpansionResult
 import com.example.arcadia.domain.model.ai.StudioMatch
@@ -139,6 +142,20 @@ class FallbackAIRepository(
     override fun clearCache() {
         primaryRepository.clearCache()
         fallbackRepository.clearCache()
+    }
+
+    // ==================== Roast Generation ====================
+
+    override suspend fun generateRoast(stats: RoastStats): Result<RoastInsights> {
+        return tryWithFallback("generateRoast") {
+            primaryRepository.generateRoast(stats)
+        } ?: fallbackRepository.generateRoast(stats)
+    }
+
+    override suspend fun generateBadges(stats: RoastStats): Result<List<Badge>> {
+        return tryWithFallback("generateBadges") {
+            primaryRepository.generateBadges(stats)
+        } ?: fallbackRepository.generateBadges(stats)
     }
 
     // ==================== Helper ====================

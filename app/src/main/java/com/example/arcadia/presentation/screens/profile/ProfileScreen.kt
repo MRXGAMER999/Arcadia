@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.domain.model.ProfileSection
 import com.example.arcadia.presentation.screens.profile.components.AddSectionBottomSheet
+import com.example.arcadia.presentation.screens.profile.components.BadgesSection
 import com.example.arcadia.presentation.screens.profile.components.BioCard
 import com.example.arcadia.presentation.screens.profile.components.CustomSectionCard
 import com.example.arcadia.presentation.screens.profile.components.GamingPlatformsCard
@@ -68,6 +69,7 @@ fun ProfileScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEditProfile: () -> Unit,
     onNavigateToMyGames: (userId: String?, username: String?) -> Unit = { _, _ -> },
+    onNavigateToRoast: (targetUserId: String) -> Unit = {},
     onGameClick: (Int) -> Unit = {},
     viewModel: ProfileViewModel = koinViewModel()
 ) {
@@ -75,6 +77,7 @@ fun ProfileScreen(
     val profileState = viewModel.profileState
     val statsState = viewModel.statsState
     val libraryGames by viewModel.libraryGames.collectAsState()
+    val featuredBadges by viewModel.featuredBadges.collectAsState()
     val customSections = viewModel.customSections
     val isCurrentUser = viewModel.isCurrentUser
     val context = LocalContext.current
@@ -120,6 +123,22 @@ fun ProfileScreen(
                                 imageVector = Icons.Default.Edit,
                                 contentDescription = "Edit Profile",
                                 tint = ButtonPrimary
+                            )
+                        }
+                    }
+                    // Roast Friend button - only visible on public profiles of other users
+                    // Requirements: 10.1, 10.2, 14.1, 14.2, 14.3
+                    if (viewModel.shouldShowRoastButton()) {
+                        IconButton(
+                            onClick = { 
+                                profileState.id.takeIf { it.isNotEmpty() }?.let { targetId ->
+                                    onNavigateToRoast(targetId)
+                                }
+                            }
+                        ) {
+                            Text(
+                                text = "🔥",
+                                fontSize = 20.sp
                             )
                         }
                     }
@@ -204,6 +223,10 @@ fun ProfileScreen(
 
                         // Gaming Stats Card
                         GamingStatsCard(statsState = statsState)
+
+                        // Featured Badges Section (Requirements: 9.1, 9.3)
+                        // BadgesSection handles hiding itself when badges list is empty
+                        BadgesSection(badges = featuredBadges)
 
                         // Gaming Platforms Section
                         GamingPlatformsCard(

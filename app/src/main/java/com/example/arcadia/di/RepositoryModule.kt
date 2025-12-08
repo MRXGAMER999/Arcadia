@@ -12,11 +12,15 @@ import com.example.arcadia.data.repository.GameRepositoryImpl
 import com.example.arcadia.data.repository.GeminiRepository
 import com.example.arcadia.data.repository.GroqRepository
 import com.example.arcadia.data.repository.PagedGameRepositoryImpl
+import com.example.arcadia.data.repository.RoastRepositoryImpl
+import com.example.arcadia.data.repository.FeaturedBadgesRepositoryImpl
 import com.example.arcadia.domain.repository.AIRepository
+import com.example.arcadia.domain.repository.FeaturedBadgesRepository
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.PagedGameRepository
+import com.example.arcadia.domain.repository.RoastRepository
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -65,6 +69,15 @@ val repositoryModule = module {
     
     /** DAO for recommendation feedback (tracks user interactions for AI improvement) */
     single<RecommendationFeedbackDao> { get<GameCacheDatabase>().recommendationFeedbackDao() }
+    
+    /** DAO for roast storage (Requirements: 6.1) */
+    single { get<GameCacheDatabase>().roastDao() }
+    
+    /** Repository for roast data persistence (Requirements: 6.1) */
+    single<RoastRepository> { RoastRepositoryImpl(get()) }
+    
+    /** Repository for featured badges on user profiles (Requirements: 8.3) */
+    single<FeaturedBadgesRepository> { FeaturedBadgesRepositoryImpl() }
     
     /** 
      * Paged Game Repository for Paging 3 integration.

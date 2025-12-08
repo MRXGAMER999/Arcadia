@@ -57,7 +57,8 @@ object AnalyticsScreenKey : NavKey
 @Serializable
 data class DetailsScreenKey(val gameId: Int) : NavKey
 
-
+@Serializable
+data class RoastScreenKey(val targetUserId: String? = null) : NavKey
 
 @Composable
 fun NavigationRoot(
@@ -169,6 +170,9 @@ fun NavigationRoot(
                             onNavigateToMyGames = { navUserId, navUsername ->
                                 backStack.add(MyGamesScreenKey(navUserId, navUsername))
                             },
+                            onNavigateToRoast = { targetUserId ->
+                                backStack.add(RoastScreenKey(targetUserId))
+                            },
                             onGameClick = { gameId ->
                                 backStack.add(DetailsScreenKey(gameId))
                             }
@@ -248,6 +252,9 @@ fun NavigationRoot(
                             onNavigateBack = { backStack.remove(key) },
                             onNavigateToSearch = { query ->
                                 backStack.add(SearchScreenKey(query))
+                            },
+                            onNavigateToRoast = {
+                                backStack.add(RoastScreenKey())
                             }
                         )
                     }
@@ -258,6 +265,16 @@ fun NavigationRoot(
                     ) {
                         DetailsScreen(
                             gameId = key.gameId,
+                            onNavigateBack = { backStack.remove(key) }
+                        )
+                    }
+                }
+                is RoastScreenKey -> {
+                    NavEntry(
+                        key = key,
+                    ) {
+                        com.example.arcadia.presentation.screens.roast.RoastScreen(
+                            targetUserId = key.targetUserId,
                             onNavigateBack = { backStack.remove(key) }
                         )
                     }

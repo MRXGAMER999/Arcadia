@@ -4,6 +4,7 @@ import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
 import com.example.arcadia.domain.usecase.AnalyzeGamingProfileUseCase
 import com.example.arcadia.domain.usecase.CalculateGamingStatsUseCase
 import com.example.arcadia.domain.usecase.DetermineGamingPersonalityUseCase
+import com.example.arcadia.domain.usecase.ExtractRoastStatsUseCase
 import com.example.arcadia.domain.usecase.FilterGamesUseCase
 import com.example.arcadia.domain.usecase.GetAIGameSuggestionsUseCase
 import com.example.arcadia.domain.usecase.GetNewReleasesUseCase
@@ -69,6 +70,9 @@ val useCaseModule = module {
     
     /** Determines the user's gaming personality type */
     factory { DetermineGamingPersonalityUseCase() }
+    
+    /** Extracts roast-relevant statistics from AnalyticsState (Requirements: 4.1) */
+    factory { ExtractRoastStatsUseCase() }
     
     // ==================== Filtering & Sorting Use Cases ====================
     

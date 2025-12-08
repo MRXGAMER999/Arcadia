@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.presentation.screens.analytics.components.AIInsightsSection
 import com.example.arcadia.presentation.screens.analytics.components.GamingDNACard
+import com.example.arcadia.presentation.screens.analytics.components.RoastHeroCard
 import com.example.arcadia.presentation.screens.analytics.components.SimpleBarChart
 import com.example.arcadia.presentation.screens.analytics.components.StatCard
 import com.example.arcadia.presentation.screens.analytics.util.AnalyticsShareHelper
@@ -54,6 +55,7 @@ import java.util.Locale
 fun AnalyticsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToSearch: (String) -> Unit = {},
+    onNavigateToRoast: () -> Unit = {},
     viewModel: AnalyticsViewModel = koinViewModel()
 ) {
     val state = viewModel.state
@@ -105,7 +107,8 @@ fun AnalyticsScreen(
         ) {
             AnalyticsContent(
                 state = state,
-                onGameClick = onNavigateToSearch
+                onGameClick = onNavigateToSearch,
+                onNavigateToRoast = onNavigateToRoast
             )
         }
     }
@@ -115,6 +118,7 @@ fun AnalyticsScreen(
 fun AnalyticsContent(
     state: AnalyticsState,
     onGameClick: (String) -> Unit = {},
+    onNavigateToRoast: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -125,6 +129,12 @@ fun AnalyticsContent(
     ) {
         // Gaming DNA Section
         GamingDNACard(state = state)
+        
+        // Roast Hero Card - after GamingDNACard (Requirement 1.1)
+        RoastHeroCard(
+            hoursPlayed = state.hoursPlayed,
+            onTap = onNavigateToRoast
+        )
 
         // Time & Completion Stats
         Row(
