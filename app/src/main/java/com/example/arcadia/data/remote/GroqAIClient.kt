@@ -33,11 +33,12 @@ class GroqAIClient(
     override suspend fun generateJsonContent(
         prompt: String,
         temperature: Float,
-        maxTokens: Int
+        maxTokens: Int,
+        model: String?
     ): String {
         Log.d(TAG, "Generating JSON content...")
         
-        val response = executeWithModelFallback { modelName ->
+        val response = executeWithModelFallback(preferredModel = model) { modelName ->
             GroqChatRequest(
                 model = modelName,
                 messages = listOf(
@@ -63,11 +64,12 @@ class GroqAIClient(
     override suspend fun generateTextContent(
         prompt: String,
         temperature: Float,
-        maxTokens: Int
+        maxTokens: Int,
+        model: String?
     ): String {
         Log.d(TAG, "Generating text content...")
         
-        val response = executeWithModelFallback { modelName ->
+        val response = executeWithModelFallback(preferredModel = model) { modelName ->
             GroqChatRequest(
                 model = modelName,
                 messages = listOf(
@@ -85,11 +87,18 @@ class GroqAIClient(
     override fun generateStreamingContent(
         prompt: String,
         temperature: Float,
-        maxTokens: Int
+        maxTokens: Int,
+        model: String?
     ): Flow<String> = flow {
         Log.d(TAG, "Starting streaming generation...")
         
-        val modelsToTry = listOf(GroqConfig.MODEL_NAME) + GroqConfig.FALLBACK_MODELS
+        val defaultModels = listOf(GroqConfig.MODEL_NAME) + GroqConfig.FALLBACK_MODELS
+        val modelsToTry = if (model != null) {
+            listOf(model) + defaultModels
+        } else {
+            defaultModels
+        }
+        
         var lastException: Exception? = null
         
         for ((index, modelName) in modelsToTry.withIndex()) {
@@ -166,9 +175,16 @@ class GroqAIClient(
      * Execute request with automatic model fallback.
      */
     private suspend fun executeWithModelFallback(
+        preferredModel: String? = null,
         createRequest: (modelName: String) -> GroqChatRequest
     ): GroqChatResponse {
-        val modelsToTry = listOf(GroqConfig.MODEL_NAME) + GroqConfig.FALLBACK_MODELS
+        val defaultModels = listOf(GroqConfig.MODEL_NAME) + GroqConfig.FALLBACK_MODELS
+        val modelsToTry = if (preferredModel != null) {
+            listOf(preferredModel) + defaultModels
+        } else {
+            defaultModels
+        }
+        
         var lastException: Exception? = null
         
         for ((index, modelName) in modelsToTry.withIndex()) {

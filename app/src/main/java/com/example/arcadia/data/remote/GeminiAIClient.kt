@@ -34,7 +34,7 @@ class GeminiAIClient : AIClient {
                 temperature = 0.2f
                 topK = 32
                 topP = 0.9f
-                maxOutputTokens = 4096
+                maxOutputTokens = 8192
                 responseMimeType = "application/json"
             }
         )
@@ -56,7 +56,8 @@ class GeminiAIClient : AIClient {
     override suspend fun generateJsonContent(
         prompt: String,
         temperature: Float,
-        maxTokens: Int
+        maxTokens: Int,
+        model: String?
     ): String {
         return try {
             Log.d(TAG, "Generating JSON content...")
@@ -89,7 +90,8 @@ class GeminiAIClient : AIClient {
     override suspend fun generateTextContent(
         prompt: String,
         temperature: Float,
-        maxTokens: Int
+        maxTokens: Int,
+        model: String?
     ): String {
         return try {
             Log.d(TAG, "Generating text content...")
@@ -116,7 +118,8 @@ class GeminiAIClient : AIClient {
     override fun generateStreamingContent(
         prompt: String,
         temperature: Float,
-        maxTokens: Int
+        maxTokens: Int,
+        model: String?
     ): Flow<String> = flow {
         try {
             Log.d(TAG, "Starting streaming generation...")

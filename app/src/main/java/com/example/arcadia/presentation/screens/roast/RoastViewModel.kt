@@ -14,6 +14,12 @@ import com.example.arcadia.domain.repository.RoastRepository
 import com.example.arcadia.domain.usecase.ExtractRoastStatsUseCase
 import com.example.arcadia.presentation.base.BaseViewModel
 import com.example.arcadia.presentation.screens.analytics.AnalyticsState
+import com.example.arcadia.presentation.screens.roast.util.MotionPreferences
+import com.example.arcadia.presentation.screens.roast.util.RuneTextGenerator
+import com.example.arcadia.data.mapper.RoastResponseMapper
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onEach
 
 /**
  * UI state for the Roast Screen.
@@ -33,7 +39,14 @@ data class RoastScreenState(
     val hasInsufficientStats: Boolean = false,
     val isSavingBadges: Boolean = false,
     val badgesSaved: Boolean = false,
-    val badgeSaveError: String? = null
+    val badgeSaveError: String? = null,
+
+    // Animation state fields
+    val streamingText: String = "",
+    val isStreaming: Boolean = false,
+    val revealPhase: RevealPhase = RevealPhase.HIDDEN,
+    val isShaking: Boolean = false,
+    val reduceMotion: Boolean = false
 ) {
     companion object {
         const val MAX_FEATURED_BADGES = 3
@@ -63,16 +76,7 @@ class RoastViewModel(
         private set
 
     // Fun loading messages that rotate during roast generation
-    private val loadingMessages = listOf(
-        "Analyzing your gaming sins...",
-        "Consulting the roast gods...",
-        "Calculating your life choices...",
-        "Preparing maximum savagery...",
-        "Reviewing your backlog shame...",
-        "Generating personalized burns...",
-        "Measuring your completion rate tears...",
-        "Crafting artisanal roasts..."
-    )
+    private val loadingMessages = MysticalLoadingMessages.messages
 
     private var currentStats: RoastStats? = null
 
@@ -100,7 +104,8 @@ class RoastViewModel(
                     state = state.copy(
                         roast = roastWithTimestamp.roast,
                         generatedAt = roastWithTimestamp.generatedAt,
-                        error = null
+                        error = null,
+                        revealPhase = RevealPhase.COMPLETE
                     )
                 }
             }
@@ -187,52 +192,8 @@ class RoastViewModel(
             return
         }
 
-        launchWithKey("generate_roast") {
-            state = state.copy(
-                isLoading = true,
-                loadingMessage = loadingMessages.random(),
-                error = null
-            )
-
-            // Start rotating loading messages
-            val messageJob = launchWithKey("loading_messages") {
-                while (true) {
-                    kotlinx.coroutines.delay(2000)
-                    state = state.copy(loadingMessage = loadingMessages.random())
-                }
-            }
-
-            try {
-                // Generate roast
-                val roastResult = aiRepository.generateRoast(stats)
-                
-                roastResult.onSuccess { roast ->
-                    val generatedAt = System.currentTimeMillis()
-                    
-                    // Save to local storage only for self-roasts (Requirement 10.4)
-                    if (targetUserId == null) {
-                        roastRepository.saveRoast(roast)
-                    }
-
-                    state = state.copy(
-                        isLoading = false,
-                        roast = roast,
-                        generatedAt = generatedAt,
-                        error = null
-                    )
-
-                    // Generate badges after roast
-                    generateBadges(stats)
-                }.onFailure { error ->
-                    state = state.copy(
-                        isLoading = false,
-                        error = error.message ?: "Failed to generate roast. Please try again."
-                    )
-                }
-            } finally {
-                cancelJob("loading_messages")
-            }
-        }
+        // Use streaming generation
+        generateRoastStreaming()
     }
 
     /**
@@ -275,20 +236,36 @@ class RoastViewModel(
      */
     fun confirmRegenerate() {
         hideRegenerateDialog()
-        generateRoast()
+        // Shake then generate
+        launchWithKey("shake_trigger") {
+            if (!state.reduceMotion) {
+                state = state.copy(isShaking = true)
+                delay(500) // Shake duration
+                state = state.copy(isShaking = false)
+            }
+            generateRoast()
+        }
     }
 
     /**
      * Handles the regenerate button click.
      * Shows confirmation dialog if a roast exists, otherwise generates directly.
      * 
-     * Requirements: 3.1, 3.2
+     * Requirements: 3.1, 3.2, 7.2
      */
     fun regenerateRoast() {
         if (state.roast != null) {
             showRegenerateDialog()
         } else {
-            generateRoast()
+            // Shake then generate
+            launchWithKey("shake_trigger") {
+                if (!state.reduceMotion) {
+                    state = state.copy(isShaking = true)
+                    delay(500) // Shake duration
+                    state = state.copy(isShaking = false)
+                }
+                generateRoast()
+            }
         }
     }
 
@@ -363,5 +340,150 @@ class RoastViewModel(
     fun retry() {
         state = state.copy(error = null)
         generateRoast()
+    }
+
+    /**
+     * Checks for reduced motion preferences.
+     * Should be called from the UI.
+     * 
+     * Requirements: 12.1, 12.2, 12.3
+     */
+    fun checkMotionPreferences(context: android.content.Context) {
+        val isReduced = MotionPreferences.isReduceMotionEnabled(context)
+        if (state.reduceMotion != isReduced) {
+            state = state.copy(reduceMotion = isReduced)
+        }
+    }
+
+    /**
+     * Generates a roast using streaming.
+     * 
+     * Requirements: 3.1, 3.4
+     */
+    private fun generateRoastStreaming() {
+        val stats = currentStats ?: return
+        
+        launchWithKey("generate_roast_streaming") {
+            state = state.copy(
+                isLoading = true,
+                isStreaming = true,
+                streamingText = "",
+                revealPhase = RevealPhase.STREAMING,
+                loadingMessage = loadingMessages.random(),
+                error = null
+            )
+
+            // Start rotating loading messages
+            val messageJob = launchWithKey("loading_messages") {
+                while (true) {
+                    delay(RevealTiming.MESSAGE_ROTATION_INTERVAL_MS)
+                    state = state.copy(loadingMessage = loadingMessages.random())
+                }
+            }
+
+            val fullTextBuilder = StringBuilder()
+
+            try {
+                aiRepository.generateRoastStreaming(stats)
+                    .onEach { chunk ->
+                        fullTextBuilder.append(chunk)
+                        state = state.copy(streamingText = fullTextBuilder.toString())
+                    }
+                    .collect()
+
+                // Streaming complete
+                val fullText = fullTextBuilder.toString()
+                val parseResult = RoastResponseMapper.parseRoastResponse(fullText)
+                
+                parseResult.fold(
+                    onSuccess = { roast ->
+                        val generatedAt = System.currentTimeMillis()
+                        
+                        if (targetUserId == null) {
+                            roastRepository.saveRoast(roast)
+                        }
+
+                        // Update roast data but keep streaming/loading true until reveal starts
+                        // This prevents a flash of the loading state or blank screen
+                        state = state.copy(
+                            roast = roast,
+                            generatedAt = generatedAt,
+                            error = null
+                        )
+                        
+                        // Start reveal sequence
+                        startRevealSequence()
+                        
+                        // Generate badges
+                        generateBadges(stats)
+                    },
+                    onFailure = { error ->
+                        state = state.copy(
+                            isLoading = false,
+                            isStreaming = false,
+                            error = "The oracle spoke in riddles. (Parsing error)"
+                        )
+                    }
+                )
+
+            } catch (e: Exception) {
+                state = state.copy(
+                    isLoading = false,
+                    isStreaming = false,
+                    error = e.message ?: "The oracle was silent."
+                )
+            } finally {
+                cancelJob("loading_messages")
+            }
+        }
+    }
+
+    /**
+     * Orchestrates the reveal animation sequence.
+     * 
+     * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7
+     */
+    private fun startRevealSequence() {
+        launchWithKey("reveal_sequence") {
+            // If reduce motion is on, skip animations
+            if (state.reduceMotion) {
+                state = state.copy(
+                    revealPhase = RevealPhase.COMPLETE,
+                    isLoading = false,
+                    isStreaming = false
+                )
+                return@launchWithKey
+            }
+
+            // Phase 1: Title (Immediate)
+            // Set isLoading = false so UI switches to ResultCard
+            state = state.copy(
+                revealPhase = RevealPhase.REVEALING_TITLE,
+                isLoading = false,
+                isStreaming = false
+            )
+            
+            // Phase 2: Headline
+            delay(RevealTiming.HEADLINE_DELAY_MS)
+            state = state.copy(revealPhase = RevealPhase.REVEALING_HEADLINE)
+            
+            // Phase 3: Could Have List
+            delay(RevealTiming.COULD_HAVE_DELAY_MS - RevealTiming.HEADLINE_DELAY_MS)
+            state = state.copy(revealPhase = RevealPhase.REVEALING_COULD_HAVE)
+            
+            // Phase 4: Prediction
+            delay(RevealTiming.PREDICTION_DELAY_MS - RevealTiming.COULD_HAVE_DELAY_MS)
+            state = state.copy(revealPhase = RevealPhase.REVEALING_PREDICTION)
+            
+            // Phase 5: Wholesome
+            delay(RevealTiming.WHOLESOME_DELAY_MS - RevealTiming.PREDICTION_DELAY_MS)
+            state = state.copy(revealPhase = RevealPhase.REVEALING_WHOLESOME)
+            
+            // Phase 6: Complete (Buttons)
+            delay(RevealTiming.BUTTONS_DELAY_MS - RevealTiming.WHOLESOME_DELAY_MS)
+            state = state.copy(
+                revealPhase = RevealPhase.COMPLETE
+            )
+        }
     }
 }

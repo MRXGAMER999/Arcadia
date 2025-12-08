@@ -156,6 +156,16 @@ interface AIRepository {
      * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
      */
     suspend fun generateRoast(stats: RoastStats): Result<RoastInsights>
+
+    /**
+     * Generates a roast using streaming, emitting chunks as they arrive.
+     * 
+     * @param stats The user's gaming statistics for personalization
+     * @return Flow emitting chunks of the generated text
+     * 
+     * Requirements: 3.1
+     */
+    fun generateRoastStreaming(stats: RoastStats): Flow<String>
     
     /**
      * Generates AI-powered badges based on the user's gaming patterns.

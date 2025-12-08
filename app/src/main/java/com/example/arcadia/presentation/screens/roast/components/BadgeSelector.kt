@@ -70,12 +70,12 @@ fun BadgeSelector(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2A47)),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
             // Header with count indicator
             Row(
@@ -87,15 +87,15 @@ fun BadgeSelector(
                     Text(
                         text = "🏆 Your Badges",
                         color = Color.White,
-                        fontSize = 18.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (isFriendRoast) "Badges generated for your friend" 
                                else "Select up to $maxBadges to feature on your profile",
                         color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 12.sp
+                        fontSize = 11.sp
                     )
                 }
                 
@@ -108,7 +108,7 @@ fun BadgeSelector(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             // Badge grid
             FlowRow(
@@ -131,7 +131,7 @@ fun BadgeSelector(
             
             // Save button - only show for self-roasts with selected badges (Requirements: 8.3)
             if (!isFriendRoast && selectedBadges.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 
                 Button(
                     onClick = onSaveBadges,
@@ -143,11 +143,11 @@ fun BadgeSelector(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(40.dp)
                 ) {
                     if (isSaving) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(16.dp),
                             color = Color.White,
                             strokeWidth = 2.dp
                         )
@@ -155,25 +155,29 @@ fun BadgeSelector(
                         Text(
                             text = "Saving...",
                             color = Color.White,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
                         )
                     } else if (isSaved) {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Saved to Profile!",
+                            text = "Saved!",
                             color = Color.White,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
                         )
                     } else {
                         Text(
                             text = "💾 Save to Profile",
                             color = Color.White,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
                         )
                     }
                 }
@@ -194,12 +198,12 @@ private fun BadgeCountIndicator(
                 if (selected == max) Color(0xFF4ADE80).copy(alpha = 0.2f)
                 else Color.White.copy(alpha = 0.1f)
             )
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Text(
             text = "$selected/$max selected",
             color = if (selected == max) Color(0xFF4ADE80) else Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Medium
         )
     }
@@ -239,7 +243,7 @@ private fun SelectableBadgeItem(
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable(enabled = enabled) { onClick() }
-            .padding(12.dp)
+            .padding(8.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically
@@ -247,33 +251,33 @@ private fun SelectableBadgeItem(
             // Emoji
             Text(
                 text = badge.emoji,
-                fontSize = 20.sp
+                fontSize = 18.sp
             )
             
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             
             // Title
             Column {
                 Text(
                     text = badge.title,
                     color = if (enabled) Color.White else Color.White.copy(alpha = 0.4f),
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
                     text = badge.reason,
                     color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     maxLines = 1
                 )
             }
             
             // Selection indicator
             if (isSelected) {
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
-                        .size(20.dp)
+                        .size(16.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF4ADE80)),
                     contentAlignment = Alignment.Center
@@ -282,7 +286,7 @@ private fun SelectableBadgeItem(
                         imageVector = Icons.Default.Check,
                         contentDescription = "Selected",
                         tint = Color.White,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }

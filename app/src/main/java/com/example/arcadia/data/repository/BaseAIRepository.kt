@@ -1344,7 +1344,13 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             
             Log.d(TAG, "Generating roast with ${aiClient.providerName} for stats: ${stats.totalGames} games, ${stats.hoursPlayed} hours")
             
-            val response = aiClient.generateTextContent(prompt)
+            // Use higher temperature (0.9f) for maximum creativity and savagery
+            // Use specific model 'openai/gpt-oss-120b' if supported by the client (Groq)
+            val response = aiClient.generateTextContent(
+                prompt = prompt, 
+                temperature = 0.8f,
+                model = "openai/gpt-oss-120b"
+            )
             
             Log.d(TAG, "Roast response received: ${response.take(200)}...")
             
@@ -1371,6 +1377,27 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
             Result.failure(AIError.from(e))
         }
     }
+
+    /**
+     * Generates a roast using streaming, emitting chunks as they arrive.
+     * 
+     * Requirements: 3.1, 3.2
+     */
+    override fun generateRoastStreaming(stats: RoastStats): Flow<String> = flow {
+        val prompt = GeminiPrompts.gamingRoastPromptEnhanced(stats)
+        
+        Log.d(TAG, "Starting streaming roast generation with ${aiClient.providerName}...")
+        
+        // Use higher temperature (0.9f) for maximum creativity and savagery
+        // Use specific model 'openai/gpt-oss-120b' if supported by the client (Groq)
+        aiClient.generateStreamingContent(
+            prompt = prompt, 
+            temperature = 0.8f,
+            model = "openai/gpt-oss-120b"
+        ).collect { chunk ->
+            emit(chunk)
+        }
+    }.flowOn(Dispatchers.IO)
 
     /**
      * Generates AI-powered badges based on the user's gaming patterns.

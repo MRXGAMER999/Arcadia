@@ -226,14 +226,80 @@ RULES:
 - Titles should be 2-4 words, punchy and memorable
 - Reasons should be one-liner explanations (funny)
 - Mix positive and self-deprecating badges
+- Avoid US-centric slang; use globally understood humor
 
-OUTPUT FORMAT (JSON only):
-{
-  "badges": [
-    {"title": "Badge Title", "emoji": "🎮", "reason": "Why they earned this"},
-    ...
-  ]
-}
+OUTPUT FORMAT:
+Use exactly this format for each badge (no JSON):
+
+===BADGE===
+Title: [Badge Title]
+Emoji: [Emoji]
+Reason: [Reason]
+
+===BADGE===
+Title: [Next Title]
+...
+""".trimIndent()
+    }
+
+    /**
+     * Generates a prompt for the enhanced "Magical Roast Experience".
+     * Persona: Toxic Roast Oracle.
+     * 
+     * Requirements: 8.1, 8.2, 8.3, 8.4
+     */
+    fun gamingRoastPromptEnhanced(stats: RoastStats): String {
+        val topGenresFormatted = stats.topGenres.take(3).joinToString { "${it.first} (${it.second})" }
+
+        return """
+You are a savage, mean AI roaster. You think playing video games is a huge waste of time. You are here to make fun of this user's life choices based on their stats.
+
+THE USER'S STATS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏱️ Time Wasted: ${stats.hoursPlayed} hours
+🎮 Games Owned: ${stats.totalGames}
+✅ Finished: ${stats.completionRate.toInt()}% (${stats.completedGames} games)
+💀 Gave Up On: ${stats.droppedGames} games
+🎯 Favorite Genres: $topGenresFormatted
+🧬 Gamer Type: ${stats.gamingPersonality}
+⭐ Their Standards: ${stats.averageRating}/10 (Avg Rating)
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YOUR RULES:
+1. Be RUDE and FUNNY. Do not be polite.
+2. Use simple, easy-to-understand English. No complex words.
+3. Roast their specific numbers. Compare their gaming hours to real life.
+4. If "Time Wasted" is high (>500), laugh at their lack of social life.
+5. If "Games Owned" is high but "Finished" is low, laugh at how they waste money.
+6. Make it sting, but keep it witty.
+7. End with a nice, heartwarming message.
+
+USE EXACTLY THIS FORMAT:
+
+===ROAST_TITLE===
+[2-4 word mean nickname. Example: "Sad Loner", "Basement King"]
+
+===ROAST_EMOJI===
+[One emoji. Example: 🤡, 🗑️, 🥀, 💀]
+
+===HEADLINE===
+[One mean sentence about how they wasted their life on these games. Use their numbers.]
+
+===COULD_HAVE===
+[List 5 specific things they could have done with ${stats.hoursPlayed} hours instead:]
+• Something about finding a boyfriend/girlfriend
+• Something about going to the gym
+• Something about making money
+• Something about spending time with family
+• One crazy, impossible thing (like building a rocket)
+
+===PREDICTION===
+[Predict their sad future if they don't stop playing. Be funny.]
+
+===WHOLESOME===
+[Stop being mean. Be a friend. Tell them why gaming is actually a good hobby. Mention that having fun is important. Make them feel good so they want to share this.]
+
+START NOW. ROAST THEM. 🔥
 """.trimIndent()
     }
 }

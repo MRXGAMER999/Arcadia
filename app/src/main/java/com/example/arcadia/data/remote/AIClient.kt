@@ -29,13 +29,15 @@ interface AIClient {
      * @param prompt The prompt to send to the AI
      * @param temperature Temperature for generation (0.0-1.0)
      * @param maxTokens Maximum tokens in response
+     * @param model Optional specific model to use
      * @return Raw JSON string response
      * @throws AIClientException on error
      */
     suspend fun generateJsonContent(
         prompt: String,
         temperature: Float = 0.2f,
-        maxTokens: Int = 4096
+        maxTokens: Int = 4096,
+        model: String? = null
     ): String
     
     /**
@@ -45,13 +47,15 @@ interface AIClient {
      * @param prompt The prompt to send to the AI
      * @param temperature Temperature for generation (0.0-1.0)
      * @param maxTokens Maximum tokens in response
+     * @param model Optional specific model to use
      * @return Raw text string response
      * @throws AIClientException on error
      */
     suspend fun generateTextContent(
         prompt: String,
         temperature: Float = 0.7f,
-        maxTokens: Int = 4096
+        maxTokens: Int = 4096,
+        model: String? = null
     ): String
     
     /**
@@ -61,12 +65,14 @@ interface AIClient {
      * @param prompt The prompt to send to the AI
      * @param temperature Temperature for generation (0.0-1.0)
      * @param maxTokens Maximum tokens in response
+     * @param model Optional specific model to use
      * @return Flow emitting content chunks as they arrive
      */
     fun generateStreamingContent(
         prompt: String,
         temperature: Float = 0.7f,
-        maxTokens: Int = 4096
+        maxTokens: Int = 4096,
+        model: String? = null
     ): Flow<String>
 }
 

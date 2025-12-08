@@ -15,31 +15,39 @@ object BadgeResponseMapper {
     }
 
     /**
-     * Parses an AI badge response JSON string into a list of Badge objects.
-     * 
-     * Expected JSON format:
-     * {
-     *   "badges": [
-     *     {"title": "Badge Title", "emoji": "🎮", "reason": "Why they earned this"},
-     *     ...
-     *   ]
-     * }
-     *
-     * @param response The raw AI response string (JSON)
-     * @return Result containing list of Badges on success, or failure with exception
+     * Parses an AI badge response string into a list of Badge objects.
+     * Supports both the custom "===BADGE===" format (primary) and JSON (fallback).
      */
     fun parseBadgesResponse(response: String): Result<List<Badge>> {
         return try {
-            // Clean up the response - remove markdown code blocks if present
+            // 1. Try parsing custom format first
+            val badges = response.split("===BADGE===")
+                .filter { it.isNotBlank() }
+                .mapNotNull { section ->
+                    val title = section.lines().find { it.trim().startsWith("Title:", true) }?.substringAfter(":")?.trim()
+                    val emoji = section.lines().find { it.trim().startsWith("Emoji:", true) }?.substringAfter(":")?.trim()
+                    val reason = section.lines().find { it.trim().startsWith("Reason:", true) }?.substringAfter(":")?.trim()
+                    
+                    if (!title.isNullOrBlank() && !emoji.isNullOrBlank() && !reason.isNullOrBlank()) {
+                        Badge(title, emoji, reason)
+                    } else {
+                        null
+                    }
+                }
+
+            if (badges.isNotEmpty()) {
+                return Result.success(badges)
+            }
+
+            // 2. Fallback: Try JSON parsing if custom format failed
             val cleanedResponse = cleanJsonResponse(response)
-            
             val dto = json.decodeFromString<BadgesResponseDto>(cleanedResponse)
-            val badges = dto.badges.map { it.toBadge() }
+            val jsonBadges = dto.badges.map { it.toBadge() }
             
-            if (badges.isEmpty()) {
+            if (jsonBadges.isEmpty()) {
                 Result.failure(IllegalArgumentException("No badges found in response"))
             } else {
-                Result.success(badges)
+                Result.success(jsonBadges)
             }
         } catch (e: Exception) {
             Result.failure(e)

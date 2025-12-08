@@ -152,6 +152,14 @@ class FallbackAIRepository(
         } ?: fallbackRepository.generateRoast(stats)
     }
 
+    override fun generateRoastStreaming(stats: RoastStats): Flow<String> {
+        return primaryRepository.generateRoastStreaming(stats)
+            .catch { e ->
+                Log.e(TAG, "Primary streaming failed, switching to fallback", e)
+                emitAll(fallbackRepository.generateRoastStreaming(stats))
+            }
+    }
+
     override suspend fun generateBadges(stats: RoastStats): Result<List<Badge>> {
         return tryWithFallback("generateBadges") {
             primaryRepository.generateBadges(stats)

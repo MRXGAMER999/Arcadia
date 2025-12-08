@@ -4,12 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +41,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.LaunchedEffect
+import com.example.arcadia.presentation.screens.roast.components.AnimatedRoastResultCard
+import com.example.arcadia.presentation.screens.roast.components.EmberParticles
+import com.example.arcadia.presentation.screens.roast.components.MysticalLoadingState
+import com.example.arcadia.presentation.screens.roast.components.RuneConsole
+import com.example.arcadia.presentation.screens.roast.components.shake
 import com.example.arcadia.presentation.screens.roast.components.BadgeSelector
 import com.example.arcadia.presentation.screens.roast.components.RoastErrorState
 import com.example.arcadia.presentation.screens.roast.components.RoastLoadingState
@@ -71,6 +79,11 @@ fun RoastScreen(
     val state = viewModel.state
     val context = LocalContext.current
     
+    // Check motion preferences
+    LaunchedEffect(Unit) {
+        viewModel.checkMotionPreferences(context)
+    }
+
     Scaffold(
         topBar = {
             RoastTopBar(
@@ -79,35 +92,39 @@ fun RoastScreen(
             )
         },
         containerColor = Color.Transparent,
-        modifier = modifier.background(
-            Brush.verticalGradient(
-                colors = listOf(
-                    Color(0xFF1A0A0A),
-                    Color(0xFF0A1929)
+        modifier = modifier
+            .shake(enabled = state.isShaking)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        RoastTheme.backgroundStart,
+                        RoastTheme.backgroundEnd
+                    )
                 )
             )
-        )
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1A0A0A),
-                            Color(0xFF0A1929)
-                        )
-                    )
-                )
         ) {
+            // Background Particles
+            EmberParticles(reduceMotion = state.reduceMotion)
+
             when {
-                // Loading state (Requirements: 2.2)
+                // Loading state
                 state.isLoading -> {
-                    RoastLoadingState(message = state.loadingMessage)
+                    if (state.isStreaming) {
+                        RuneConsole(streamingText = state.streamingText)
+                    } else {
+                        MysticalLoadingState(
+                            message = state.loadingMessage,
+                            reduceMotion = state.reduceMotion
+                        )
+                    }
                 }
                 
-                // Error state (Requirements: 13.1, 13.2, 13.3)
+                // Error state
                 state.error != null -> {
                     RoastErrorState(
                         errorMessage = state.error,
@@ -116,21 +133,36 @@ fun RoastScreen(
                     )
                 }
                 
-                // Results state (Requirements: 2.3, 2.4, 2.5, 8.2, 8.3, 8.4)
+                // Results state
                 state.roast != null -> {
-                    RoastResultsContent(
-                        state = state,
-                        onRegenerateClick = { viewModel.regenerateRoast() },
-                        onShareClick = { 
-                            // Requirements: 11.1 - Share roast content
-                            RoastShareHelper.shareRoast(context, state.roast)
-                        },
-                        onBadgeClick = { viewModel.selectBadge(it) },
-                        onSaveBadges = { viewModel.saveFeaturedBadges() }
-                    )
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        AnimatedRoastResultCard(
+                            roast = state.roast!!,
+                            revealPhase = state.revealPhase,
+                            reduceMotion = state.reduceMotion,
+                            onRegenerate = { viewModel.regenerateRoast() },
+                            onShare = { 
+                                RoastShareHelper.shareRoast(context, state.roast!!)
+                            },
+                            badgesContent = {
+                                if (state.badges.isNotEmpty()) {
+                                    BadgeSelector(
+                                        badges = state.badges,
+                                        selectedBadges = state.selectedBadges,
+                                        onBadgeClick = { viewModel.selectBadge(it) },
+                                        onSaveBadges = { viewModel.saveFeaturedBadges() },
+                                        isSaving = state.isSavingBadges,
+                                        isSaved = state.badgesSaved,
+                                        isFriendRoast = state.targetUserId != null,
+                                        maxBadges = RoastScreenState.MAX_FEATURED_BADGES
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
                 
-                // Empty state (Requirements: 2.1)
+                // Empty state
                 else -> {
                     RoastEmptyState(
                         hasInsufficientStats = state.hasInsufficientStats,
@@ -139,7 +171,7 @@ fun RoastScreen(
                 }
             }
             
-            // Regenerate confirmation dialog (Requirements: 3.1, 3.2, 3.3)
+            // Regenerate confirmation dialog
             if (state.isRegenerateDialogVisible) {
                 RegenerateConfirmationDialog(
                     onKeepCurrent = { viewModel.hideRegenerateDialog() },
@@ -196,6 +228,7 @@ private fun RoastEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // Animated flame emoji
         Text(
             text = "🔥",
             fontSize = 80.sp
@@ -207,19 +240,20 @@ private fun RoastEmptyState(
             text = "Ready to Get Roasted?",
             color = Color.White,
             fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center,
+            letterSpacing = 0.5.sp
         )
         
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         
         Text(
             text = if (hasInsufficientStats) {
-                "Add more games to your library first! You need at least 3 games and 5 hours played."
+                "Add more games to your library first! You need at least 3 games and 5 hours played to unlock your personalized roast."
             } else {
-                "Let our AI analyze your gaming habits and deliver a personalized roast you'll never forget."
+                "Let our AI analyze your gaming habits and deliver a personalized roast you'll never forget. Prepare for the truth!"
             },
-            color = Color.White.copy(alpha = 0.7f),
+            color = Color.White.copy(alpha = 0.85f),
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
             lineHeight = 24.sp
@@ -231,8 +265,8 @@ private fun RoastEmptyState(
             onClick = onRoastMeClick,
             enabled = !hasInsufficientStats,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFFF6B35),
-                disabledContainerColor = Color(0xFF444444)
+                containerColor = Color(0xFFFF7043),
+                disabledContainerColor = Color(0xFF333333)
             ),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier
@@ -240,67 +274,28 @@ private fun RoastEmptyState(
                 .height(56.dp)
         ) {
             Text(
-                text = "🔥 Roast Me",
+                text = "🔥 Roast Me Now",
                 color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp,
+                letterSpacing = 0.5.sp
+            )
+        }
+        
+        if (hasInsufficientStats) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "💡 Tip: Build your library by adding games from the search screen",
+                color = Color(0xFFFF7043).copy(alpha = 0.7f),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
             )
         }
     }
 }
 
-/**
- * Results content with roast card, badges, and action buttons.
- * Requirements: 2.3, 2.4, 2.5, 8.2, 8.3, 8.4
- */
-@Composable
-private fun RoastResultsContent(
-    state: RoastScreenState,
-    onRegenerateClick: () -> Unit,
-    onShareClick: () -> Unit,
-    onBadgeClick: (com.example.arcadia.domain.model.ai.Badge) -> Unit,
-    onSaveBadges: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-    ) {
-        // Roast result card
-        RoastResultCard(
-            roast = state.roast!!,
-            generatedAt = state.generatedAt
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Badge selector (if badges are available)
-        // Requirements: 8.2, 8.3, 8.4
-        if (state.badges.isNotEmpty()) {
-            BadgeSelector(
-                badges = state.badges,
-                selectedBadges = state.selectedBadges,
-                onBadgeClick = onBadgeClick,
-                onSaveBadges = onSaveBadges,
-                isSaving = state.isSavingBadges,
-                isSaved = state.badgesSaved,
-                isFriendRoast = state.targetUserId != null,
-                maxBadges = RoastScreenState.MAX_FEATURED_BADGES
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-        
-        // Action buttons (Requirements: 2.5)
-        ActionButtons(
-            onShareClick = onShareClick,
-            onRegenerateClick = onRegenerateClick
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-    }
-}
+
 
 
 /**
@@ -314,7 +309,7 @@ private fun ActionButtons(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Share button
         Button(
@@ -325,18 +320,21 @@ private fun ActionButtons(
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp)
+                .height(40.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Share,
                 contentDescription = null,
-                tint = Color.White
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Share",
                 color = Color.White,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
             )
         }
         
@@ -349,18 +347,21 @@ private fun ActionButtons(
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp)
+                .height(40.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Refresh,
                 contentDescription = null,
-                tint = Color.White
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Regenerate",
                 color = Color.White,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
             )
         }
     }
