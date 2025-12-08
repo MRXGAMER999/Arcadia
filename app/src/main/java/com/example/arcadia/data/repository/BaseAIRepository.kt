@@ -1340,7 +1340,7 @@ Rules for slugs: lowercase, hyphenated, RAWG API compatible (e.g., "ryu-ga-gotok
      */
     override suspend fun generateRoast(stats: RoastStats): Result<RoastInsights> {
         return try {
-            val prompt = GeminiPrompts.gamingRoastPrompt(stats)
+            val prompt = GeminiPrompts.gamingRoastPromptEnhanced(stats)
             
             Log.d(TAG, "Generating roast with ${aiClient.providerName} for stats: ${stats.totalGames} games, ${stats.hoursPlayed} hours")
             

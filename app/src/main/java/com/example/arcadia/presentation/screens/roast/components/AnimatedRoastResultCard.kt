@@ -191,7 +191,7 @@ fun AnimatedRoastResultCard(
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
-                                    text = item,
+                                    text = item.trim().trimStart('.', '-', '•', '*', ' ').trim(),
                                     color = Color.White.copy(alpha = 0.95f),
                                     style = MaterialTheme.typography.bodyLargeEmphasized.copy(
                                         lineHeight = 24.sp
