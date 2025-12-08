@@ -18,8 +18,12 @@ import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapMerge
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
 
 /**
  * Enhanced RemoteMediator for AI-powered game recommendations.
@@ -75,6 +79,9 @@ class AIRecommendationsRemoteMediator(
         private const val MEDIUM_CONFIDENCE_THRESHOLD = 40
     }
 
+    // Cache library during initialize() to avoid re-fetching in load()
+    private var cachedInitializationLibrary: List<GameListEntry>? = null
+
     /**
      * Called by Paging 3 to determine if we should refresh data.
      * 
@@ -88,7 +95,7 @@ class AIRecommendationsRemoteMediator(
         val cacheCount = cachedGamesDao.getAIRecommendationsCount()
         
         if (remoteKey == null || cacheCount == 0) {
-            Log.d(TAG, "No cache found (key=$remoteKey, count=$cacheCount), triggering initial refresh")
+            Log.d(TAG, "initialize: No cache found (key=$remoteKey, count=$cacheCount), triggering initial refresh")
             return InitializeAction.LAUNCH_INITIAL_REFRESH
         }
         
@@ -98,9 +105,11 @@ class AIRecommendationsRemoteMediator(
         
         // Check if library has changed significantly
         val currentLibrary = try {
-            userLibraryProvider()
+            val lib = userLibraryProvider()
+            cachedInitializationLibrary = lib // Cache for load()
+            lib
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to get library for cache check, using cached data", e)
+            Log.w(TAG, "initialize: Failed to get library for cache check, using cached data", e)
             return InitializeAction.SKIP_INITIAL_REFRESH
         }
         
@@ -110,17 +119,26 @@ class AIRecommendationsRemoteMediator(
         val libraryHashChanged = currentLibraryHash != remoteKey.libraryHash
         val significantLibraryChange = librarySizeChange >= MIN_LIBRARY_CHANGE_FOR_REFRESH
         
-        Log.d(TAG, "Cache check: age=${cacheAge/1000}s, stale=$isCacheStale, hashChanged=$libraryHashChanged, sizeChange=$librarySizeChange")
+        Log.d(TAG, "initialize: Cache check: age=${cacheAge/1000}s, stale=$isCacheStale, hashChanged=$libraryHashChanged, sizeChange=$librarySizeChange (prev=${remoteKey.librarySize}, curr=$currentLibrarySize)")
+        
+        // SAFEGUARD: If library suddenly appears empty (but we have substantial cache), 
+        // assume it's a loading glitch (or fast switching) and keep cached data 
+        // to prevent flashing "No Recommendations".
+        // Real empty library (user deleted all games) can be handled by manual refresh.
+        if (currentLibrarySize == 0 && remoteKey.librarySize > 5) {
+             Log.w(TAG, "initialize: Library size dropped from ${remoteKey.librarySize} to 0. Assuming loading glitch, skipping refresh to preserve cache.")
+             return InitializeAction.SKIP_INITIAL_REFRESH
+        }
         
         // OFFLINE-FIRST STRATEGY with smart invalidation:
         // - Always show cached data immediately (SKIP_INITIAL_REFRESH)
         // - But trigger background refresh if cache is stale OR library changed significantly
         // This ensures instant app startup while keeping recommendations fresh
         return if (isCacheStale || (libraryHashChanged && significantLibraryChange)) {
-            Log.d(TAG, "Cache needs refresh (stale=$isCacheStale, significantChange=$significantLibraryChange), triggering background refresh")
+            Log.d(TAG, "initialize: Cache needs refresh (stale=$isCacheStale, significantChange=$significantLibraryChange), triggering background refresh")
             InitializeAction.LAUNCH_INITIAL_REFRESH
         } else {
-            Log.d(TAG, "Found $cacheCount cached recommendations. Cache is fresh, skipping refresh.")
+            Log.d(TAG, "initialize: Found $cacheCount cached recommendations. Cache is fresh, skipping refresh.")
             InitializeAction.SKIP_INITIAL_REFRESH
         }
     }
@@ -158,8 +176,9 @@ class AIRecommendationsRemoteMediator(
         return try {
             Log.d(TAG, "Starting AI recommendations refresh with progressive loading")
             
-            // 1. Get current library
-            val userLibrary = userLibraryProvider()
+            // 1. Get current library (use cached if available from initialize)
+            val userLibrary = cachedInitializationLibrary ?: userLibraryProvider()
+            cachedInitializationLibrary = null // Clear cache
             val libraryHash = libraryHashProvider(userLibrary)
             val librarySize = userLibrary.size
             val libraryFingerprint = computeLibraryFingerprint(userLibrary)
@@ -518,36 +537,31 @@ class AIRecommendationsRemoteMediator(
 
     /**
      * Fetch game details from RAWG in batches to avoid rate limiting.
-     * Uses coroutines for parallel fetching within each batch.
+     * Uses concurrent Flow with flatMapMerge for efficient throughput.
      */
     private suspend fun fetchGamesInBatches(
         gameNames: List<String>,
         recommendationMap: Map<String, GameRecommendation>,
         startOrder: Int,
         libraryHash: Int
-    ): List<CachedGameEntity> = coroutineScope {
-        val results = mutableListOf<CachedGameEntity>()
-        
-        gameNames.chunked(MAX_CONCURRENT_FETCHES).forEachIndexed { batchIndex, batch ->
-            val batchResults = batch.mapIndexed { indexInBatch, gameName ->
-                async {
+    ): List<CachedGameEntity> {
+        // Fix: Use mapIndexed on the List, NOT on the Flow to avoid resolution errors
+        return gameNames.mapIndexed { index, name -> IndexedValue(index, name) }
+            .asFlow()
+            .flatMapMerge(concurrency = MAX_CONCURRENT_FETCHES) { (index, gameName) ->
+                flow {
                     val recommendation = recommendationMap[gameName.lowercase()] ?: GameRecommendation(gameName)
-                    fetchSingleGame(
+                    val result = fetchSingleGame(
                         gameName = gameName,
                         recommendation = recommendation,
-                        order = startOrder + batchIndex * MAX_CONCURRENT_FETCHES + indexInBatch,
+                        order = startOrder + index,
                         libraryHash = libraryHash
                     )
+                    if (result != null) emit(result)
                 }
-            }.awaitAll().filterNotNull()
-            
-            // Don't filter here - we want to cache ALL recommendations
-            // Filtering is done in the ViewModel layer to allow dynamic updates when library changes
-            results.addAll(batchResults)
-            Log.d(TAG, "Batch ${batchIndex + 1}: fetched ${batchResults.size}/${batch.size} games")
-        }
-        
-        results
+            }
+            .toList()
+            .sortedBy { it.aiRecommendationOrder }
     }
 
     /**

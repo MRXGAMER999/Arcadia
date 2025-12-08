@@ -141,8 +141,17 @@ class GroqAIClient(
                 Log.w(TAG, "Streaming failed with model $modelName: ${e.message}")
                 
                 if (index < modelsToTry.size - 1) {
-                    Log.d(TAG, "Trying next model for streaming in 2s...")
-                    kotlinx.coroutines.delay(2000)
+                    val isRateLimit = e.message?.lowercase()?.contains("429") == true || 
+                                      e.message?.lowercase()?.contains("rate") == true
+                    
+                    val delayMs = if (isRateLimit) {
+                        (1000L * (1 shl index)).coerceAtMost(4000L)
+                    } else {
+                        500L
+                    }
+                    
+                    Log.d(TAG, "Trying next model for streaming in ${delayMs}ms...")
+                    kotlinx.coroutines.delay(delayMs)
                     continue
                 }
             }
@@ -177,8 +186,18 @@ class GroqAIClient(
                 
                 // Check if we should retry with fallback
                 if (shouldFallback(e) && index < modelsToTry.size - 1) {
-                    Log.d(TAG, "Falling back to next model in 2s...")
-                    kotlinx.coroutines.delay(2000)
+                    val isRateLimit = e.message?.lowercase()?.contains("429") == true || 
+                                      e.message?.lowercase()?.contains("rate") == true
+                    
+                    // Smart delay: exponential backoff for rate limits, brief pause for others
+                    val delayMs = if (isRateLimit) {
+                        (1000L * (1 shl index)).coerceAtMost(4000L) // 1s, 2s, 4s...
+                    } else {
+                        500L // Brief pause for 500/503 errors to let service recover
+                    }
+                    
+                    Log.d(TAG, "Falling back to next model in ${delayMs}ms...")
+                    kotlinx.coroutines.delay(delayMs)
                     continue
                 }
                 
@@ -202,23 +221,31 @@ class GroqAIClient(
                message.contains("limit") ||
                message.contains("429") ||
                message.contains("503") ||
+               message.contains("500") ||
+               message.contains("502") ||
+               message.contains("504") ||
                message.contains("overloaded") ||
-               message.contains("capacity")
+               message.contains("capacity") ||
+               message.contains("internal error") ||
+               message.contains("bad gateway")
     }
     
     /**
-     * Clean JSON response from markdown formatting.
+     * Clean JSON response from markdown formatting using robust regex extraction.
+     * Finds the largest matching brace pair { ... } to handle markdown blocks, 
+     * prefix text, or suffix text reliably.
      */
     private fun cleanJsonResponse(text: String): String {
-        var cleaned = text
-        if (cleaned.contains("```")) {
-            val jsonStart = cleaned.indexOf("{")
-            val jsonEnd = cleaned.lastIndexOf("}") + 1
-            if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                cleaned = cleaned.substring(jsonStart, jsonEnd)
-            }
+        // Find the first '{' and the last '}'
+        val jsonStart = text.indexOf('{')
+        val jsonEnd = text.lastIndexOf('}')
+        
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+            return text.substring(jsonStart, jsonEnd + 1).trim()
         }
-        return cleaned.trim()
+        
+        // If no braces found, return original (will likely fail parsing later, but nothing better to do)
+        return text.trim()
     }
     
     /**

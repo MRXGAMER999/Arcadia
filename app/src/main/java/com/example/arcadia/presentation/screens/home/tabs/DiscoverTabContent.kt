@@ -86,6 +86,12 @@ fun DiscoverTabContent(
     
     // Collect Paging 3 items at composable scope (must be called unconditionally)
     val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
+    
+    LaunchedEffect(aiPagingItems.loadState, aiPagingItems.itemCount) {
+        if (aiPagingItems.itemCount == 0 && aiPagingItems.loadState.refresh is LoadState.NotLoading) {
+            android.util.Log.w("DiscoverTabContent", "Showing Empty State: Count=0, State=${aiPagingItems.loadState.refresh}")
+        }
+    }
 
     // Manage scroll state manually for Paging 3 using ViewModel state
     // This ensures persistence even if the View is destroyed/recreated
@@ -120,9 +126,8 @@ fun DiscoverTabContent(
     val usePagedAI = discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION && 
                      discoveryFilterState.activeFilterCount == 1
     
-    // For AI mode, also consider paging refresh state for the pull-to-refresh indicator
-    val isActuallyRefreshing = screenState.isRefreshing || 
-        (usePagedAI && aiPagingItems.loadState.refresh is LoadState.Loading && aiPagingItems.itemCount == 0)
+    // Only use ViewModel state for refresh indicator to avoid showing it on tab switch/initial load
+    val isActuallyRefreshing = screenState.isRefreshing
 
     Box(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
