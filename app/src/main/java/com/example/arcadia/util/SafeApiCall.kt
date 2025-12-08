@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.arcadia.data.remote.dto.GameDto
 import com.example.arcadia.data.remote.mapper.toGame
 import com.example.arcadia.domain.model.Game
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -32,6 +33,7 @@ inline fun <T> safeApiFlow(
         val result = apiCall()
         emit(RequestState.Success(result))
     } catch (e: Exception) {
+        if (e is CancellationException) throw e
         Log.e(tag, "$errorMessage: ${e.message}", e)
         emit(RequestState.Error("$errorMessage: ${e.message}"))
     }
@@ -56,6 +58,7 @@ inline fun safeGameListApiFlow(
         val games = dtos.map { it.toGame() }
         emit(RequestState.Success(games))
     } catch (e: Exception) {
+        if (e is CancellationException) throw e
         Log.e(tag, "$errorMessage: ${e.message}", e)
         emit(RequestState.Error("$errorMessage: ${e.message}"))
     }
@@ -78,6 +81,7 @@ suspend inline fun <T> safeCall(
     return try {
         Result.success(block())
     } catch (e: Exception) {
+        if (e is CancellationException) throw e
         Log.e(tag, "$errorMessage: ${e.message}", e)
         Result.failure(e)
     }
@@ -100,6 +104,7 @@ suspend inline fun <T> safeRequestState(
     return try {
         RequestState.Success(block())
     } catch (e: Exception) {
+        if (e is CancellationException) throw e
         Log.e(tag, "$errorMessage: ${e.message}", e)
         RequestState.Error("$errorMessage: ${e.message}")
     }

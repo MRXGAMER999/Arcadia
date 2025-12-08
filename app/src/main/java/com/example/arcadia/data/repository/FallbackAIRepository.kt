@@ -162,6 +162,7 @@ class FallbackAIRepository(
                 null // Signal to use fallback
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.w(TAG, "Primary $operationName threw exception, switching to fallback: ${e.message}")
             null // Signal to use fallback
         }
@@ -175,35 +176,41 @@ class FallbackAIRepository(
         operationName: String,
         primaryOperation: suspend () -> Result<T>
     ): Result<T>? {
-        return try {
-            val result = primaryOperation()
-            if (result.isSuccess) {
-                result
-            } else {
+        var attempts = 0
+        val maxAttempts = 2
+        
+        while (attempts < maxAttempts) {
+            attempts++
+            try {
+                val result = primaryOperation()
+                if (result.isSuccess) return result
+                
                 val error = result.exceptionOrNull()
                 val errorMessage = error?.message?.lowercase() ?: ""
                 
-                // If rate limited, wait and retry once before falling back
-                if (errorMessage.contains("rate") || errorMessage.contains("429")) {
-                    Log.w(TAG, "Primary $operationName rate limited, waiting 3s before fallback to Gemini")
+                // If rate limited, wait and retry
+                if ((errorMessage.contains("rate") || errorMessage.contains("429")) && attempts < maxAttempts) {
+                    Log.w(TAG, "Primary $operationName rate limited (attempt $attempts), waiting 3s before retry")
                     kotlinx.coroutines.delay(3000)
-                    // Don't retry Groq - just fall back to Gemini immediately
-                    Log.w(TAG, "Falling back to Gemini due to Groq rate limit")
-                    null
-                } else {
-                    Log.w(TAG, "Primary $operationName returned failure: ${error?.message}")
-                    null
+                    continue
                 }
-            }
-        } catch (e: Exception) {
-            val errorMessage = e.message?.lowercase() ?: ""
-            if (errorMessage.contains("rate") || errorMessage.contains("429")) {
-                Log.w(TAG, "Primary $operationName rate limited (exception), falling back to Gemini")
-                kotlinx.coroutines.delay(1000) // Brief delay before fallback
-            } else {
+                
+                Log.w(TAG, "Primary $operationName returned failure: ${error?.message}")
+                return null
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                
+                val errorMessage = e.message?.lowercase() ?: ""
+                if ((errorMessage.contains("rate") || errorMessage.contains("429")) && attempts < maxAttempts) {
+                    Log.w(TAG, "Primary $operationName rate limited (exception attempt $attempts), waiting 3s before retry")
+                    kotlinx.coroutines.delay(3000)
+                    continue
+                }
+                
                 Log.w(TAG, "Primary $operationName threw exception, switching to fallback: ${e.message}")
+                return null
             }
-            null
         }
+        return null
     }
 }

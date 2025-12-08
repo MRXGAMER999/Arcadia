@@ -126,7 +126,8 @@ class GroqAIClient(
                                     emit(content)
                                 }
                             } catch (e: Exception) {
-                                // Ignore parse errors for individual chunks
+                                // Log parse errors instead of swallowing them
+                                Log.w(TAG, "Failed to parse streaming chunk: '$data'", e)
                             }
                         }
                     }

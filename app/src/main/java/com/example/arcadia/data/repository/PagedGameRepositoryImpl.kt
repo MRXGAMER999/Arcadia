@@ -169,7 +169,9 @@ class PagedGameRepositoryImpl(
      */
     private suspend fun getUserLibrary(): List<GameListEntry> {
         return try {
-            val result = gameListRepository.getGameList(SortOrder.NEWEST_FIRST)
+            // Fix: Use RATING_HIGH to prioritize user's favorites for AI analysis
+            // instead of just the most recently added games (which might be backlog).
+            val result = gameListRepository.getGameList(SortOrder.RATING_HIGH)
                 .first { it is RequestState.Success || it is RequestState.Error }
             
             when (result) {
