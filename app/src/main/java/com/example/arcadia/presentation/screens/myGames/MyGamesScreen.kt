@@ -107,7 +107,7 @@ fun MyGamesScreen(
     listState: LazyListState = rememberLazyListState(),
     gridState: LazyGridState = rememberLazyGridState()
 ) {
-    val viewModel: MyGamesViewModel = koinViewModel { parametersOf(userId) }
+    val viewModel: MyGamesViewModel = koinViewModel(key = userId) { parametersOf(userId) }
     val screenState = viewModel.screenState
     val undoState by viewModel.undoState.collectAsState()
     var showStats by remember { mutableStateOf(false) }

@@ -1,5 +1,6 @@
 package com.example.arcadia.domain.model
 
+import com.example.arcadia.domain.model.ai.Badge
 import kotlinx.serialization.Serializable
 
 
@@ -22,7 +23,16 @@ data class Gamer(
     // Custom profile sections
     val customSections: List<ProfileSection> = emptyList(),
     // Profile visibility settings
-    val isProfilePublic: Boolean = true
+    val isProfilePublic: Boolean = true,
+    
+    // Friends feature fields
+    val friendRequestsSentToday: Int = 0,
+    val friendRequestsLastResetDate: String? = null,
+    val oneSignalPlayerId: String? = null,
+    
+    // Other fields
+    val featuredBadges: List<Badge> = emptyList(),
+    val fcmToken: String? = null
 )
 
 @Serializable

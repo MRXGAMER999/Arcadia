@@ -65,6 +65,7 @@ fun NewHomeScreen(
     onNavigateToMyGames: () -> Unit = {},
     onNavigateToSearch: (String?) -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
+    onNavigateToFriends: () -> Unit = {},
     onGameClick: (Int) -> Unit = {},
     viewModel: HomeViewModel = org.koin.androidx.compose.koinViewModel()
 ) {
@@ -72,6 +73,7 @@ fun NewHomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val screenState = viewModel.screenState
     val snackbarState by viewModel.snackbarState.collectAsState()
+    val pendingFriendRequestCount by viewModel.pendingFriendRequestCount.collectAsState()
     val scope = rememberCoroutineScope()
     
     // Double back to exit logic
@@ -114,8 +116,9 @@ fun NewHomeScreen(
             topBar = {
                 HomeTopBar(
                     selectedIndex = selectedTab,
+                    pendingFriendRequestCount = pendingFriendRequestCount,
                     onSearchClick = { onNavigateToSearch(null) },
-                    onNotificationsClick = { /* TODO: Notifications */ },
+                    onFriendsClick = onNavigateToFriends,
                     onSettingsClick = { onNavigateToProfile() }
                 )
             },

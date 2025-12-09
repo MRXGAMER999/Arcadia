@@ -8,6 +8,9 @@
 
     <!-- Optional: For Google Sign-In -->
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+    
+    <!-- Push Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:name="com.example.MyApplication"
         android:allowBackup="true"

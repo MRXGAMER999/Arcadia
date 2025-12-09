@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class Badge(
-    val title: String,
-    val emoji: String,
-    val reason: String
+    val title: String = "",
+    val emoji: String = "",
+    val reason: String = ""
 )

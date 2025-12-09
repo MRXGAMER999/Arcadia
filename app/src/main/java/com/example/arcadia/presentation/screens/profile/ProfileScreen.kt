@@ -12,11 +12,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,8 +27,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
@@ -35,6 +44,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -50,11 +61,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.domain.model.ProfileSection
+import com.example.arcadia.domain.model.friend.FriendshipStatus
 import com.example.arcadia.presentation.screens.profile.components.AddSectionBottomSheet
 import com.example.arcadia.presentation.screens.profile.components.BadgesSection
 import com.example.arcadia.presentation.screens.profile.components.BioCard
@@ -62,8 +75,10 @@ import com.example.arcadia.presentation.screens.profile.components.CustomSection
 import com.example.arcadia.presentation.screens.profile.components.GamingPlatformsCard
 import com.example.arcadia.presentation.screens.profile.components.GamingStatsCard
 import com.example.arcadia.presentation.screens.profile.components.LibraryPreviewCard
+import com.example.arcadia.presentation.screens.friends.components.LimitReachedDialog
 import com.example.arcadia.presentation.screens.profile.components.ProfileHeader
 import com.example.arcadia.presentation.screens.profile.components.ShareProfileDialog
+import com.example.arcadia.presentation.screens.profile.components.UnfriendConfirmationDialog
 import com.example.arcadia.presentation.screens.profile.components.shareProfileAsText
 import com.example.arcadia.ui.theme.BebasNeueFont
 import com.example.arcadia.ui.theme.ButtonPrimary
@@ -92,6 +107,10 @@ fun ProfileScreen(
     val customSections = viewModel.customSections
     val isCurrentUser = viewModel.isCurrentUser
     val context = LocalContext.current
+    
+    // Friendship state - Requirements: 8.1-8.4, 8.10, 8.11
+    val friendshipState by viewModel.friendshipState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var showAddSectionSheet by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
@@ -104,9 +123,25 @@ fun ProfileScreen(
         viewModel.loadProfile(userId)
         isVisible = true
     }
+    
+    // Show error/success messages via snackbar
+    LaunchedEffect(friendshipState.error) {
+        friendshipState.error?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearFriendshipError()
+        }
+    }
+    
+    LaunchedEffect(friendshipState.successMessage) {
+        friendshipState.successMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearFriendshipSuccess()
+        }
+    }
 
     Scaffold(
         containerColor = Surface,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -229,6 +264,15 @@ fun ProfileScreen(
                                 if (!profileState.country.isNullOrEmpty()) append(profileState.country)
                             }.takeIf { it.isNotEmpty() }
                         )
+                        
+                        // Friend Action Button - Requirements: 8.1-8.4, 8.10, 8.11
+                        if (viewModel.shouldShowFriendActionButton()) {
+                            FriendActionButton(
+                                status = friendshipState.status,
+                                isLoading = friendshipState.isLoading,
+                                onClick = { viewModel.onFriendActionButtonClick() }
+                            )
+                        }
 
                         // Bio Section
                         if (!profileState.description.isNullOrEmpty()) {
@@ -323,6 +367,24 @@ fun ProfileScreen(
             }
         )
     }
+    
+    // Unfriend Confirmation Dialog - Requirements: 9.1, 9.3, 9.4
+    if (friendshipState.showUnfriendDialog) {
+        UnfriendConfirmationDialog(
+            username = profileState.username,
+            onConfirm = { viewModel.unfriend() },
+            onDismiss = { viewModel.dismissUnfriendDialog() }
+        )
+    }
+    
+    // Limit Reached Dialog - Requirements: 3.21, 3.22, 3.26, 6.11
+    friendshipState.limitReachedType?.let { limitType ->
+        LimitReachedDialog(
+            limitType = limitType,
+            cooldownHours = friendshipState.cooldownHours,
+            onDismiss = { viewModel.dismissLimitDialog() }
+        )
+    }
 }
 
 @Composable
@@ -341,3 +403,90 @@ private fun CoolRoastButton(onClick: () -> Unit) {
         )
     }
 }
+
+/**
+ * Friend action button displayed on other users' profiles.
+ * Shows different states based on friendship status.
+ * 
+ * Requirements: 8.1-8.4, 8.10
+ * - 8.1: NOT_FRIENDS → "Add as Friend" button with plus icon
+ * - 8.2: REQUEST_SENT → disabled "Request Pending" button with hourglass icon
+ * - 8.3: REQUEST_RECEIVED → "Accept Request" button with checkmark icon
+ * - 8.4: FRIENDS → "Friends" button with checkmark icon
+ * - 8.10: Show loading indicator during operations
+ */
+@Composable
+private fun FriendActionButton(
+    status: FriendshipStatus,
+    isLoading: Boolean,
+    onClick: () -> Unit
+) {
+    val (text, icon, containerColor, enabled) = when (status) {
+        FriendshipStatus.NOT_FRIENDS -> FriendButtonConfig(
+            text = "Add as Friend",
+            icon = Icons.Default.PersonAdd,
+            containerColor = ButtonPrimary,
+            enabled = true
+        )
+        FriendshipStatus.REQUEST_SENT -> FriendButtonConfig(
+            text = "Request Pending",
+            icon = Icons.Default.HourglassEmpty,
+            containerColor = TextSecondary.copy(alpha = 0.5f),
+            enabled = false
+        )
+        FriendshipStatus.REQUEST_RECEIVED -> FriendButtonConfig(
+            text = "Accept Request",
+            icon = Icons.Default.Check,
+            containerColor = Color(0xFF4CAF50), // Green for accept
+            enabled = true
+        )
+        FriendshipStatus.FRIENDS -> FriendButtonConfig(
+            text = "Friends",
+            icon = Icons.Default.Check,
+            containerColor = ButtonPrimary,
+            enabled = true
+        )
+    }
+    
+    Button(
+        onClick = onClick,
+        enabled = enabled && !isLoading,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = Surface,
+            disabledContainerColor = containerColor.copy(alpha = 0.6f),
+            disabledContentColor = Surface.copy(alpha = 0.6f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = Surface,
+                strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(text = text)
+    }
+}
+
+/**
+ * Configuration data class for friend button appearance.
+ */
+private data class FriendButtonConfig(
+    val text: String,
+    val icon: ImageVector,
+    val containerColor: Color,
+    val enabled: Boolean
+)

@@ -6,7 +6,9 @@ import com.example.arcadia.data.local.StudioCacheDatabase
 import com.example.arcadia.data.local.StudioCacheManager
 import com.example.arcadia.data.local.dao.RecommendationFeedbackDao
 import com.example.arcadia.data.remote.GroqApiService
+import com.example.arcadia.data.remote.OneSignalNotificationService
 import com.example.arcadia.data.repository.FallbackAIRepository
+import com.example.arcadia.data.repository.FriendsRepositoryImpl
 import com.example.arcadia.data.repository.GameListRepositoryImpl
 import com.example.arcadia.data.repository.GameRepositoryImpl
 import com.example.arcadia.data.repository.GeminiRepository
@@ -16,11 +18,13 @@ import com.example.arcadia.data.repository.RoastRepositoryImpl
 import com.example.arcadia.data.repository.FeaturedBadgesRepositoryImpl
 import com.example.arcadia.domain.repository.AIRepository
 import com.example.arcadia.domain.repository.FeaturedBadgesRepository
+import com.example.arcadia.domain.repository.FriendsRepository
 import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.PagedGameRepository
 import com.example.arcadia.domain.repository.RoastRepository
+import com.google.firebase.firestore.FirebaseFirestore
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -31,10 +35,24 @@ import org.koin.dsl.module
  */
 val repositoryModule = module {
     
+    // ==================== Firebase ====================
+    
+    /** Firebase Firestore instance */
+    single { FirebaseFirestore.getInstance() }
+    
     // ==================== Repositories ====================
     
     /** Repository for gamer/user data */
     single<GamerRepository> { GamerRepositoryImpl() }
+    
+    /** OneSignal Notification Service */
+    single { OneSignalNotificationService() }
+    
+    /** Repository for friends and friend requests (Requirements: 1.1, 3.5, 6.3, 8.1-8.4, 14.1-14.7) */
+    single<FriendsRepository> { FriendsRepositoryImpl(get(), get()) }
+    
+    /** OneSignal notification service for push notifications (Requirements: 10.6, 10.7, 10.8) */
+    single { OneSignalNotificationService(get()) }
     
     /** 
      * Repository for game data from RAWG API

@@ -10,6 +10,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.storage
+import com.onesignal.OneSignal
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -17,6 +18,10 @@ import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 class GamerRepositoryImpl: GamerRepository {
+    
+    companion object {
+        private const val TAG = "GamerRepositoryImpl"
+    }
     override fun getCurrentUserId(): String? {
         return Firebase.auth.currentUser?.uid
     }
@@ -42,7 +47,11 @@ class GamerRepositoryImpl: GamerRepository {
                 if(userDoc.exists()){
                     // Existing user - return their profile completion status
                     val gamer = userDoc.toObject(Gamer::class.java)
-                    android.util.Log.d("GamerRepository", "Existing user, profileComplete: ${gamer?.profileComplete}")
+                    android.util.Log.d(TAG, "Existing user, profileComplete: ${gamer?.profileComplete}")
+                    
+                    // Login to OneSignal with user ID and save player ID
+                    loginToOneSignal(user.uid)
+                    
                     onSuccess(gamer?.profileComplete ?: false)
                 } else {
                     // New user - create user with profileComplete = false
@@ -61,7 +70,11 @@ class GamerRepositoryImpl: GamerRepository {
                     )
 
                     userCollection.document(user.uid).set(userData).await()
-                    android.util.Log.d("GamerRepository", "User document created successfully")
+                    android.util.Log.d(TAG, "User document created successfully")
+                    
+                    // Login to OneSignal with user ID and save player ID
+                    loginToOneSignal(user.uid)
+                    
                     onSuccess(false) // New user, profile not complete
                 }
 
@@ -364,10 +377,76 @@ class GamerRepositoryImpl: GamerRepository {
 
     override suspend fun signOut(): RequestState<Unit> {
         return try {
+            // Logout from OneSignal before signing out from Firebase
+            // Requirements: 10.5
+            logoutFromOneSignal()
+            
             Firebase.auth.signOut()
             RequestState.Success(Unit)
         } catch (e: Exception) {
             RequestState.Error(e.message ?: "Error signing out")
+        }
+    }
+    
+    /**
+     * Logs in to OneSignal with the user's Firebase UID as external ID.
+     * Also saves the OneSignal player ID to Firestore for push notification targeting.
+     * Requirements: 10.3, 10.4
+     */
+    private fun loginToOneSignal(userId: String) {
+        try {
+            // Login to OneSignal with the Firebase user ID as external ID
+            OneSignal.login(userId)
+            android.util.Log.d(TAG, "OneSignal login called for user: $userId")
+            
+            // Get the OneSignal subscription ID (player ID) and save to Firestore
+            // The subscription ID is the unique identifier for push notification targeting
+            val subscriptionId = OneSignal.User.pushSubscription.id
+            if (!subscriptionId.isNullOrBlank()) {
+                saveOneSignalPlayerId(userId, subscriptionId)
+            } else {
+                android.util.Log.w(TAG, "OneSignal subscription ID not available yet")
+                // The subscription ID will be available after OneSignal processes the login
+                // The next time the user opens the app, we'll try to save it again
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to login to OneSignal", e)
+            // Don't fail the auth flow if OneSignal login fails
+        }
+    }
+    
+    /**
+     * Saves the OneSignal player ID to the user's Firestore document.
+     * Requirements: 10.4
+     */
+    private fun saveOneSignalPlayerId(userId: String, playerId: String) {
+        try {
+            val database = Firebase.firestore
+            database.collection("users")
+                .document(userId)
+                .update("oneSignalPlayerId", playerId)
+                .addOnSuccessListener {
+                    android.util.Log.d(TAG, "OneSignal player ID saved to Firestore: $playerId")
+                }
+                .addOnFailureListener { e ->
+                    android.util.Log.e(TAG, "Failed to save OneSignal player ID: ${e.message}", e)
+                }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Error saving OneSignal player ID", e)
+        }
+    }
+    
+    /**
+     * Logs out from OneSignal to disassociate the device from the user.
+     * Requirements: 10.5
+     */
+    private fun logoutFromOneSignal() {
+        try {
+            OneSignal.logout()
+            android.util.Log.d(TAG, "OneSignal logout called")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to logout from OneSignal", e)
+            // Don't fail the sign out flow if OneSignal logout fails
         }
     }
 }

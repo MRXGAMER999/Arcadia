@@ -78,7 +78,7 @@ fun RoastScreen(
     targetUserId: String?,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: RoastViewModel = koinViewModel { parametersOf(targetUserId) }
+    viewModel: RoastViewModel = koinViewModel(key = targetUserId) { parametersOf(targetUserId) }
 ) {
     val state = viewModel.state
     val context = LocalContext.current

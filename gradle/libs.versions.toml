@@ -23,6 +23,13 @@ firebaseBom = "34.6.0"
 koin-bom = "4.1.1"
 retrofit = "3.0.0"
 okhttp = "5.3.2"
+# QR Code and Camera dependencies
+zxing = "3.5.3"
+mlkitBarcodeScanning = "17.3.0"
+cameraX = "1.4.1"
+accompanistPermissions = "0.36.0"
+# OneSignal
+onesignal = "5.1.23"
 
 [libraries]
 androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
@@ -84,6 +91,24 @@ room-paging = { group = "androidx.room", name = "room-paging", version.ref = "ro
 paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
 paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
 
+# QR Code - ZXing
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+
+# ML Kit Barcode Scanning
+mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcodeScanning" }
+
+# CameraX
+camerax-core = { group = "androidx.camera", name = "camera-core", version.ref = "cameraX" }
+camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "cameraX" }
+camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "cameraX" }
+camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "cameraX" }
+
+# Accompanist Permissions
+accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanistPermissions" }
+
+# OneSignal
+onesignal = { group = "com.onesignal", name = "OneSignal", version.ref = "onesignal" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
@@ -91,3 +116,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 google-services = { id = "com.google.gms.google-services", version = "4.4.4" }
 ksp = { id = "com.google.devtools.ksp", version = "2.2.20-2.0.3" }
+onesignal = { id = "com.onesignal.androidsdk.onesignal-gradle-plugin", version = "0.14.0" }

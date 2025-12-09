@@ -44,6 +44,10 @@ class PreferencesManager(context: Context) {
         // Migration tracking
         private const val KEY_MIGRATION_VERSION = "migration_version"
         private const val CURRENT_MIGRATION_VERSION = 1 // Increment when new migration needed
+        
+        // Friends feature keys
+        private const val KEY_LAST_DECLINED_REQUESTS_CLEANUP = "last_declined_requests_cleanup"
+        private const val CLEANUP_INTERVAL_DAYS = 7
 
         // My Games Screen Settings
         private const val KEY_MEDIA_LAYOUT = "media_layout"
@@ -418,6 +422,29 @@ class PreferencesManager(context: Context) {
      */
     fun markDevPubMigrationComplete() {
         preferences.edit { putInt(KEY_MIGRATION_VERSION, 1) }
+    }
+    
+    // ==================== Friends Feature ====================
+    
+    /**
+     * Check if declined requests cleanup should be performed.
+     * Returns true if last cleanup was more than 7 days ago.
+     * Requirements: 17.1, 17.2
+     */
+    fun shouldCleanupDeclinedRequests(): Boolean {
+        val lastCleanup = preferences.getLong(KEY_LAST_DECLINED_REQUESTS_CLEANUP, 0L)
+        if (lastCleanup == 0L) return true
+        
+        val daysSinceCleanup = (System.currentTimeMillis() - lastCleanup) / (1000 * 60 * 60 * 24)
+        return daysSinceCleanup >= CLEANUP_INTERVAL_DAYS
+    }
+    
+    /**
+     * Mark declined requests cleanup as complete.
+     * Requirements: 17.4
+     */
+    fun markDeclinedRequestsCleanupComplete() {
+        preferences.edit { putLong(KEY_LAST_DECLINED_REQUESTS_CLEANUP, System.currentTimeMillis()) }
     }
 }
 

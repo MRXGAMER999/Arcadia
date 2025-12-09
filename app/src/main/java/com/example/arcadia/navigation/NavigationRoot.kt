@@ -15,6 +15,8 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.example.arcadia.presentation.screens.authScreen.AuthScreen
 import com.example.arcadia.presentation.screens.detailsScreen.DetailsScreen
+import com.example.arcadia.presentation.screens.friends.FriendRequestsScreen
+import com.example.arcadia.presentation.screens.friends.FriendsScreen
 import com.example.arcadia.presentation.screens.home.NewHomeScreen
 import com.example.arcadia.presentation.screens.myGames.MyGamesScreen
 import com.example.arcadia.presentation.screens.onBoarding.OnBoardingScreen
@@ -59,6 +61,12 @@ data class DetailsScreenKey(val gameId: Int) : NavKey
 
 @Serializable
 data class RoastScreenKey(val targetUserId: String? = null) : NavKey
+
+@Serializable
+object FriendsScreenKey : NavKey
+
+@Serializable
+object FriendRequestsScreenKey : NavKey
 
 @Composable
 fun NavigationRoot(
@@ -143,6 +151,9 @@ fun NavigationRoot(
                             },
                             onNavigateToAnalytics = {
                                 backStack.add(AnalyticsScreenKey)
+                            },
+                            onNavigateToFriends = {
+                                backStack.add(FriendsScreenKey)
                             },
                             onGameClick = { gameId ->
                                 backStack.add(DetailsScreenKey(gameId))
@@ -276,6 +287,35 @@ fun NavigationRoot(
                         com.example.arcadia.presentation.screens.roast.RoastScreen(
                             targetUserId = key.targetUserId,
                             onNavigateBack = { backStack.remove(key) }
+                        )
+                    }
+                }
+                is FriendsScreenKey -> {
+                    NavEntry(
+                        key = key,
+                    ) {
+                        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                        FriendsScreen(
+                            onNavigateBack = { backStack.remove(key) },
+                            onNavigateToFriendRequests = {
+                                backStack.add(FriendRequestsScreenKey)
+                            },
+                            onNavigateToProfile = { userId ->
+                                backStack.add(ProfileScreenKey(userId))
+                            },
+                            currentUserId = currentUserId
+                        )
+                    }
+                }
+                is FriendRequestsScreenKey -> {
+                    NavEntry(
+                        key = key,
+                    ) {
+                        FriendRequestsScreen(
+                            onNavigateBack = { backStack.remove(key) },
+                            onNavigateToProfile = { userId ->
+                                backStack.add(ProfileScreenKey(userId))
+                            }
                         )
                     }
                 }

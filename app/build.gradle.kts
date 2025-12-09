@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.onesignal)
 }
 
 android {
@@ -22,7 +23,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
-        // Load properties from local.properties and expose RAWG API Key via BuildConfig
+        // Load properties from local.properties and expose API Keys via BuildConfig
         val localPropertiesFile = rootProject.file("local.properties")
         if (localPropertiesFile.exists()) {
             val localProperties = Properties().apply {
@@ -31,13 +32,19 @@ android {
             val rawgApiKey = localProperties.getProperty("RAWG_API_KEY", "")
             val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY", "")
             val groqApiKey = localProperties.getProperty("GROQ_API_KEY", "")
+            val onesignalAppId = localProperties.getProperty("ONESIGNAL_APP_ID", "")
+            val onesignalRestApiKey = localProperties.getProperty("ONESIGNAL_REST_API_KEY", "")
             buildConfigField("String", "RAWG_API_KEY", "\"$rawgApiKey\"")
             buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
             buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
+            buildConfigField("String", "ONESIGNAL_APP_ID", "\"$onesignalAppId\"")
+            buildConfigField("String", "ONESIGNAL_REST_API_KEY", "\"$onesignalRestApiKey\"")
         } else {
             buildConfigField("String", "RAWG_API_KEY", "\"\"")
             buildConfigField("String", "GEMINI_API_KEY", "\"\"")
             buildConfigField("String", "GROQ_API_KEY", "\"\"")
+            buildConfigField("String", "ONESIGNAL_APP_ID", "\"\"")
+            buildConfigField("String", "ONESIGNAL_REST_API_KEY", "\"\"")
         }
     }
 
@@ -145,6 +152,24 @@ dependencies {
     // Paging 3
     implementation(libs.paging.runtime)
     implementation(libs.paging.compose)
+
+    // QR Code - ZXing for generation
+    implementation(libs.zxing.core)
+
+    // ML Kit Barcode Scanning
+    implementation(libs.mlkit.barcode.scanning)
+
+    // CameraX for QR scanning
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+
+    // Accompanist Permissions
+    implementation(libs.accompanist.permissions)
+
+    // OneSignal Push Notifications
+    implementation(libs.onesignal)
 
     // Tests
     testImplementation(libs.junit)

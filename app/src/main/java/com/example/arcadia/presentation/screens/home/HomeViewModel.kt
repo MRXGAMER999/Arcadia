@@ -9,6 +9,8 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.filter
 import com.example.arcadia.domain.repository.AIRepository
+import com.example.arcadia.domain.repository.FriendsRepository
+import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.presentation.base.LibraryAwareViewModel
 import com.example.arcadia.domain.model.DiscoveryFilterState
 import com.example.arcadia.domain.model.DiscoverySortOrder
@@ -31,6 +33,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -59,7 +64,9 @@ class HomeViewModel(
     private val preferencesManager: PreferencesManager,
     addGameToLibraryUseCase: AddGameToLibraryUseCase,
     @Suppress("unused") private val parallelGameFilter: ParallelGameFilter, // Kept for potential future local filtering
-    private val pagedGameRepository: PagedGameRepository // Paging 3 repository for AI recommendations
+    private val pagedGameRepository: PagedGameRepository, // Paging 3 repository for AI recommendations
+    private val friendsRepository: FriendsRepository, // For pending friend request count
+    private val gamerRepository: GamerRepository // For current user ID
 ) : LibraryAwareViewModel(gameListRepository, addGameToLibraryUseCase) {
     
     companion object {
@@ -155,6 +162,11 @@ class HomeViewModel(
     var discoverScrollIndex by mutableIntStateOf(0)
     var discoverScrollOffset by mutableIntStateOf(0)
 
+    // Pending friend request count for badge display
+    // Requirements: 2.3, 2.4, 2.5
+    private val _pendingFriendRequestCount = MutableStateFlow(0)
+    val pendingFriendRequestCount: StateFlow<Int> = _pendingFriendRequestCount.asStateFlow()
+
     init {
         // Load saved discovery filter preferences
         loadSavedDiscoveryPreferences()
@@ -164,6 +176,22 @@ class HomeViewModel(
         loadInitialData()
         // Run one-time migrations in background
         runMigrationsIfNeeded()
+        // Observe pending friend request count for badge display
+        observePendingFriendRequestCount()
+    }
+    
+    /**
+     * Observes the pending friend request count for badge display on the friends icon.
+     * Requirements: 2.3, 2.4, 2.5
+     */
+    private fun observePendingFriendRequestCount() {
+        val userId = gamerRepository.getCurrentUserId() ?: return
+        
+        launchWithKey("pending_friend_request_count") {
+            friendsRepository.getPendingRequestCountRealtime(userId).collect { count ->
+                _pendingFriendRequestCount.value = count
+            }
+        }
     }
     
     /**
