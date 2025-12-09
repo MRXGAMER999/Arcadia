@@ -80,6 +80,12 @@ data class FriendsUiState(
     val actionError: String? = null,
     /** Action success message */
     val actionSuccess: String? = null,
+    /** Snackbar visibility for action confirmations */
+    val showActionSnackbar: Boolean = false,
+    /** Message for action snackbar */
+    val actionSnackbarMessage: String? = null,
+    /** Target username for action snackbar */
+    val actionTargetName: String? = null,
     /** Reciprocal request that needs user confirmation */
     val reciprocalRequest: FriendRequest? = null,
     /** Target user for reciprocal request dialog */
@@ -518,7 +524,10 @@ class FriendsViewModel(
                         _uiState.update { 
                             it.copy(
                                 isActionInProgress = false,
-                                actionSuccess = "Friend request sent!"
+                                actionSuccess = null,
+                                showActionSnackbar = true,
+                                actionSnackbarMessage = "Friend request sent",
+                                actionTargetName = targetUser.username
                             )
                         }
                         // Refresh search results to update status
@@ -597,7 +606,10 @@ class FriendsViewModel(
                         _uiState.update { 
                             it.copy(
                                 isActionInProgress = false,
-                                actionSuccess = "Friend request accepted!"
+                                actionSuccess = null,
+                                showActionSnackbar = true,
+                                actionSnackbarMessage = "Friend added",
+                                actionTargetName = targetUser.username
                             )
                         }
                         // Refresh search results to update status
@@ -656,7 +668,10 @@ class FriendsViewModel(
                     _uiState.update { 
                         it.copy(
                             isActionInProgress = false,
-                            actionSuccess = "Friend request accepted!"
+                                actionSuccess = null,
+                                showActionSnackbar = true,
+                                actionSnackbarMessage = "Friend added",
+                                actionTargetName = _uiState.value.reciprocalRequestTargetUser?.username
                         )
                     }
                     // Refresh search results
@@ -702,6 +717,10 @@ class FriendsViewModel(
      */
     fun clearActionSuccess() {
         _uiState.update { it.copy(actionSuccess = null) }
+    }
+
+    fun dismissActionSnackbar() {
+        _uiState.update { it.copy(showActionSnackbar = false, actionSnackbarMessage = null, actionTargetName = null) }
     }
     
     /**

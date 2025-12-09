@@ -21,7 +21,6 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -41,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.arcadia.presentation.components.AddGameSnackbar
 import com.example.arcadia.presentation.components.common.EmptyState
 import com.example.arcadia.presentation.components.common.ErrorState
 import com.example.arcadia.presentation.components.common.LoadingState
@@ -51,25 +51,15 @@ import com.example.arcadia.presentation.screens.friends.components.LimitReachedD
 import com.example.arcadia.presentation.screens.friends.components.ReciprocalRequestDialog
 import com.example.arcadia.ui.theme.BebasNeueFont
 import com.example.arcadia.ui.theme.ButtonPrimary
-import com.example.arcadia.ui.theme.ResponsiveDimens
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
-import com.example.arcadia.ui.theme.rememberResponsiveDimens
 import org.koin.androidx.compose.koinViewModel
-
 
 /**
  * Friends Screen displaying the user's friends list.
- * Responsive design that adapts to all screen sizes.
  * 
  * Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 11.1, 11.2, 11.3
- * 
- * @param onNavigateBack Callback to navigate back to the previous screen
- * @param onNavigateToFriendRequests Callback to navigate to the Friend Requests screen
- * @param onNavigateToProfile Callback to navigate to a friend's profile
- * @param currentUserId The current user's ID for QR code generation
- * @param viewModel The FriendsViewModel instance
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +73,6 @@ fun FriendsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val dimens = rememberResponsiveDimens()
     
     // Detect when user scrolls near the end for pagination
     val shouldLoadMore by remember {
@@ -97,14 +86,12 @@ fun FriendsScreen(
         }
     }
     
-    // Trigger load more when needed
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) {
             viewModel.loadMoreFriends()
         }
     }
     
-    // Show snackbar for action errors
     LaunchedEffect(uiState.actionError) {
         uiState.actionError?.let { error ->
             snackbarHostState.showSnackbar(error)
@@ -112,10 +99,8 @@ fun FriendsScreen(
         }
     }
     
-    // Show snackbar for action success
     LaunchedEffect(uiState.actionSuccess) {
-        uiState.actionSuccess?.let { success ->
-            snackbarHostState.showSnackbar(success)
+        if (uiState.actionSuccess != null) {
             viewModel.clearActionSuccess()
         }
     }
@@ -128,13 +113,10 @@ fun FriendsScreen(
                 pendingRequestCount = uiState.pendingRequestCount,
                 onNavigateBack = onNavigateBack,
                 onNotificationsClick = onNavigateToFriendRequests,
-                formatBadgeCount = viewModel::formatBadgeCount,
-                dimens = dimens
+                formatBadgeCount = viewModel::formatBadgeCount
             )
         },
         floatingActionButton = {
-            // FAB for adding friends - Requirements: 3.1
-            // Disable when offline - Requirements: 13.4
             FloatingActionButton(
                 onClick = { 
                     if (!uiState.isOffline) {
@@ -142,72 +124,68 @@ fun FriendsScreen(
                     }
                 },
                 containerColor = if (uiState.isOffline) ButtonPrimary.copy(alpha = 0.5f) else ButtonPrimary,
-                contentColor = Surface,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = if (dimens.isExpanded) 8.dp else 6.dp
-                ),
-                modifier = Modifier.size(
-                    if (dimens.isExpanded) 64.dp 
-                    else if (dimens.isMedium) 60.dp 
-                    else 56.dp
-                )
+                contentColor = Surface
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Add Friends",
-                    modifier = Modifier.size(dimens.iconLarge)
+                    contentDescription = "Add Friends"
                 )
             }
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Offline banner - Requirements: 13.3, 13.4
-            OfflineBanner(isOffline = uiState.isOffline)
-            
-            Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    // Loading state - Requirements: 1.5
-                    uiState.isLoading && uiState.friends.isEmpty() -> {
-                        LoadingState(message = "Loading friends...")
-                    }
-                    
-                    // Error state - Requirements: 1.6
-                    uiState.error != null && uiState.friends.isEmpty() -> {
-                        ErrorState(
-                            message = uiState.error ?: "Failed to load friends",
-                            onRetry = { viewModel.retry() }
-                        )
-                    }
-                    
-                    // Empty state - Requirements: 1.3
-                    uiState.friends.isEmpty() -> {
-                        EmptyState(
-                            title = "No friends yet",
-                            subtitle = "Tap + to add!",
-                            icon = Icons.Default.People
-                        )
-                    }
-                    
-                    // Friends list - Requirements: 1.1, 1.2
-                    else -> {
-                        FriendsList(
-                            friends = uiState.friends,
-                            isLoadingMore = uiState.isLoadingMore,
-                            listState = listState,
-                            onFriendClick = onNavigateToProfile,
-                            dimens = dimens
-                        )
+            Column(modifier = Modifier.fillMaxSize()) {
+                OfflineBanner(isOffline = uiState.isOffline)
+                
+                Box(modifier = Modifier.fillMaxSize()) {
+                    when {
+                        uiState.isLoading && uiState.friends.isEmpty() -> {
+                            LoadingState(message = "Loading friends...")
+                        }
+                        uiState.error != null && uiState.friends.isEmpty() -> {
+                            ErrorState(
+                                message = uiState.error ?: "Failed to load friends",
+                                onRetry = { viewModel.retry() }
+                            )
+                        }
+                        uiState.friends.isEmpty() -> {
+                            EmptyState(
+                                title = "No friends yet",
+                                subtitle = "Tap + to add!",
+                                icon = Icons.Default.People
+                            )
+                        }
+                        else -> {
+                            FriendsList(
+                                friends = uiState.friends,
+                                isLoadingMore = uiState.isLoadingMore,
+                                listState = listState,
+                                onFriendClick = onNavigateToProfile
+                            )
+                        }
                     }
                 }
+            }
+
+            if (uiState.showActionSnackbar && uiState.actionSnackbarMessage != null) {
+                AddGameSnackbar(
+                    visible = uiState.showActionSnackbar,
+                    gameName = uiState.actionTargetName ?: "Friend",
+                    message = uiState.actionSnackbarMessage,
+                    showUndo = false,
+                    onDismiss = { viewModel.dismissActionSnackbar() },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp)
+                )
             }
         }
     }
     
-    // Add Friends Bottom Sheet
     AddFriendsBottomSheet(
         isVisible = uiState.bottomSheetMode != BottomSheetMode.HIDDEN,
         mode = uiState.bottomSheetMode,
@@ -238,7 +216,6 @@ fun FriendsScreen(
         }
     )
     
-    // Reciprocal Request Dialog
     if (uiState.reciprocalRequest != null && uiState.reciprocalRequestTargetUser != null) {
         ReciprocalRequestDialog(
             username = uiState.reciprocalRequestTargetUser!!.username,
@@ -247,7 +224,6 @@ fun FriendsScreen(
         )
     }
     
-    // Limit Reached Dialog - Requirements: 3.21, 3.22, 3.26, 6.11
     uiState.limitReachedType?.let { limitType ->
         LimitReachedDialog(
             limitType = limitType,
@@ -257,26 +233,19 @@ fun FriendsScreen(
     }
 }
 
-/**
- * Top bar for the Friends screen.
- * Responsive design with adaptive sizing.
- * 
- * Requirements: 11.1, 11.2, 11.3
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FriendsTopBar(
     pendingRequestCount: Int,
     onNavigateBack: () -> Unit,
     onNotificationsClick: () -> Unit,
-    formatBadgeCount: (Int) -> String,
-    dimens: ResponsiveDimens
+    formatBadgeCount: (Int) -> String
 ) {
     TopAppBar(
         title = {
             Text(
                 text = "FRIENDS",
-                fontSize = dimens.fontSizeTitle,
+                fontSize = 28.sp,
                 fontFamily = BebasNeueFont,
                 color = TextSecondary,
                 letterSpacing = 2.sp
@@ -287,13 +256,11 @@ private fun FriendsTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(dimens.iconMedium)
+                    tint = TextSecondary
                 )
             }
         },
         actions = {
-            // Notification bell with badge - Requirements: 11.3, 2.3, 2.4, 2.5
             IconButton(onClick = onNotificationsClick) {
                 if (pendingRequestCount > 0) {
                     BadgedBox(
@@ -304,7 +271,7 @@ private fun FriendsTopBar(
                             ) {
                                 Text(
                                     text = formatBadgeCount(pendingRequestCount),
-                                    fontSize = dimens.fontSizeSmall * 0.85f,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -313,71 +280,53 @@ private fun FriendsTopBar(
                         Icon(
                             imageVector = Icons.Default.Notifications,
                             contentDescription = "Friend Requests",
-                            tint = ButtonPrimary,
-                            modifier = Modifier.size(dimens.iconMedium)
+                            tint = ButtonPrimary
                         )
                     }
                 } else {
                     Icon(
                         imageVector = Icons.Default.Notifications,
                         contentDescription = "Friend Requests",
-                        tint = ButtonPrimary,
-                        modifier = Modifier.size(dimens.iconMedium)
+                        tint = ButtonPrimary
                     )
                 }
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Surface
-        )
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
     )
 }
 
-/**
- * LazyColumn displaying the friends list.
- * Responsive layout with adaptive spacing.
- * 
- * Requirements: 1.1, 1.2
- */
 @Composable
 private fun FriendsList(
     friends: List<com.example.arcadia.domain.model.friend.Friend>,
     isLoadingMore: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    onFriendClick: (String) -> Unit,
-    dimens: ResponsiveDimens
+    onFriendClick: (String) -> Unit
 ) {
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            top = dimens.paddingSmall,
-            bottom = dimens.paddingXLarge + 56.dp // Account for FAB
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimens.paddingXSmall)
+        contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        items(
-            items = friends,
-            key = { it.userId }
-        ) { friend ->
+        items(items = friends, key = { it.userId }) { friend ->
             FriendListItem(
                 friend = friend,
                 onClick = { onFriendClick(friend.userId) }
             )
         }
         
-        // Loading more indicator
         if (isLoadingMore) {
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(dimens.paddingLarge),
+                        .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
                         color = ButtonPrimary,
-                        modifier = Modifier.size(dimens.iconLarge),
+                        modifier = Modifier.size(32.dp),
                         strokeWidth = 3.dp
                     )
                 }

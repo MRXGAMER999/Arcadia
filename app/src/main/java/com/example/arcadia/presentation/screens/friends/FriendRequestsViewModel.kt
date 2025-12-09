@@ -49,6 +49,12 @@ data class FriendRequestsUiState(
     val actionError: String? = null,
     /** Action success message */
     val actionSuccess: String? = null,
+    /** Snackbar visibility for action confirmations */
+    val showActionSnackbar: Boolean = false,
+    /** Message for action snackbar */
+    val actionSnackbarMessage: String? = null,
+    /** Target username for action snackbar */
+    val actionTargetName: String? = null,
     /** Whether the device is currently offline - Requirements: 13.3, 13.4 */
     val isOffline: Boolean = false,
     /** Type of limit reached for showing dialog - Requirements: 6.11 */
@@ -245,7 +251,10 @@ class FriendRequestsViewModel(
                             it.copy(
                                 isActionInProgress = false,
                                 processingRequestId = null,
-                                actionSuccess = "Friend request accepted!"
+                                actionSuccess = null,
+                                showActionSnackbar = true,
+                                actionSnackbarMessage = "Friend request accepted",
+                                actionTargetName = request.fromUsername
                             )
                         }
                     }
@@ -435,5 +444,9 @@ class FriendRequestsViewModel(
      */
     fun dismissLimitDialog() {
         _uiState.update { it.copy(limitReachedType = null) }
+    }
+
+    fun dismissActionSnackbar() {
+        _uiState.update { it.copy(showActionSnackbar = false, actionSnackbarMessage = null, actionTargetName = null) }
     }
 }

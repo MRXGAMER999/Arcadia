@@ -28,72 +28,59 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.arcadia.domain.model.friend.Friend
 import com.example.arcadia.ui.theme.ButtonPrimary
-import com.example.arcadia.ui.theme.ResponsiveDimens
 import com.example.arcadia.ui.theme.TextSecondary
-import com.example.arcadia.ui.theme.rememberResponsiveDimens
 
 /**
  * A list item displaying a friend's avatar and username.
- * Responsive design that adapts to all screen sizes.
  * 
  * Requirements: 1.1, 1.2
  * - Display avatar and username
  * - Handle tap to navigate to profile
- * 
- * @param friend The friend data to display
- * @param onClick Callback when the item is tapped
- * @param modifier Modifier for customization
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FriendListItem(
     friend: Friend,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalPlatformContext.current
-    val dimens = rememberResponsiveDimens()
-    
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = dimens.horizontalPadding,
-                vertical = dimens.cardVerticalPadding
-            )
+            .padding(horizontal = 16.dp, vertical = 4.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(dimens.cardCornerRadius),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF0F1B41)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = dimens.cardElevation)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(dimens.cardHorizontalPadding),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.itemSpacing)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Avatar
             FriendAvatar(
                 imageUrl = friend.profileImageUrl,
                 username = friend.username,
-                size = dimens.avatarMedium,
-                dimens = dimens
+                size = 48.dp
             )
             
             // Username
             Text(
                 text = friend.username,
                 color = TextSecondary,
-                fontSize = dimens.fontSizeMedium,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -105,7 +92,7 @@ fun FriendListItem(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = TextSecondary.copy(alpha = 0.5f),
-                modifier = Modifier.size(dimens.iconMedium)
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -120,7 +107,6 @@ internal fun FriendAvatar(
     imageUrl: String?,
     username: String,
     size: Dp,
-    dimens: ResponsiveDimens,
     modifier: Modifier = Modifier
 ) {
     val context = LocalPlatformContext.current
@@ -157,11 +143,11 @@ internal fun FriendAvatar(
                     }
                 },
                 error = {
-                    DefaultAvatar(size = size, dimens = dimens)
+                    DefaultAvatar(size = size)
                 }
             )
         } else {
-            DefaultAvatar(size = size, dimens = dimens)
+            DefaultAvatar(size = size)
         }
     }
 }
@@ -170,10 +156,7 @@ internal fun FriendAvatar(
  * Default avatar icon when no profile image is available.
  */
 @Composable
-internal fun DefaultAvatar(
-    size: Dp,
-    dimens: ResponsiveDimens
-) {
+internal fun DefaultAvatar(size: Dp) {
     Icon(
         imageVector = Icons.Default.Person,
         contentDescription = null,

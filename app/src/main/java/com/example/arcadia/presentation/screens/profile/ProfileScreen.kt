@@ -80,6 +80,9 @@ import com.example.arcadia.presentation.screens.profile.components.ProfileHeader
 import com.example.arcadia.presentation.screens.profile.components.ShareProfileDialog
 import com.example.arcadia.presentation.screens.profile.components.UnfriendConfirmationDialog
 import com.example.arcadia.presentation.screens.profile.components.shareProfileAsText
+import com.example.arcadia.presentation.components.AddGameSnackbar
+import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
+import com.example.arcadia.presentation.screens.profile.SectionDraft
 import com.example.arcadia.ui.theme.BebasNeueFont
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
@@ -117,6 +120,7 @@ fun ProfileScreen(
     var showShareDialog by remember { mutableStateOf(false) }
     var showLibrarySection by remember { mutableStateOf(true) }
     var sectionToEdit by remember { mutableStateOf<ProfileSection?>(null) }
+    var sectionDraftOverride by remember { mutableStateOf<SectionDraft?>(null) }
     
     // Animation state
     var isVisible by remember { mutableStateOf(false) }
@@ -125,7 +129,7 @@ fun ProfileScreen(
         isVisible = true
     }
     
-    // Show error/success messages via snackbar
+    // Show error messages via snackbar
     LaunchedEffect(friendshipState.error) {
         friendshipState.error?.let { error ->
             snackbarHostState.showSnackbar(error)
@@ -133,10 +137,13 @@ fun ProfileScreen(
         }
     }
     
-    LaunchedEffect(friendshipState.successMessage) {
-        friendshipState.successMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearFriendshipSuccess()
+    // Reopen section sheet with draft when requested by ViewModel
+    LaunchedEffect(viewModel.reopenSectionDraft) {
+        viewModel.reopenSectionDraft?.let { draft ->
+            sectionDraftOverride = draft
+            sectionToEdit = viewModel.customSections.find { it.id == draft.id }
+            showAddSectionSheet = true
+            viewModel.consumeReopenSectionDraft()
         }
     }
 
@@ -208,7 +215,11 @@ fun ProfileScreen(
         floatingActionButton = {
             if (isCurrentUser) {
                 FloatingActionButton(
-                    onClick = { showAddSectionSheet = true },
+                    onClick = { 
+                        sectionDraftOverride = null
+                        sectionToEdit = null
+                        showAddSectionSheet = true 
+                    },
                     containerColor = ButtonPrimary,
                     contentColor = Surface,
                     shape = RoundedCornerShape(16.dp)
@@ -218,138 +229,199 @@ fun ProfileScreen(
             }
         }
     ) { paddingValues ->
-        screenReady.DisplayResult(
-            modifier = Modifier.padding(paddingValues),
-            onLoading = {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    LoadingIndicator(color = ButtonPrimary)
-                }
-            },
-            onError = { errorMessage ->
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = errorMessage,
-                        color = Color(0xFFFF3535),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            },
-            onSuccess = {
-                AnimatedVisibility(
-                    visible = isVisible,
-                    enter = fadeIn(tween(500)) + slideInVertically(tween(500)) { it / 10 }
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            screenReady.DisplayResult(
+                modifier = Modifier.fillMaxSize(),
+                onLoading = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        // Profile Header
-                        ProfileHeader(
-                            imageUrl = profileState.profileImageUrl,
-                            name = profileState.name,
-                            username = profileState.username,
-                            location = buildString {
-                                if (!profileState.city.isNullOrEmpty()) append(profileState.city)
-                                if (!profileState.city.isNullOrEmpty() && !profileState.country.isNullOrEmpty()) append(", ")
-                                if (!profileState.country.isNullOrEmpty()) append(profileState.country)
-                            }.takeIf { it.isNotEmpty() }
+                        LoadingIndicator(color = ButtonPrimary)
+                    }
+                },
+                onError = { errorMessage ->
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = errorMessage,
+                            color = Color(0xFFFF3535),
+                            textAlign = TextAlign.Center
                         )
-                        
-                        // Friend Action Button - Requirements: 8.1-8.4, 8.10, 8.11
-                        if (viewModel.shouldShowFriendActionButton()) {
-                            FriendActionButton(
-                                status = friendshipState.status,
-                                isLoading = friendshipState.isLoading,
-                                onClick = { viewModel.onFriendActionButtonClick() }
+                    }
+                },
+                onSuccess = {
+                    AnimatedVisibility(
+                        visible = isVisible,
+                        enter = fadeIn(tween(500)) + slideInVertically(tween(500)) { it / 10 }
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            // Profile Header
+                            ProfileHeader(
+                                imageUrl = profileState.profileImageUrl,
+                                name = profileState.name,
+                                username = profileState.username,
+                                location = buildString {
+                                    if (!profileState.city.isNullOrEmpty()) append(profileState.city)
+                                    if (!profileState.city.isNullOrEmpty() && !profileState.country.isNullOrEmpty()) append(", ")
+                                    if (!profileState.country.isNullOrEmpty()) append(profileState.country)
+                                }.takeIf { it.isNotEmpty() }
                             )
-                        }
+                            
+                            // Friend Action Button - Requirements: 8.1-8.4, 8.10, 8.11
+                            if (viewModel.shouldShowFriendActionButton()) {
+                                FriendActionButton(
+                                    status = friendshipState.status,
+                                    isLoading = friendshipState.isLoading,
+                                    onClick = { viewModel.onFriendActionButtonClick() }
+                                )
+                            }
 
-                        // Bio Section
-                        if (!profileState.description.isNullOrEmpty()) {
-                            BioCard(bio = profileState.description)
-                        }
+                            // Bio Section
+                            if (!profileState.description.isNullOrEmpty()) {
+                                BioCard(bio = profileState.description)
+                            }
 
-                        // Gaming Stats Card
-                        GamingStatsCard(statsState = statsState)
+                            // Gaming Stats Card
+                            GamingStatsCard(statsState = statsState)
 
-                        // Featured Badges Section (Requirements: 9.1, 9.3)
-                        // BadgesSection handles hiding itself when badges list is empty
-                        BadgesSection(badges = featuredBadges)
+                            // Featured Badges Section (Requirements: 9.1, 9.3)
+                            // BadgesSection handles hiding itself when badges list is empty
+                            BadgesSection(badges = featuredBadges)
 
-                        // Gaming Platforms Section
-                        GamingPlatformsCard(
-                            steamId = profileState.steamId,
-                            xboxGamertag = profileState.xboxGamertag,
-                            psnId = profileState.psnId
-                        )
+                            // Gaming Platforms Section
+                            GamingPlatformsCard(
+                                steamId = profileState.steamId,
+                                xboxGamertag = profileState.xboxGamertag,
+                                psnId = profileState.psnId
+                            )
 
-                        // Custom Profile Sections
-                        customSections.forEach { section ->
-                            CustomSectionCard(
-                                section = section,
-                                games = libraryGames.filter { it.rawgId in section.gameIds },
+                            // Custom Profile Sections
+                            customSections.forEach { section ->
+                                CustomSectionCard(
+                                    section = section,
+                                    games = libraryGames.filter { it.rawgId in section.gameIds },
+                                    onGameClick = onGameClick,
+                                    onEditClick = if (isCurrentUser) { { 
+                                        sectionDraftOverride = null
+                                        sectionToEdit = section
+                                        showAddSectionSheet = true
+                                    } } else null,
+                                    onDeleteClick = if (isCurrentUser) { { viewModel.deleteCustomSection(section.id) } } else null
+                                )
+                            }
+
+                            // My Library Preview
+                            LibraryPreviewCard(
+                                games = libraryGames.take(10),
+                                totalGames = statsState.totalGames,
                                 onGameClick = onGameClick,
-                                onEditClick = if (isCurrentUser) { { sectionToEdit = section } } else null,
-                                onDeleteClick = if (isCurrentUser) { { viewModel.deleteCustomSection(section.id) } } else null
+                                onSeeAllClick = { 
+                                    // Pass userId and username only if viewing another user's profile
+                                    if (isCurrentUser) {
+                                        onNavigateToMyGames(null, null)
+                                    } else {
+                                        onNavigateToMyGames(userId, profileState.username)
+                                    }
+                                },
+                                expanded = showLibrarySection,
+                                onExpandClick = { showLibrarySection = !showLibrarySection }
                             )
+
+                            Spacer(modifier = Modifier.height(80.dp))
                         }
-
-                        // My Library Preview
-                        LibraryPreviewCard(
-                            games = libraryGames.take(10),
-                            totalGames = statsState.totalGames,
-                            onGameClick = onGameClick,
-                            onSeeAllClick = { 
-                                // Pass userId and username only if viewing another user's profile
-                                if (isCurrentUser) {
-                                    onNavigateToMyGames(null, null)
-                                } else {
-                                    onNavigateToMyGames(userId, profileState.username)
-                                }
-                            },
-                            expanded = showLibrarySection,
-                            onExpandClick = { showLibrarySection = !showLibrarySection }
-                        )
-
-                        Spacer(modifier = Modifier.height(80.dp))
                     }
                 }
+            )
+
+            val bottomPadding = if (isCurrentUser) 96.dp else 16.dp
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = bottomPadding),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                viewModel.sectionSnackbarState?.let { state ->
+                    AddGameSnackbar(
+                        visible = true,
+                        gameName = state.title,
+                        message = state.message,
+                        showUndo = state.showUndo,
+                        onUndo = if (state.showUndo) {
+                            { viewModel.undoDeleteSection() }
+                        } else null,
+                        onDismiss = { viewModel.onSectionSnackbarDismiss() }
+                    )
+                }
+
+                viewModel.friendActionSnackbarState?.let { state ->
+                    AddGameSnackbar(
+                        visible = true,
+                        gameName = state.username,
+                        message = state.message,
+                        showUndo = false,
+                        onDismiss = { viewModel.dismissFriendActionSnackbar() }
+                    )
+                }
+
+                UnsavedChangesSnackbar(
+                    visible = viewModel.showUnsavedSectionSnackbar,
+                    onReopen = { viewModel.reopenUnsavedSectionDraft() },
+                    onSave = { viewModel.saveUnsavedSection() },
+                    onDismiss = { viewModel.dismissUnsavedSectionSnackbar() }
+                )
             }
-        )
+        }
     }
 
-    // Add Section Bottom Sheet
+    // Add/Edit Section Bottom Sheet with unsaved-changes handling
     if (showAddSectionSheet) {
         AddSectionBottomSheet(
             libraryGames = libraryGames,
-            onDismiss = { showAddSectionSheet = false },
-            onSave = { title, type, gameIds ->
-                viewModel.addCustomSection(title, type, gameIds)
-                showAddSectionSheet = false
-            }
-        )
-    }
-
-    // Edit Section Bottom Sheet
-    sectionToEdit?.let { section ->
-        AddSectionBottomSheet(
-            libraryGames = libraryGames,
-            existingSection = section,
-            onDismiss = { sectionToEdit = null },
-            onSave = { title, type, gameIds ->
-                viewModel.updateCustomSection(section.id, title, type, gameIds)
+            existingSection = sectionToEdit,
+            initialTitle = sectionDraftOverride?.title,
+            initialType = sectionDraftOverride?.type,
+            initialGameIds = sectionDraftOverride?.gameIds,
+            baselineTitle = sectionToEdit?.title,
+            baselineType = sectionToEdit?.type,
+            baselineGameIds = sectionToEdit?.gameIds,
+            onDismiss = { 
+                sectionDraftOverride = null
                 sectionToEdit = null
+                showAddSectionSheet = false 
+            },
+            onSave = { title, type, gameIds ->
+                val targetSectionId = sectionToEdit?.id ?: sectionDraftOverride?.id
+                if (targetSectionId != null) {
+                    viewModel.updateCustomSection(targetSectionId, title, type, gameIds)
+                } else {
+                    viewModel.addCustomSection(title, type, gameIds)
+                }
+                sectionDraftOverride = null
+                sectionToEdit = null
+                showAddSectionSheet = false
+            },
+            onDismissWithUnsavedChanges = { draft ->
+                viewModel.showUnsavedSectionSnackbar(draft)
+                sectionDraftOverride = null
+                sectionToEdit = null
+                showAddSectionSheet = false
             }
         )
     }

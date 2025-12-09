@@ -29,29 +29,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.arcadia.domain.model.friend.FriendRequest
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
-import com.example.arcadia.ui.theme.rememberResponsiveDimens
 import com.example.arcadia.util.TimestampFormatter
 
 /**
  * A list item displaying a sent (outgoing) friend request with Pending badge and Cancel button.
- * Responsive design that adapts to all screen sizes.
  * 
  * Requirements: 7.2, 7.4, 7.6, 13.4
  * - Display avatar, username, timestamp, Pending badge
  * - Implement Cancel button
  * - Handle tap to navigate to profile
  * - Disable action buttons when offline
- * 
- * @param request The friend request data to display
- * @param isProcessing Whether an action is being processed for this request
- * @param isOffline Whether the device is currently offline
- * @param onCancel Callback when Cancel button is tapped
- * @param onClick Callback when the item is tapped (navigate to profile)
- * @param modifier Modifier for customization
  */
 @Composable
 fun SentRequestListItem(
@@ -62,112 +54,46 @@ fun SentRequestListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dimens = rememberResponsiveDimens()
-    
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = dimens.horizontalPadding,
-                vertical = dimens.cardVerticalPadding
-            )
+            .padding(horizontal = 16.dp, vertical = 4.dp)
             .clickable(enabled = !isProcessing, onClick = onClick),
-        shape = RoundedCornerShape(dimens.cardCornerRadius),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF0F1B41)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = dimens.cardElevation)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        // Use Column layout on very compact screens
-        if (dimens.isCompact && dimens.screenWidth < 360.dp) {
-            // Compact vertical layout for very small screens
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(dimens.cardHorizontalPadding)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    // Avatar
-                    FriendAvatar(
-                        imageUrl = request.toProfileImageUrl,
-                        username = request.toUsername,
-                        size = dimens.avatarMedium,
-                        dimens = dimens
-                    )
-                    
-                    Spacer(modifier = Modifier.width(dimens.itemSpacing))
-                    
-                    // Username, timestamp, and Pending badge
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(dimens.paddingSmall)
-                        ) {
-                            Text(
-                                text = request.toUsername,
-                                color = TextSecondary,
-                                fontSize = dimens.fontSizeMedium,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            
-                            PendingBadge()
-                        }
-                        
-                        Spacer(modifier = Modifier.height(dimens.paddingXSmall))
-                        
-                        Text(
-                            text = TimestampFormatter.format(request.createdAt),
-                            color = TextSecondary.copy(alpha = 0.6f),
-                            fontSize = dimens.fontSizeSmall
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(dimens.itemSpacing))
-                
-                // Cancel button full width
-                SentRequestCancelButton(
-                    isProcessing = isProcessing,
-                    isOffline = isOffline,
-                    onCancel = onCancel,
-                    showText = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        } else {
-            // Standard horizontal layout
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Row 1: Avatar + Username + Pending badge + Timestamp
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(dimens.cardHorizontalPadding),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Avatar
                 FriendAvatar(
                     imageUrl = request.toProfileImageUrl,
                     username = request.toUsername,
-                    size = dimens.avatarMedium,
-                    dimens = dimens
+                    size = 48.dp
                 )
                 
-                Spacer(modifier = Modifier.width(dimens.itemSpacing))
+                Spacer(modifier = Modifier.width(12.dp))
                 
-                // Username, timestamp, and Pending badge
+                // Username, timestamp, and Pending badge - takes full available space
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(dimens.paddingSmall)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
                             text = request.toUsername,
                             color = TextSecondary,
-                            fontSize = dimens.fontSizeMedium,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -177,69 +103,53 @@ fun SentRequestListItem(
                         PendingBadge()
                     }
                     
-                    Spacer(modifier = Modifier.height(dimens.paddingXSmall))
+                    Spacer(modifier = Modifier.height(2.dp))
                     
                     Text(
                         text = TimestampFormatter.format(request.createdAt),
                         color = TextSecondary.copy(alpha = 0.6f),
-                        fontSize = dimens.fontSizeSmall
+                        fontSize = 12.sp,
+                        maxLines = 1
                     )
                 }
-                
-                Spacer(modifier = Modifier.width(dimens.itemSpacing))
-                
-                // Cancel button
-                SentRequestCancelButton(
-                    isProcessing = isProcessing,
-                    isOffline = isOffline,
-                    onCancel = onCancel,
-                    showText = !dimens.isCompact || dimens.screenWidth >= 400.dp
-                )
             }
-        }
-    }
-}
-
-/**
- * Cancel button for sent requests.
- */
-@Composable
-private fun SentRequestCancelButton(
-    isProcessing: Boolean,
-    isOffline: Boolean,
-    onCancel: () -> Unit,
-    showText: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val dimens = rememberResponsiveDimens()
-    
-    if (isProcessing) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(dimens.iconMedium),
-            color = ButtonPrimary,
-            strokeWidth = 2.dp
-        )
-    } else {
-        OutlinedButton(
-            onClick = onCancel,
-            enabled = !isOffline,
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = TextSecondary,
-                disabledContentColor = TextSecondary.copy(alpha = 0.5f)
-            ),
-            modifier = modifier.height(dimens.buttonHeightSmall)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Cancel",
-                modifier = Modifier.size(dimens.iconSmall)
-            )
-            if (showText) {
-                Spacer(modifier = Modifier.width(dimens.paddingXSmall))
-                Text(
-                    text = "Cancel",
-                    fontSize = dimens.fontSizeSmall
-                )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Row 2: Cancel button (aligned to the right)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isProcessing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = ButtonPrimary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        enabled = !isOffline,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = TextSecondary,
+                            disabledContentColor = TextSecondary.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancel",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Cancel",
+                            fontSize = 14.sp
+                        )
+                    }
+                }
             }
         }
     }
@@ -247,37 +157,31 @@ private fun SentRequestCancelButton(
 
 /**
  * Pending status badge displayed next to the username.
- * Responsive sizing based on screen dimensions.
  * 
  * Requirements: 7.2
  */
 @Composable
 private fun PendingBadge() {
-    val dimens = rememberResponsiveDimens()
-    
     Row(
         modifier = Modifier
             .background(
                 color = YellowAccent.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(dimens.paddingXSmall)
+                shape = RoundedCornerShape(4.dp)
             )
-            .padding(
-                horizontal = dimens.paddingSmall,
-                vertical = dimens.paddingXSmall
-            ),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.paddingXSmall)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Icon(
             imageVector = Icons.Default.HourglassEmpty,
             contentDescription = null,
             tint = YellowAccent,
-            modifier = Modifier.size(dimens.iconSmall * 0.75f)
+            modifier = Modifier.size(12.dp)
         )
         Text(
             text = "Pending",
             color = YellowAccent,
-            fontSize = dimens.fontSizeSmall * 0.85f,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Medium
         )
     }

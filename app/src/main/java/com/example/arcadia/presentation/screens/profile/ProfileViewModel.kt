@@ -28,6 +28,33 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+/**
+ * Draft representation of a profile section, used for unsaved changes and reopening.
+ */
+data class SectionDraft(
+    val id: String? = null,
+    val title: String,
+    val type: ProfileSectionType,
+    val gameIds: List<Int>
+)
+
+/**
+ * UI state for section action snackbar messaging.
+ */
+data class SectionSnackbarState(
+    val title: String,
+    val message: String,
+    val showUndo: Boolean = false
+)
+
+/**
+ * UI state for friendship action snackbar messaging.
+ */
+data class FriendActionSnackbarState(
+    val username: String,
+    val message: String
+)
+
 data class ProfileState(
     val id: String = "",
     val name: String = "",
@@ -120,9 +147,28 @@ class ProfileViewModel(
     var customSections: List<ProfileSection> by mutableStateOf(emptyList())
         private set
 
+    // Section unsaved changes + snackbar state
+    var showUnsavedSectionSnackbar: Boolean by mutableStateOf(false)
+        private set
+    var unsavedSectionDraft: SectionDraft? by mutableStateOf(null)
+        private set
+    var reopenSectionDraft: SectionDraft? by mutableStateOf(null)
+        private set
+
+    // Section success snackbar state
+    var sectionSnackbarState: SectionSnackbarState? by mutableStateOf(null)
+        private set
+    private var pendingSectionActionMessage: String? = null
+    private var pendingSectionTitle: String? = null
+    private var pendingSectionShowUndo: Boolean? = null
+    private var lastDeletedSection: ProfileSection? = null
+    private var lastDeletedIndex: Int? = null
+
     // Friendship state
     private val _friendshipState = MutableStateFlow(ProfileFriendshipState())
     val friendshipState: StateFlow<ProfileFriendshipState> = _friendshipState.asStateFlow()
+    var friendActionSnackbarState: FriendActionSnackbarState? by mutableStateOf(null)
+        private set
 
     /** The target user ID for friendship operations */
     private var targetUserId: String? = null
@@ -271,11 +317,17 @@ class ProfileViewModel(
             gameIds = gameIds,
             order = customSections.size
         )
+        pendingSectionTitle = title
+        pendingSectionActionMessage = "Section \"$title\" added"
+        pendingSectionShowUndo = false
         customSections = customSections + newSection
         saveCustomSections()
     }
 
     fun updateCustomSection(sectionId: String, title: String, type: ProfileSectionType, gameIds: List<Int>) {
+        pendingSectionTitle = title
+        pendingSectionActionMessage = "Section \"$title\" updated"
+        pendingSectionShowUndo = false
         customSections = customSections.map { section ->
             if (section.id == sectionId) {
                 section.copy(title = title, type = type, gameIds = gameIds)
@@ -287,18 +339,109 @@ class ProfileViewModel(
     }
 
     fun deleteCustomSection(sectionId: String) {
+        val toDelete = customSections.find { it.id == sectionId } ?: return
+        lastDeletedSection = toDelete
+        lastDeletedIndex = customSections.indexOf(toDelete).takeIf { it >= 0 }
         customSections = customSections.filter { it.id != sectionId }
-        saveCustomSections()
+        pendingSectionTitle = toDelete.title
+        pendingSectionActionMessage = "Section deleted"
+        pendingSectionShowUndo = true
+        sectionSnackbarState = SectionSnackbarState(
+            title = toDelete.title,
+            message = "Section deleted",
+            showUndo = true
+        )
     }
 
     private fun saveCustomSections() {
         launchWithKey("save_sections") {
             val result = gamerRepository.updateGamer(customSections = customSections)
             if (result.isError()) {
-                // Reload profile to revert to server state on error
                 loadProfileData(null)
+                clearPendingSectionSnackbar()
+            } else if (result.isSuccess()) {
+                val title = pendingSectionTitle
+                val message = pendingSectionActionMessage
+                val showUndo = pendingSectionShowUndo ?: false
+                if (title != null && message != null) {
+                    sectionSnackbarState = SectionSnackbarState(
+                        title = title,
+                        message = message,
+                        showUndo = showUndo
+                    )
+                }
+                clearPendingSectionSnackbar()
+                // Clear deletion caches after persistence
+                if (showUndo) {
+                    lastDeletedSection = null
+                    lastDeletedIndex = null
+                }
             }
         }
+    }
+
+    fun dismissSectionSnackbar() {
+        sectionSnackbarState = null
+    }
+
+    private fun clearPendingSectionSnackbar() {
+        pendingSectionTitle = null
+        pendingSectionActionMessage = null
+        pendingSectionShowUndo = null
+    }
+
+    fun undoDeleteSection() {
+        val deleted = lastDeletedSection ?: return
+        val insertIndex = lastDeletedIndex ?: customSections.size
+        val mutable = customSections.toMutableList()
+        mutable.add(insertIndex.coerceAtMost(mutable.size), deleted)
+        customSections = mutable
+        clearPendingSectionSnackbar()
+        lastDeletedSection = null
+        lastDeletedIndex = null
+        sectionSnackbarState = null
+        saveCustomSections()
+    }
+
+    fun onSectionSnackbarDismiss() {
+        if (lastDeletedSection != null && (pendingSectionShowUndo == true || sectionSnackbarState?.showUndo == true)) {
+            // finalize deletion
+            saveCustomSections()
+            lastDeletedSection = null
+            lastDeletedIndex = null
+            clearPendingSectionSnackbar()
+        }
+        sectionSnackbarState = null
+    }
+
+    fun showUnsavedSectionSnackbar(draft: SectionDraft) {
+        unsavedSectionDraft = draft
+        showUnsavedSectionSnackbar = true
+    }
+
+    fun dismissUnsavedSectionSnackbar() {
+        showUnsavedSectionSnackbar = false
+        unsavedSectionDraft = null
+    }
+
+    fun reopenUnsavedSectionDraft() {
+        reopenSectionDraft = unsavedSectionDraft
+        showUnsavedSectionSnackbar = false
+        unsavedSectionDraft = null
+    }
+
+    fun consumeReopenSectionDraft() {
+        reopenSectionDraft = null
+    }
+
+    fun saveUnsavedSection() {
+        val draft = unsavedSectionDraft ?: return
+        if (draft.id != null) {
+            updateCustomSection(draft.id, draft.title, draft.type, draft.gameIds)
+        } else {
+            addCustomSection(draft.title, draft.type, draft.gameIds)
+        }
+        dismissUnsavedSectionSnackbar()
     }
 
     fun refreshData(userId: String? = null) {
@@ -447,7 +590,11 @@ class ProfileViewModel(
                         _friendshipState.value = _friendshipState.value.copy(
                             isLoading = false,
                             status = FriendshipStatus.REQUEST_SENT,
-                            successMessage = "Friend request sent!"
+                            successMessage = null
+                        )
+                        friendActionSnackbarState = FriendActionSnackbarState(
+                            username = profileState.username,
+                            message = "Friend request sent"
                         )
                     }
                     is RequestState.Error -> {
@@ -510,7 +657,11 @@ class ProfileViewModel(
                             isLoading = false,
                             status = FriendshipStatus.FRIENDS,
                             pendingRequest = null,
-                            successMessage = "Friend request accepted!"
+                            successMessage = null
+                        )
+                        friendActionSnackbarState = FriendActionSnackbarState(
+                            username = profileState.username,
+                            message = "Friend added"
                         )
                     }
                     is RequestState.Error -> {
@@ -582,7 +733,11 @@ class ProfileViewModel(
                         _friendshipState.value = _friendshipState.value.copy(
                             isLoading = false,
                             status = FriendshipStatus.NOT_FRIENDS,
-                            successMessage = "Removed from friends"
+                            successMessage = null
+                        )
+                        friendActionSnackbarState = FriendActionSnackbarState(
+                            username = profileState.username,
+                            message = "Removed from friends"
                         )
                     }
                     is RequestState.Error -> {
@@ -632,6 +787,10 @@ class ProfileViewModel(
      */
     fun clearFriendshipSuccess() {
         _friendshipState.value = _friendshipState.value.copy(successMessage = null)
+    }
+
+    fun dismissFriendActionSnackbar() {
+        friendActionSnackbarState = null
     }
     
     /**

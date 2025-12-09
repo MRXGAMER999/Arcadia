@@ -351,14 +351,18 @@ fun MyGamesScreen(
                 // Games Grid
                 when (val state = screenState.games) {
                     is RequestState.Loading -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingIndicator(color = ButtonPrimary)
+                        // Only show loading indicator on initial load when there's no data yet
+                        if (screenState.isInitialLoad) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LoadingIndicator(color = ButtonPrimary)
+                            }
                         }
+                        // Otherwise, keep showing existing content during background refresh
                     }
                     
                     is RequestState.Success -> {
@@ -599,7 +603,9 @@ private fun ReorderableListView(
                     }
                 }
             }
-            viewModel.onDragEnd()
+            if (screenState.isDragging) {
+                viewModel.onDragEnd()
+            }
         }
     }
     

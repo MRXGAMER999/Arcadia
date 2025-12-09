@@ -38,6 +38,8 @@ data class MyGamesScreenState(
     val canReorder: Boolean = false, // Whether reordering is possible (5+ 10/10 games + rating sort)
     // Drag state for Firebase listener management
     val isDragging: Boolean = false,
+    // Track if this is the initial load to show loading indicator only on first load
+    val isInitialLoad: Boolean = true,
 )
 
 /**
@@ -61,7 +63,6 @@ class MyGamesViewModel(
     companion object {
         private const val NOTIFICATION_DURATION_MS = 2000L
         private const val UNSAVED_CHANGES_TIMEOUT_MS = 5000L
-        private const val REORDER_INACTIVITY_TIMEOUT_MS = 15000L // 15 seconds
     }
     
     /** Whether viewing another user's library (read-only mode) */
@@ -72,9 +73,6 @@ class MyGamesViewModel(
     
     // Job for unsaved changes snackbar auto-dismiss
     private var unsavedChangesJob: kotlinx.coroutines.Job? = null
-    
-    // Job for reorder mode inactivity timeout
-    private var reorderInactivityJob: kotlinx.coroutines.Job? = null
     
     // Flag to pause Firebase listener during drag
     private var isFirebaseListenerPaused = false
@@ -276,7 +274,7 @@ class MyGamesViewModel(
     }
 
     
-    private fun loadGames() {
+    private fun loadGames(showLoadingIndicator: Boolean = true) {
         // Don't reload if Firebase listener is paused during drag (only for own library)
         if (isFirebaseListenerPaused && !isReadOnly) {
             android.util.Log.d("MyGamesVM", "loadGames: Skipping - Firebase listener paused")
@@ -301,7 +299,7 @@ class MyGamesViewModel(
                         is RequestState.Success -> {
                             // Store unfiltered games
                             val allGames = state.data
-                            screenState = screenState.copy(allGames = allGames)
+                            screenState = screenState.copy(allGames = allGames, isInitialLoad = false)
                             
                             // Apply client-side filtering with current state (not captured)
                             // This ensures we always use the latest filter settings even when
@@ -310,10 +308,14 @@ class MyGamesViewModel(
                         }
                         is RequestState.Error -> {
                             // Keep existing allGames and filter state
-                            screenState = screenState.copy(games = state)
+                            screenState = screenState.copy(games = state, isInitialLoad = false)
                         }
                         is RequestState.Loading -> {
-                            screenState = screenState.copy(games = state)
+                            // Only show loading state if explicitly requested and it's initial load
+                            if (showLoadingIndicator && screenState.isInitialLoad) {
+                                screenState = screenState.copy(games = state)
+                            }
+                            // Otherwise, keep current games state to avoid flashing
                         }
                         else -> {
                             screenState = screenState.copy(games = state)
@@ -660,21 +662,27 @@ class MyGamesViewModel(
         android.util.Log.d("MyGamesVM", "onDragStart: Pausing Firebase listener")
         isFirebaseListenerPaused = true
         screenState = screenState.copy(isDragging = true)
-        
-        // Cancel any pending inactivity timeout
-        reorderInactivityJob?.cancel()
     }
     
     /**
-     * Called when drag ends. Starts the inactivity timer.
-     * Firebase listener will resume after 15 seconds of inactivity.
+     * Called when drag ends. Saves pending changes and resumes Firebase listener.
      */
     fun onDragEnd() {
-        android.util.Log.d("MyGamesVM", "onDragEnd: Starting inactivity timer")
+        android.util.Log.d("MyGamesVM", "onDragEnd: Saving changes and resuming Firebase listener")
         screenState = screenState.copy(isDragging = false)
         
-        // Start inactivity timer
-        startReorderInactivityTimer()
+        // Save pending changes immediately and resume Firebase listener
+        launchWithKey("save_on_drag_end") {
+            if (pendingImportanceUpdates.isNotEmpty()) {
+                savePendingImportanceUpdates()
+            }
+            
+            // Resume Firebase listener
+            isFirebaseListenerPaused = false
+            
+            // Silent reload to sync with Firebase (no loading indicator)
+            loadGames(showLoadingIndicator = false)
+        }
     }
     
     /**
@@ -717,30 +725,6 @@ class MyGamesViewModel(
         if (importanceUpdates.isNotEmpty()) {
             pendingImportanceUpdates.putAll(importanceUpdates)
             android.util.Log.d("MyGamesVM", "onReorderComplete: Queued ${importanceUpdates.size} importance updates")
-        }
-    }
-    
-    /**
-     * Starts the inactivity timer. After 15 seconds of no drag activity,
-     * resumes Firebase listener and batch saves pending importance updates.
-     */
-    private fun startReorderInactivityTimer() {
-        reorderInactivityJob?.cancel()
-        reorderInactivityJob = launchWithKey("reorder_inactivity") {
-            kotlinx.coroutines.delay(REORDER_INACTIVITY_TIMEOUT_MS)
-            
-            android.util.Log.d("MyGamesVM", "Inactivity timeout: Resuming Firebase listener and saving changes")
-            
-            // Batch save pending importance updates
-            if (pendingImportanceUpdates.isNotEmpty()) {
-                savePendingImportanceUpdates()
-            }
-            
-            // Resume Firebase listener
-            isFirebaseListenerPaused = false
-            
-            // Reload games to sync with Firebase
-            loadGames()
         }
     }
     
@@ -805,7 +789,6 @@ class MyGamesViewModel(
             }
         }
         
-        reorderInactivityJob?.cancel()
         unsavedChangesJob?.cancel()
         saveImportanceJob?.cancel()
     }

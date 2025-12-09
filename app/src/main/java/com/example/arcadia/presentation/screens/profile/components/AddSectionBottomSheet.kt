@@ -49,6 +49,7 @@ import com.example.arcadia.R
 import com.example.arcadia.domain.model.GameListEntry
 import com.example.arcadia.domain.model.ProfileSection
 import com.example.arcadia.domain.model.ProfileSectionType
+import com.example.arcadia.presentation.screens.profile.SectionDraft
 import com.example.arcadia.presentation.screens.searchScreen.components.SearchField
 import com.example.arcadia.ui.theme.BebasNeueFont
 import com.example.arcadia.ui.theme.ButtonPrimary
@@ -63,13 +64,28 @@ private val CardBackground = Color(0xFF0A1F4D)
 fun AddSectionBottomSheet(
     libraryGames: List<GameListEntry>,
     existingSection: ProfileSection? = null,
+    initialTitle: String? = null,
+    initialType: ProfileSectionType? = null,
+    initialGameIds: List<Int>? = null,
+    baselineTitle: String? = null,
+    baselineType: ProfileSectionType? = null,
+    baselineGameIds: List<Int>? = null,
     onDismiss: () -> Unit,
-    onSave: (String, ProfileSectionType, List<Int>) -> Unit
+    onSave: (String, ProfileSectionType, List<Int>) -> Unit,
+    onDismissWithUnsavedChanges: ((SectionDraft) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var title by remember { mutableStateOf(existingSection?.title ?: "") }
-    var selectedType by remember { mutableStateOf(existingSection?.type ?: ProfileSectionType.SINGLE_GAME) }
-    var selectedGameIds by remember { mutableStateOf(existingSection?.gameIds ?: emptyList()) }
+    val displayTitle = initialTitle ?: existingSection?.title ?: ""
+    val displayType = initialType ?: existingSection?.type ?: ProfileSectionType.SINGLE_GAME
+    val displayGameIds = initialGameIds ?: existingSection?.gameIds ?: emptyList()
+
+    val comparisonTitle = baselineTitle ?: existingSection?.title ?: ""
+    val comparisonType = baselineType ?: existingSection?.type ?: ProfileSectionType.SINGLE_GAME
+    val comparisonGameIds = baselineGameIds ?: existingSection?.gameIds ?: emptyList()
+
+    var title by remember { mutableStateOf(displayTitle) }
+    var selectedType by remember { mutableStateOf(displayType) }
+    var selectedGameIds by remember { mutableStateOf(displayGameIds) }
     var searchQuery by remember { mutableStateOf("") }
     
     // Filter games based on search query
@@ -81,7 +97,27 @@ fun AddSectionBottomSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
+    ModalBottomSheet(
+        onDismissRequest = {
+            val hasChanges = title != comparisonTitle ||
+                selectedType != comparisonType ||
+                selectedGameIds != comparisonGameIds
+
+            if (hasChanges && onDismissWithUnsavedChanges != null) {
+                onDismissWithUnsavedChanges(
+                    SectionDraft(
+                        id = existingSection?.id,
+                        title = title,
+                        type = selectedType,
+                        gameIds = selectedGameIds
+                    )
+                )
+            }
+            onDismiss()
+        },
+        sheetState = sheetState,
+        containerColor = Surface
+    ) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(24.dp)
