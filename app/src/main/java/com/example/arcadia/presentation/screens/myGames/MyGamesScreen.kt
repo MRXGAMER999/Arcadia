@@ -239,9 +239,9 @@ fun MyGamesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
-                    top = paddingValues.calculateTopPadding(),
                     start = paddingValues.calculateLeftPadding(LayoutDirection.Ltr),
-                    end = paddingValues.calculateRightPadding(LayoutDirection.Ltr)
+                    end = paddingValues.calculateRightPadding(LayoutDirection.Ltr),
+                    top = if(isReadOnly) paddingValues.calculateTopPadding() else 0.dp
                 )
                 .background(Color.Transparent)
         ) {

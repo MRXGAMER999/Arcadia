@@ -84,7 +84,8 @@ class ProfileViewModel(
     private val gameListRepository: GameListRepository,
     private val featuredBadgesRepository: FeaturedBadgesRepository,
     private val friendsRepository: FriendsRepository,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val userIdParam: String? = null
 ) : BaseViewModel() {
 
     companion object {
@@ -127,21 +128,32 @@ class ProfileViewModel(
     private var targetUserId: String? = null
 
     init {
-        // Data loading is now triggered from UI via loadProfile(userId)
+        // Initialize isCurrentUser immediately to prevent race conditions
+        val currentUserId = gamerRepository.getCurrentUserId()
+        isCurrentUser = userIdParam == null || userIdParam == currentUserId
+        targetUserId = userIdParam
+        
+        // Load profile data immediately
+        loadProfile(userIdParam)
     }
 
     fun loadProfile(userId: String? = null) {
+        // If userId is provided here, update state (though init handles the primary case)
+        if (userId != userIdParam) {
+            val currentUserId = gamerRepository.getCurrentUserId()
+            isCurrentUser = userId == null || userId == currentUserId
+            targetUserId = userId
+        }
+        
         screenReady = RequestState.Loading
-        val currentUserId = gamerRepository.getCurrentUserId()
-        isCurrentUser = userId == null || userId == currentUserId
-        targetUserId = userId
         
         loadProfileData(userId)
         loadGamingStats(userId)
-        loadFeaturedBadges(userId ?: currentUserId)
+        loadFeaturedBadges(userId ?: gamerRepository.getCurrentUserId())
         
         // Load friendship status if viewing another user's profile
         // Requirements: 8.1-8.4, 14.6, 14.7
+        val currentUserId = gamerRepository.getCurrentUserId()
         if (!isCurrentUser && userId != null && currentUserId != null) {
             loadFriendshipStatus(currentUserId, userId)
         } else {

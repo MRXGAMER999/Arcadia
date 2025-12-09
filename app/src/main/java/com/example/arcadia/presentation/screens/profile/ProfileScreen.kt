@@ -87,6 +87,7 @@ import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
 import com.example.arcadia.util.DisplayResult
 import org.koin.androidx.compose.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -97,7 +98,7 @@ fun ProfileScreen(
     onNavigateToMyGames: (userId: String?, username: String?) -> Unit = { _, _ -> },
     onNavigateToRoast: (targetUserId: String?) -> Unit = {},
     onGameClick: (Int) -> Unit = {},
-    viewModel: ProfileViewModel = koinViewModel()
+    viewModel: ProfileViewModel = koinViewModel(key = userId) { parametersOf(userId) }
 ) {
     val screenReady = viewModel.screenReady
     val profileState = viewModel.profileState
@@ -120,7 +121,7 @@ fun ProfileScreen(
     // Animation state
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(userId) {
-        viewModel.loadProfile(userId)
+        // Profile is now loaded in init block of ViewModel
         isVisible = true
     }
     

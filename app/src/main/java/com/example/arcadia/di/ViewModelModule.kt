@@ -22,7 +22,7 @@ val viewModelModule = module {
     viewModel { EditProfileViewModel(get()) }
     // ProfileViewModel: gamerRepository, gameListRepository, featuredBadgesRepository, friendsRepository, networkMonitor
     // Requirements: 8.1-8.4, 9.1, 9.2, 9.3, 13.1, 13.2, 13.3, 13.4, 14.6, 14.7 - Load featured badges and friendship status for profile display
-    viewModel { ProfileViewModel(get(), get(), get(), get(), get()) }
+    viewModel { (userId: String?) -> ProfileViewModel(get(), get(), get(), get(), get(), userId) }
     // HomeViewModel: gameRepository, gameListRepository, aiRepository, preferencesManager, addGameToLibraryUseCase, parallelGameFilter, pagedGameRepository, friendsRepository, gamerRepository
     // Requirements: 2.3, 2.4, 2.5 - Pending friend request count for badge display
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
