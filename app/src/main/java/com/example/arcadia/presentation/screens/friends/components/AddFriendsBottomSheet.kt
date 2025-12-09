@@ -97,9 +97,11 @@ import com.example.arcadia.presentation.screens.friends.BottomSheetMode
 import com.example.arcadia.presentation.screens.friends.QRCodeMode
 import com.example.arcadia.ui.theme.BebasNeueFont
 import com.example.arcadia.ui.theme.ButtonPrimary
+import com.example.arcadia.ui.theme.ResponsiveDimens
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
+import com.example.arcadia.ui.theme.rememberResponsiveDimens
 import com.example.arcadia.util.QRCodeUtils
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -223,6 +225,7 @@ fun AddFriendsBottomSheet(
 
 /**
  * Content for the OPTIONS mode showing three options: Search, QR Code, Share Link.
+ * Responsive design that adapts to all screen sizes.
  * Requirements: 3.1
  */
 @Composable
@@ -231,20 +234,22 @@ private fun OptionsContent(
     onQRCodeClick: () -> Unit,
     onShareClick: () -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 32.dp)
+            .padding(horizontal = dimens.horizontalPadding)
+            .padding(bottom = dimens.paddingXLarge)
     ) {
         // Title
         Text(
             text = "ADD FRIENDS",
-            fontSize = 24.sp,
+            fontSize = dimens.fontSizeXLarge,
             fontFamily = BebasNeueFont,
             color = TextSecondary,
             letterSpacing = 2.sp,
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = dimens.paddingXLarge)
         )
         
         // Option cards
@@ -255,7 +260,7 @@ private fun OptionsContent(
             onClick = onSearchClick
         )
         
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(dimens.itemSpacing))
         
         OptionCard(
             icon = Icons.Default.QrCodeScanner,
@@ -264,7 +269,7 @@ private fun OptionsContent(
             onClick = onQRCodeClick
         )
         
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(dimens.itemSpacing))
         
         OptionCard(
             icon = Icons.Default.Share,
@@ -277,6 +282,7 @@ private fun OptionsContent(
 
 /**
  * A card representing an option in the OPTIONS mode.
+ * Responsive design with adaptive sizing.
  */
 @Composable
 private fun OptionCard(
@@ -285,11 +291,13 @@ private fun OptionCard(
     subtitle: String,
     onClick: () -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(dimens.cardCornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF0F1B41)
         )
@@ -297,12 +305,12 @@ private fun OptionCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(dimens.cardHorizontalPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(dimens.avatarMedium)
                     .clip(CircleShape)
                     .background(ButtonPrimary.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
@@ -311,23 +319,23 @@ private fun OptionCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = ButtonPrimary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(dimens.iconMedium)
                 )
             }
             
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(dimens.itemSpacing))
             
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     color = TextSecondary,
-                    fontSize = 16.sp,
+                    fontSize = dimens.fontSizeMedium,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
                     text = subtitle,
                     color = TextSecondary.copy(alpha = 0.7f),
-                    fontSize = 14.sp
+                    fontSize = dimens.fontSizeSmall
                 )
             }
         }
@@ -339,6 +347,7 @@ private fun OptionCard(
 
 /**
  * Content for the SEARCH mode with search field and results.
+ * Responsive design that adapts to all screen sizes.
  * Requirements: 3.2, 3.3, 3.4, 3.6, 3.7, 3.9-3.12
  */
 @Composable
@@ -355,11 +364,13 @@ private fun SearchContent(
     onAcceptFriendRequest: (UserSearchResult) -> Unit,
     onNavigateToProfile: (String) -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 32.dp)
+            .padding(horizontal = dimens.horizontalPadding)
+            .padding(bottom = dimens.paddingXLarge)
     ) {
         // Header with back arrow
         Row(
@@ -370,32 +381,39 @@ private fun SearchContent(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = TextSecondary
+                    tint = TextSecondary,
+                    modifier = Modifier.size(dimens.iconMedium)
                 )
             }
             
             Text(
                 text = "SEARCH",
-                fontSize = 24.sp,
+                fontSize = dimens.fontSizeXLarge,
                 fontFamily = BebasNeueFont,
                 color = TextSecondary,
                 letterSpacing = 2.sp
             )
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(dimens.paddingLarge))
         
         // Search field
         OutlinedTextField(
             value = searchQuery,
             onValueChange = onSearchQueryChange,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Search by username...") },
+            placeholder = { 
+                Text(
+                    "Search by username...",
+                    fontSize = dimens.fontSizeMedium
+                ) 
+            },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = null,
-                    tint = ButtonPrimary
+                    tint = ButtonPrimary,
+                    modifier = Modifier.size(dimens.iconMedium)
                 )
             },
             trailingIcon = {
@@ -404,13 +422,15 @@ private fun SearchContent(
                         Icon(
                             imageVector = Icons.Default.Clear,
                             contentDescription = "Clear",
-                            tint = TextSecondary
+                            tint = TextSecondary,
+                            modifier = Modifier.size(dimens.iconMedium)
                         )
                     }
                 }
             },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = dimens.fontSizeMedium),
+            shape = RoundedCornerShape(dimens.cardCornerRadius),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = ButtonPrimary,
                 unfocusedBorderColor = Color(0xFF252B3B),
@@ -424,31 +444,37 @@ private fun SearchContent(
             )
         )
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(dimens.paddingLarge))
         
-        // Search results or hint
+        // Search results or hint - responsive height
+        val contentHeight = if (dimens.isExpanded) 350.dp else if (dimens.isMedium) 280.dp else 200.dp
+        val maxListHeight = if (dimens.isExpanded) 500.dp else if (dimens.isMedium) 450.dp else 400.dp
+        
         when {
             isSearching -> {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
+                        .height(contentHeight),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = ButtonPrimary)
+                    CircularProgressIndicator(
+                        color = ButtonPrimary,
+                        modifier = Modifier.size(dimens.iconLarge)
+                    )
                 }
             }
             searchHint != null -> {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
+                        .height(contentHeight),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = searchHint,
                         color = TextSecondary.copy(alpha = 0.7f),
-                        fontSize = 14.sp,
+                        fontSize = dimens.fontSizeSmall,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -457,7 +483,8 @@ private fun SearchContent(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp)
+                        .heightIn(max = maxListHeight),
+                    verticalArrangement = Arrangement.spacedBy(dimens.paddingSmall)
                 ) {
                     items(
                         items = searchResults,
@@ -480,6 +507,7 @@ private fun SearchContent(
 
 /**
  * A list item displaying a user search result with action button.
+ * Responsive design with adaptive sizing.
  * Requirements: 3.9-3.12
  */
 @Composable
@@ -491,13 +519,13 @@ private fun UserSearchResultItem(
     onNavigateToProfile: () -> Unit
 ) {
     val context = LocalContext.current
+    val dimens = rememberResponsiveDimens()
     
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
             .clickable(onClick = onNavigateToProfile),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(dimens.cardCornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF0F1B41)
         )
@@ -505,13 +533,13 @@ private fun UserSearchResultItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(dimens.cardHorizontalPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(dimens.avatarMedium)
                     .clip(CircleShape)
                     .background(Color(0xFF252B3B)),
                 contentAlignment = Alignment.Center
@@ -524,19 +552,19 @@ private fun UserSearchResultItem(
                             .build(),
                         contentDescription = "${user.username}'s avatar",
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(dimens.avatarMedium)
                             .clip(CircleShape),
                         contentScale = ContentScale.Crop,
                         loading = {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(dimens.avatarMedium)
                                     .background(Color(0xFF252B3B)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator(
                                     color = ButtonPrimary,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(dimens.iconMedium)
                                 )
                             }
                         },
@@ -545,7 +573,7 @@ private fun UserSearchResultItem(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
                                 tint = ButtonPrimary.copy(alpha = 0.5f),
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(dimens.avatarMedium * 0.6f)
                             )
                         }
                     )
@@ -554,18 +582,18 @@ private fun UserSearchResultItem(
                         imageVector = Icons.Default.Person,
                         contentDescription = null,
                         tint = ButtonPrimary.copy(alpha = 0.5f),
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(dimens.avatarMedium * 0.6f)
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(dimens.itemSpacing))
             
             // Username
             Text(
                 text = user.username,
                 color = TextSecondary,
-                fontSize = 16.sp,
+                fontSize = dimens.fontSizeMedium,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f)
             )
@@ -585,6 +613,7 @@ private fun UserSearchResultItem(
 
 /**
  * Action button based on friendship status.
+ * Responsive design with adaptive sizing.
  * Requirements: 3.9-3.12
  */
 @Composable
@@ -595,25 +624,27 @@ private fun FriendshipActionButton(
     onSendFriendRequest: () -> Unit,
     onAcceptFriendRequest: () -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    
     when {
         // Recently declined - show disabled label
         isRecentlyDeclined -> {
             StatusLabel(
-                text = "Recently Declined",
+                text = if (dimens.isCompact && dimens.screenWidth < 380.dp) "Declined" else "Recently Declined",
                 color = TextSecondary.copy(alpha = 0.5f)
             )
         }
         // Already friends - show disabled label
         status == FriendshipStatus.FRIENDS -> {
             StatusLabel(
-                text = "Already Friends",
+                text = if (dimens.isCompact && dimens.screenWidth < 380.dp) "Friends" else "Already Friends",
                 color = ButtonPrimary.copy(alpha = 0.7f)
             )
         }
         // Request sent - show disabled label
         status == FriendshipStatus.REQUEST_SENT -> {
             StatusLabel(
-                text = "Request Sent",
+                text = if (dimens.isCompact && dimens.screenWidth < 380.dp) "Sent" else "Request Sent",
                 color = YellowAccent.copy(alpha = 0.7f)
             )
         }
@@ -626,22 +657,23 @@ private fun FriendshipActionButton(
                     containerColor = ButtonPrimary,
                     contentColor = Surface
                 ),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(dimens.paddingSmall),
+                modifier = Modifier.height(dimens.buttonHeightSmall)
             ) {
                 if (isActionInProgress) {
                     CircularProgressIndicator(
                         color = Surface,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(dimens.iconSmall),
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(dimens.iconSmall)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Accept", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(dimens.paddingXSmall))
+                    Text("Accept", fontSize = dimens.fontSizeSmall)
                 }
             }
         }
@@ -654,22 +686,23 @@ private fun FriendshipActionButton(
                     containerColor = ButtonPrimary,
                     contentColor = Surface
                 ),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(dimens.paddingSmall),
+                modifier = Modifier.height(dimens.buttonHeightSmall)
             ) {
                 if (isActionInProgress) {
                     CircularProgressIndicator(
                         color = Surface,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(dimens.iconSmall),
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.PersonAdd,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(dimens.iconSmall)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Add", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(dimens.paddingXSmall))
+                    Text("Add", fontSize = dimens.fontSizeSmall)
                 }
             }
         }
@@ -678,24 +711,30 @@ private fun FriendshipActionButton(
 
 /**
  * A status label for disabled states.
+ * Responsive design with adaptive sizing.
  */
 @Composable
 private fun StatusLabel(
     text: String,
     color: Color
 ) {
+    val dimens = rememberResponsiveDimens()
+    
     Box(
         modifier = Modifier
             .background(
                 color = color.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(dimens.paddingSmall)
             )
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(
+                horizontal = dimens.paddingMedium,
+                vertical = dimens.paddingSmall
+            )
     ) {
         Text(
             text = text,
             color = color,
-            fontSize = 12.sp,
+            fontSize = dimens.fontSizeSmall,
             fontWeight = FontWeight.Medium
         )
     }
@@ -706,6 +745,7 @@ private fun StatusLabel(
 
 /**
  * Content for the QR_CODE mode with MY CODE and SCAN tabs.
+ * Responsive design that adapts to all screen sizes.
  * Requirements: 4.1, 4.2, 4.3, 4.4-4.11
  */
 @OptIn(ExperimentalPermissionsApi::class)
@@ -718,11 +758,13 @@ private fun QRCodeContent(
     onNavigateToProfile: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 32.dp)
+            .padding(horizontal = dimens.horizontalPadding)
+            .padding(bottom = dimens.paddingXLarge)
     ) {
         // Header with back arrow
         Row(
@@ -733,20 +775,21 @@ private fun QRCodeContent(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = TextSecondary
+                    tint = TextSecondary,
+                    modifier = Modifier.size(dimens.iconMedium)
                 )
             }
             
             Text(
                 text = "QR CODE",
-                fontSize = 24.sp,
+                fontSize = dimens.fontSizeXLarge,
                 fontFamily = BebasNeueFont,
                 color = TextSecondary,
                 letterSpacing = 2.sp
             )
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(dimens.paddingLarge))
         
         // Segmented tabs
         SingleChoiceSegmentedButtonRow(
@@ -766,10 +809,10 @@ private fun QRCodeContent(
                 Icon(
                     imageVector = Icons.Default.QrCode,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(dimens.iconSmall)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("MY CODE")
+                Spacer(modifier = Modifier.width(dimens.paddingSmall))
+                Text("MY CODE", fontSize = dimens.fontSizeSmall)
             }
             
             SegmentedButton(
@@ -786,14 +829,14 @@ private fun QRCodeContent(
                 Icon(
                     imageVector = Icons.Default.CameraAlt,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(dimens.iconSmall)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("SCAN")
+                Spacer(modifier = Modifier.width(dimens.paddingSmall))
+                Text("SCAN", fontSize = dimens.fontSizeSmall)
             }
         }
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(dimens.sectionSpacing))
         
         // Tab content
         when (qrCodeMode) {
@@ -814,12 +857,21 @@ private fun QRCodeContent(
 
 /**
  * Content for the MY CODE tab showing the user's QR code.
+ * Responsive design with adaptive QR code sizing.
  * Requirements: 4.2, 4.3
  */
 @Composable
 private fun MyCodeContent(currentUserId: String) {
+    val dimens = rememberResponsiveDimens()
     var qrCodeBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isError by remember { mutableStateOf(false) }
+    
+    // Responsive QR code size
+    val qrCodeSize = when {
+        dimens.isExpanded -> 320.dp
+        dimens.isMedium -> 280.dp
+        else -> minOf(dimens.screenWidth * 0.65f, 256.dp)
+    }
     
     // Generate QR code
     LaunchedEffect(currentUserId) {
@@ -836,23 +888,24 @@ private fun MyCodeContent(currentUserId: String) {
                 // Error state
                 Box(
                     modifier = Modifier
-                        .size(256.dp)
+                        .size(qrCodeSize)
                         .background(
                             color = Color(0xFF0F1B41),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(dimens.cardCornerRadius)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(dimens.paddingLarge)
                     ) {
                         Text(
                             text = "Failed to generate QR code",
                             color = TextSecondary.copy(alpha = 0.7f),
-                            fontSize = 14.sp,
+                            fontSize = dimens.fontSizeSmall,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(dimens.paddingLarge))
                         Button(
                             onClick = {
                                 isError = false
@@ -862,9 +915,10 @@ private fun MyCodeContent(currentUserId: String) {
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = ButtonPrimary,
                                 contentColor = Surface
-                            )
+                            ),
+                            modifier = Modifier.height(dimens.buttonHeightSmall)
                         ) {
-                            Text("Retry")
+                            Text("Retry", fontSize = dimens.fontSizeSmall)
                         }
                     }
                 }
@@ -873,12 +927,12 @@ private fun MyCodeContent(currentUserId: String) {
                 // QR code display
                 Box(
                     modifier = Modifier
-                        .size(256.dp)
+                        .size(qrCodeSize)
                         .background(
                             color = Color.White,
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(dimens.cardCornerRadius)
                         )
-                        .padding(16.dp),
+                        .padding(dimens.paddingLarge),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
@@ -892,24 +946,27 @@ private fun MyCodeContent(currentUserId: String) {
                 // Loading state
                 Box(
                     modifier = Modifier
-                        .size(256.dp)
+                        .size(qrCodeSize)
                         .background(
                             color = Color(0xFF0F1B41),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(dimens.cardCornerRadius)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = ButtonPrimary)
+                    CircularProgressIndicator(
+                        color = ButtonPrimary,
+                        modifier = Modifier.size(dimens.iconLarge)
+                    )
                 }
             }
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(dimens.paddingLarge))
         
         Text(
             text = "Let others scan this code to add you",
             color = TextSecondary.copy(alpha = 0.7f),
-            fontSize = 14.sp,
+            fontSize = dimens.fontSizeSmall,
             textAlign = TextAlign.Center
         )
     }
@@ -918,6 +975,7 @@ private fun MyCodeContent(currentUserId: String) {
 
 /**
  * Content for the SCAN tab with camera preview and barcode scanning.
+ * Responsive design with adaptive sizing.
  * Requirements: 4.4-4.11
  */
 @OptIn(ExperimentalPermissionsApi::class)
@@ -977,6 +1035,7 @@ private fun ScanContent(
 
 /**
  * Permission rationale UI.
+ * Responsive design with adaptive sizing.
  * Requirements: 4.5
  */
 @Composable
@@ -984,10 +1043,13 @@ private fun PermissionRationale(
     message: String,
     onRequestPermission: () -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    val contentHeight = if (dimens.isExpanded) 350.dp else if (dimens.isMedium) 320.dp else 300.dp
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp),
+            .height(contentHeight),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -995,35 +1057,37 @@ private fun PermissionRationale(
             imageVector = Icons.Default.CameraAlt,
             contentDescription = null,
             tint = ButtonPrimary,
-            modifier = Modifier.size(64.dp)
+            modifier = Modifier.size(dimens.avatarLarge)
         )
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(dimens.paddingLarge))
         
         Text(
             text = message,
             color = TextSecondary,
-            fontSize = 16.sp,
+            fontSize = dimens.fontSizeMedium,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = dimens.paddingXLarge)
         )
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(dimens.sectionSpacing))
         
         Button(
             onClick = onRequestPermission,
             colors = ButtonDefaults.buttonColors(
                 containerColor = ButtonPrimary,
                 contentColor = Surface
-            )
+            ),
+            modifier = Modifier.height(dimens.buttonHeightMedium)
         ) {
-            Text("Grant Permission")
+            Text("Grant Permission", fontSize = dimens.fontSizeMedium)
         }
     }
 }
 
 /**
  * Permission denied UI with settings redirect.
+ * Responsive design with adaptive sizing.
  * Requirements: 4.6
  */
 @Composable
@@ -1032,10 +1096,13 @@ private fun PermissionDenied(
     onOpenSettings: () -> Unit,
     onRequestPermission: () -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    val contentHeight = if (dimens.isExpanded) 350.dp else if (dimens.isMedium) 320.dp else 300.dp
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp),
+            .height(contentHeight),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -1043,32 +1110,33 @@ private fun PermissionDenied(
             imageVector = Icons.Default.CameraAlt,
             contentDescription = null,
             tint = TextSecondary.copy(alpha = 0.5f),
-            modifier = Modifier.size(64.dp)
+            modifier = Modifier.size(dimens.avatarLarge)
         )
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(dimens.paddingLarge))
         
         Text(
             text = message,
             color = TextSecondary,
-            fontSize = 16.sp,
+            fontSize = dimens.fontSizeMedium,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = dimens.paddingXLarge)
         )
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(dimens.sectionSpacing))
         
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(dimens.itemSpacing)
         ) {
             Button(
                 onClick = onRequestPermission,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF0F1B41),
                     contentColor = TextSecondary
-                )
+                ),
+                modifier = Modifier.height(dimens.buttonHeightSmall)
             ) {
-                Text("Try Again")
+                Text("Try Again", fontSize = dimens.fontSizeSmall)
             }
             
             Button(
@@ -1076,9 +1144,10 @@ private fun PermissionDenied(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonPrimary,
                     contentColor = Surface
-                )
+                ),
+                modifier = Modifier.height(dimens.buttonHeightSmall)
             ) {
-                Text("Open Settings")
+                Text("Open Settings", fontSize = dimens.fontSizeSmall)
             }
         }
     }
@@ -1087,6 +1156,7 @@ private fun PermissionDenied(
 
 /**
  * Camera preview with ML Kit barcode scanning.
+ * Responsive design with adaptive sizing.
  * Requirements: 4.7, 4.8, 4.9, 4.10, 4.11
  */
 @Composable
@@ -1098,8 +1168,16 @@ private fun CameraPreviewWithScanner(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val dimens = rememberResponsiveDimens()
     var cameraError by remember { mutableStateOf<String?>(null) }
     var isScanning by remember { mutableStateOf(true) }
+    
+    // Responsive camera preview height
+    val cameraHeight = when {
+        dimens.isExpanded -> 380.dp
+        dimens.isMedium -> 340.dp
+        else -> 300.dp
+    }
     
     // Track last scanned code to prevent duplicate callbacks
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
@@ -1109,28 +1187,29 @@ private fun CameraPreviewWithScanner(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp),
+                .height(cameraHeight),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = cameraError ?: "Camera is currently unavailable. Please try again.",
                 color = TextSecondary,
-                fontSize = 14.sp,
+                fontSize = dimens.fontSizeSmall,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp)
+                modifier = Modifier.padding(horizontal = dimens.paddingXLarge)
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(dimens.paddingLarge))
             
             Button(
                 onClick = { cameraError = null },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonPrimary,
                     contentColor = Surface
-                )
+                ),
+                modifier = Modifier.height(dimens.buttonHeightSmall)
             ) {
-                Text("Retry")
+                Text("Retry", fontSize = dimens.fontSizeSmall)
             }
         }
         return
@@ -1139,8 +1218,8 @@ private fun CameraPreviewWithScanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(cameraHeight)
+            .clip(RoundedCornerShape(dimens.cardCornerRadius))
     ) {
         AndroidView(
             factory = { ctx ->
@@ -1263,12 +1342,12 @@ private fun CameraPreviewWithScanner(
         }
     }
     
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(dimens.paddingLarge))
     
     Text(
         text = "Point your camera at a QR code",
         color = TextSecondary.copy(alpha = 0.7f),
-        fontSize = 14.sp,
+        fontSize = dimens.fontSizeSmall,
         textAlign = TextAlign.Center
     )
 }

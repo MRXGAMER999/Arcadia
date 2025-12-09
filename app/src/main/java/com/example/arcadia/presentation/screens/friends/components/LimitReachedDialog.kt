@@ -21,16 +21,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
+import com.example.arcadia.ui.theme.rememberResponsiveDimens
 
 /**
  * Type of limit that has been reached.
@@ -48,6 +46,7 @@ enum class LimitType {
 
 /**
  * Dialog shown when a user has reached a limit for friend operations.
+ * Responsive design that adapts to all screen sizes.
  * 
  * Requirements: 3.21, 3.22, 3.26, 6.11
  * 
@@ -61,6 +60,8 @@ fun LimitReachedDialog(
     cooldownHours: Int? = null,
     onDismiss: () -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    
     val (icon, title, message) = when (limitType) {
         LimitType.DAILY_LIMIT -> Triple(
             Icons.Default.Schedule,
@@ -87,7 +88,7 @@ fun LimitReachedDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(dimens.cardCornerRadius),
             colors = CardDefaults.cardColors(
                 containerColor = Surface
             )
@@ -95,7 +96,7 @@ fun LimitReachedDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(dimens.paddingXLarge),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Icon
@@ -103,42 +104,44 @@ fun LimitReachedDialog(
                     imageVector = icon,
                     contentDescription = null,
                     tint = YellowAccent,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(dimens.avatarMedium)
                 )
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(dimens.paddingLarge))
                 
                 // Title
                 Text(
                     text = title,
                     color = TextSecondary,
-                    fontSize = 20.sp,
+                    fontSize = dimens.fontSizeLarge,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
                 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(dimens.itemSpacing))
                 
                 // Message
                 Text(
                     text = message,
                     color = TextSecondary.copy(alpha = 0.8f),
-                    fontSize = 14.sp,
+                    fontSize = dimens.fontSizeSmall,
                     textAlign = TextAlign.Center
                 )
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(dimens.sectionSpacing))
                 
                 // OK Button
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(dimens.buttonHeightMedium),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ButtonPrimary,
                         contentColor = Surface
                     )
                 ) {
-                    Text("OK")
+                    Text("OK", fontSize = dimens.fontSizeMedium)
                 }
             }
         }

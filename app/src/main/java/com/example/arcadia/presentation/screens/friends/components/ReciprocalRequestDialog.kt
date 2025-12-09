@@ -18,16 +18,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
+import com.example.arcadia.ui.theme.rememberResponsiveDimens
 
 /**
  * Dialog shown when a user tries to send a friend request to someone
  * who has already sent them a request.
+ * Responsive design that adapts to all screen sizes.
  * 
  * Requirements: 3.13, 3.14, 3.15
  * 
@@ -41,10 +41,12 @@ fun ReciprocalRequestDialog(
     onAccept: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val dimens = rememberResponsiveDimens()
+    
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(dimens.cardCornerRadius),
             colors = CardDefaults.cardColors(
                 containerColor = Surface
             )
@@ -52,50 +54,55 @@ fun ReciprocalRequestDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp)
+                    .padding(dimens.paddingXLarge)
             ) {
                 Text(
                     text = "Friend Request Exists",
                     color = TextSecondary,
-                    fontSize = 20.sp,
+                    fontSize = dimens.fontSizeLarge,
                     fontWeight = FontWeight.Bold
                 )
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(dimens.paddingLarge))
                 
                 Text(
                     text = "This user has already sent you a request! Would you like to accept it?",
                     color = TextSecondary.copy(alpha = 0.8f),
-                    fontSize = 14.sp,
+                    fontSize = dimens.fontSizeSmall,
                     textAlign = TextAlign.Start
                 )
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(dimens.sectionSpacing))
                 
                 Row(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     TextButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(dimens.buttonHeightMedium)
                     ) {
                         Text(
                             text = "Cancel",
-                            color = TextSecondary.copy(alpha = 0.7f)
+                            color = TextSecondary.copy(alpha = 0.7f),
+                            fontSize = dimens.fontSizeMedium
                         )
                     }
                     
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(dimens.itemSpacing))
                     
                     Button(
                         onClick = onAccept,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(dimens.buttonHeightMedium),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = ButtonPrimary,
                             contentColor = Surface
                         )
                     ) {
-                        Text("Accept")
+                        Text("Accept", fontSize = dimens.fontSizeMedium)
                     }
                 }
             }

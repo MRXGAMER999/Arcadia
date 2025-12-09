@@ -1,8 +1,13 @@
 package com.example.arcadia.presentation.screens.friends
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -13,8 +18,10 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -29,8 +36,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,18 +48,20 @@ import com.example.arcadia.presentation.components.common.OfflineBanner
 import com.example.arcadia.presentation.screens.friends.components.AddFriendsBottomSheet
 import com.example.arcadia.presentation.screens.friends.components.FriendListItem
 import com.example.arcadia.presentation.screens.friends.components.LimitReachedDialog
-import com.example.arcadia.presentation.screens.friends.components.LimitType
 import com.example.arcadia.presentation.screens.friends.components.ReciprocalRequestDialog
 import com.example.arcadia.ui.theme.BebasNeueFont
 import com.example.arcadia.ui.theme.ButtonPrimary
+import com.example.arcadia.ui.theme.ResponsiveDimens
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
+import com.example.arcadia.ui.theme.rememberResponsiveDimens
 import org.koin.androidx.compose.koinViewModel
 
 
 /**
  * Friends Screen displaying the user's friends list.
+ * Responsive design that adapts to all screen sizes.
  * 
  * Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 11.1, 11.2, 11.3
  * 
@@ -74,6 +83,7 @@ fun FriendsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val dimens = rememberResponsiveDimens()
     
     // Detect when user scrolls near the end for pagination
     val shouldLoadMore by remember {
@@ -118,7 +128,8 @@ fun FriendsScreen(
                 pendingRequestCount = uiState.pendingRequestCount,
                 onNavigateBack = onNavigateBack,
                 onNotificationsClick = onNavigateToFriendRequests,
-                formatBadgeCount = viewModel::formatBadgeCount
+                formatBadgeCount = viewModel::formatBadgeCount,
+                dimens = dimens
             )
         },
         floatingActionButton = {
@@ -131,16 +142,25 @@ fun FriendsScreen(
                     }
                 },
                 containerColor = if (uiState.isOffline) ButtonPrimary.copy(alpha = 0.5f) else ButtonPrimary,
-                contentColor = Surface
+                contentColor = Surface,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = if (dimens.isExpanded) 8.dp else 6.dp
+                ),
+                modifier = Modifier.size(
+                    if (dimens.isExpanded) 64.dp 
+                    else if (dimens.isMedium) 60.dp 
+                    else 56.dp
+                )
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Add Friends"
+                    contentDescription = "Add Friends",
+                    modifier = Modifier.size(dimens.iconLarge)
                 )
             }
         }
     ) { paddingValues ->
-        androidx.compose.foundation.layout.Column(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
@@ -150,38 +170,39 @@ fun FriendsScreen(
             
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
-                // Loading state - Requirements: 1.5
-                uiState.isLoading && uiState.friends.isEmpty() -> {
-                    LoadingState(message = "Loading friends...")
+                    // Loading state - Requirements: 1.5
+                    uiState.isLoading && uiState.friends.isEmpty() -> {
+                        LoadingState(message = "Loading friends...")
+                    }
+                    
+                    // Error state - Requirements: 1.6
+                    uiState.error != null && uiState.friends.isEmpty() -> {
+                        ErrorState(
+                            message = uiState.error ?: "Failed to load friends",
+                            onRetry = { viewModel.retry() }
+                        )
+                    }
+                    
+                    // Empty state - Requirements: 1.3
+                    uiState.friends.isEmpty() -> {
+                        EmptyState(
+                            title = "No friends yet",
+                            subtitle = "Tap + to add!",
+                            icon = Icons.Default.People
+                        )
+                    }
+                    
+                    // Friends list - Requirements: 1.1, 1.2
+                    else -> {
+                        FriendsList(
+                            friends = uiState.friends,
+                            isLoadingMore = uiState.isLoadingMore,
+                            listState = listState,
+                            onFriendClick = onNavigateToProfile,
+                            dimens = dimens
+                        )
+                    }
                 }
-                
-                // Error state - Requirements: 1.6
-                uiState.error != null && uiState.friends.isEmpty() -> {
-                    ErrorState(
-                        message = uiState.error ?: "Failed to load friends",
-                        onRetry = { viewModel.retry() }
-                    )
-                }
-                
-                // Empty state - Requirements: 1.3
-                uiState.friends.isEmpty() -> {
-                    EmptyState(
-                        title = "No friends yet",
-                        subtitle = "Tap + to add!",
-                        icon = Icons.Default.People
-                    )
-                }
-                
-                // Friends list - Requirements: 1.1, 1.2
-                else -> {
-                    FriendsList(
-                        friends = uiState.friends,
-                        isLoadingMore = uiState.isLoadingMore,
-                        listState = listState,
-                        onFriendClick = onNavigateToProfile
-                    )
-                }
-            }
             }
         }
     }
@@ -238,6 +259,7 @@ fun FriendsScreen(
 
 /**
  * Top bar for the Friends screen.
+ * Responsive design with adaptive sizing.
  * 
  * Requirements: 11.1, 11.2, 11.3
  */
@@ -247,13 +269,14 @@ private fun FriendsTopBar(
     pendingRequestCount: Int,
     onNavigateBack: () -> Unit,
     onNotificationsClick: () -> Unit,
-    formatBadgeCount: (Int) -> String
+    formatBadgeCount: (Int) -> String,
+    dimens: ResponsiveDimens
 ) {
     TopAppBar(
         title = {
             Text(
                 text = "FRIENDS",
-                fontSize = 28.sp,
+                fontSize = dimens.fontSizeTitle,
                 fontFamily = BebasNeueFont,
                 color = TextSecondary,
                 letterSpacing = 2.sp
@@ -264,7 +287,8 @@ private fun FriendsTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = TextSecondary
+                    tint = TextSecondary,
+                    modifier = Modifier.size(dimens.iconMedium)
                 )
             }
         },
@@ -280,7 +304,7 @@ private fun FriendsTopBar(
                             ) {
                                 Text(
                                     text = formatBadgeCount(pendingRequestCount),
-                                    fontSize = 10.sp,
+                                    fontSize = dimens.fontSizeSmall * 0.85f,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -289,14 +313,16 @@ private fun FriendsTopBar(
                         Icon(
                             imageVector = Icons.Default.Notifications,
                             contentDescription = "Friend Requests",
-                            tint = ButtonPrimary
+                            tint = ButtonPrimary,
+                            modifier = Modifier.size(dimens.iconMedium)
                         )
                     }
                 } else {
                     Icon(
                         imageVector = Icons.Default.Notifications,
                         contentDescription = "Friend Requests",
-                        tint = ButtonPrimary
+                        tint = ButtonPrimary,
+                        modifier = Modifier.size(dimens.iconMedium)
                     )
                 }
             }
@@ -309,6 +335,7 @@ private fun FriendsTopBar(
 
 /**
  * LazyColumn displaying the friends list.
+ * Responsive layout with adaptive spacing.
  * 
  * Requirements: 1.1, 1.2
  */
@@ -317,11 +344,17 @@ private fun FriendsList(
     friends: List<com.example.arcadia.domain.model.friend.Friend>,
     isLoadingMore: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    onFriendClick: (String) -> Unit
+    onFriendClick: (String) -> Unit,
+    dimens: ResponsiveDimens
 ) {
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            top = dimens.paddingSmall,
+            bottom = dimens.paddingXLarge + 56.dp // Account for FAB
+        ),
+        verticalArrangement = Arrangement.spacedBy(dimens.paddingXSmall)
     ) {
         items(
             items = friends,
@@ -338,13 +371,14 @@ private fun FriendsList(
             item {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = androidx.compose.ui.Alignment.Center
+                        .fillMaxWidth()
+                        .padding(dimens.paddingLarge),
+                    contentAlignment = Alignment.Center
                 ) {
-                    androidx.compose.material3.CircularProgressIndicator(
+                    CircularProgressIndicator(
                         color = ButtonPrimary,
-                        modifier = Modifier.padding(8.dp)
+                        modifier = Modifier.size(dimens.iconLarge),
+                        strokeWidth = 3.dp
                     )
                 }
             }
