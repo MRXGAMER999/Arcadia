@@ -36,6 +36,10 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.util.TimestampFormatter
 
+import com.example.arcadia.presentation.components.common.PremiumScaleButton
+import com.example.arcadia.presentation.components.common.PremiumScaleOutlinedButton
+import com.example.arcadia.presentation.components.common.PremiumScaleWrapper
+
 /**
  * A list item displaying an incoming friend request with Accept and Decline buttons.
  * 
@@ -55,122 +59,127 @@ fun RequestListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    PremiumScaleWrapper(
+        onClick = onClick,
+        enabled = !isProcessing,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(enabled = !isProcessing, onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF0F1B41)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF0F1B41)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            // Row 1: Avatar + Username + Timestamp
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
             ) {
-                // Avatar
-                FriendAvatar(
-                    imageUrl = request.fromProfileImageUrl,
-                    username = request.fromUsername,
-                    size = 48.dp
-                )
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                // Username and timestamp - takes full available space
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center
+                // Row 1: Avatar + Username + Timestamp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = request.fromUsername,
-                        color = TextSecondary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    // Avatar
+                    FriendAvatar(
+                        imageUrl = request.fromProfileImageUrl,
+                        username = request.fromUsername,
+                        size = 48.dp
                     )
-                    
-                    Spacer(modifier = Modifier.height(2.dp))
-                    
-                    Text(
-                        text = TimestampFormatter.format(request.createdAt),
-                        color = TextSecondary.copy(alpha = 0.6f),
-                        fontSize = 12.sp,
-                        maxLines = 1
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Row 2: Action buttons (aligned to the right)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isProcessing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = ButtonPrimary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    // Decline button
-                    OutlinedButton(
-                        onClick = onDecline,
-                        enabled = !isOffline,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextSecondary,
-                            disabledContentColor = TextSecondary.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.height(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Decline",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Decline",
-                            fontSize = 14.sp
-                        )
-                    }
                     
                     Spacer(modifier = Modifier.width(12.dp))
                     
-                    // Accept button
-                    Button(
-                        onClick = onAccept,
-                        enabled = !isOffline,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = ButtonPrimary,
-                            contentColor = Surface,
-                            disabledContainerColor = ButtonPrimary.copy(alpha = 0.5f),
-                            disabledContentColor = Surface.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.height(36.dp)
+                    // Username and timestamp - takes full available space
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Accept",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Accept",
-                            fontSize = 14.sp
+                            text = request.fromUsername,
+                            color = TextSecondary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        
+                        Spacer(modifier = Modifier.height(2.dp))
+                        
+                        Text(
+                            text = TimestampFormatter.format(request.createdAt),
+                            color = TextSecondary.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Row 2: Action buttons (aligned to the right)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isProcessing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = ButtonPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        // Decline button
+                        PremiumScaleOutlinedButton(
+                            onClick = onDecline,
+                            enabled = !isOffline,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = TextSecondary,
+                                disabledContentColor = TextSecondary.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Decline",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Decline",
+                                fontSize = 14.sp
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+                        
+                        // Accept button
+                        PremiumScaleButton(
+                            onClick = onAccept,
+                            enabled = !isOffline,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ButtonPrimary,
+                                contentColor = Surface,
+                                disabledContainerColor = ButtonPrimary.copy(alpha = 0.5f),
+                                disabledContentColor = Surface.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Accept",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Accept",
+                                fontSize = 14.sp
+                            )
+                        }
                     }
                 }
             }

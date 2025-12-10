@@ -36,6 +36,9 @@ import com.example.arcadia.ui.theme.TextSecondary
 import com.example.arcadia.ui.theme.YellowAccent
 import com.example.arcadia.util.TimestampFormatter
 
+import com.example.arcadia.presentation.components.common.PremiumScaleOutlinedButton
+import com.example.arcadia.presentation.components.common.PremiumScaleWrapper
+
 /**
  * A list item displaying a sent (outgoing) friend request with Pending badge and Cancel button.
  * 
@@ -54,100 +57,105 @@ fun SentRequestListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    PremiumScaleWrapper(
+        onClick = onClick,
+        enabled = !isProcessing,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(enabled = !isProcessing, onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF0F1B41)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF0F1B41)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            // Row 1: Avatar + Username + Pending badge + Timestamp
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
             ) {
-                // Avatar
-                FriendAvatar(
-                    imageUrl = request.toProfileImageUrl,
-                    username = request.toUsername,
-                    size = 48.dp
-                )
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                // Username, timestamp, and Pending badge - takes full available space
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = request.toUsername,
-                            color = TextSecondary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
+                // Row 1: Avatar + Username + Pending badge + Timestamp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Avatar
+                    FriendAvatar(
+                        imageUrl = request.toProfileImageUrl,
+                        username = request.toUsername,
+                        size = 48.dp
+                    )
+                    
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    // Username, timestamp, and Pending badge - takes full available space
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = request.toUsername,
+                                color = TextSecondary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            
+                            PendingBadge()
+                        }
                         
-                        PendingBadge()
-                    }
-                    
-                    Spacer(modifier = Modifier.height(2.dp))
-                    
-                    Text(
-                        text = TimestampFormatter.format(request.createdAt),
-                        color = TextSecondary.copy(alpha = 0.6f),
-                        fontSize = 12.sp,
-                        maxLines = 1
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Row 2: Cancel button (aligned to the right)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isProcessing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = ButtonPrimary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    OutlinedButton(
-                        onClick = onCancel,
-                        enabled = !isOffline,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = TextSecondary,
-                            disabledContentColor = TextSecondary.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.height(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cancel",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
+                        
                         Text(
-                            text = "Cancel",
-                            fontSize = 14.sp
+                            text = TimestampFormatter.format(request.createdAt),
+                            color = TextSecondary.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            maxLines = 1
                         )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Row 2: Cancel button (aligned to the right)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isProcessing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = ButtonPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        PremiumScaleOutlinedButton(
+                            onClick = onCancel,
+                            enabled = !isOffline,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = TextSecondary,
+                                disabledContentColor = TextSecondary.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancel",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Cancel",
+                                fontSize = 14.sp
+                            )
+                        }
                     }
                 }
             }

@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.example.arcadia.presentation.components.common.PremiumSlideInItem
+import com.example.arcadia.presentation.components.common.PremiumFloatingActionButton
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -155,7 +158,7 @@ fun FriendsScreen(
                 }
             }
 
-            FloatingActionButton(
+            PremiumFloatingActionButton(
                 onClick = { 
                     if (!uiState.isOffline) {
                         viewModel.showAddFriendsSheet() 
@@ -314,11 +317,13 @@ private fun FriendsList(
         contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        items(items = friends, key = { it.userId }) { friend ->
-            FriendListItem(
-                friend = friend,
-                onClick = { onFriendClick(friend.userId) }
-            )
+        itemsIndexed(items = friends, key = { _, friend -> friend.userId }) { index, friend ->
+            PremiumSlideInItem(index = index) {
+                FriendListItem(
+                    friend = friend,
+                    onClick = { onFriendClick(friend.userId) }
+                )
+            }
         }
         
         if (isLoadingMore) {

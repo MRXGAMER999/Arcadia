@@ -49,6 +49,10 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
 import org.koin.androidx.compose.koinViewModel
 
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.example.arcadia.presentation.components.common.PremiumSlideInItem
+import com.example.arcadia.presentation.components.common.PremiumTabTransition
+
 /**
  * Friend Requests Screen displaying incoming and outgoing friend requests.
  * 
@@ -117,24 +121,26 @@ fun FriendRequestsScreen(
                             )
                         }
                         else -> {
-                            when (uiState.selectedTab) {
-                                RequestTab.INCOMING -> IncomingRequestsContent(
-                                    requests = uiState.incomingRequests,
-                                    isActionInProgress = uiState.isActionInProgress,
-                                    processingRequestId = uiState.processingRequestId,
-                                    isOffline = uiState.isOffline,
-                                    onAccept = { viewModel.acceptRequest(it) },
-                                    onDecline = { viewModel.declineRequest(it) },
-                                    onNavigateToProfile = onNavigateToProfile
-                                )
-                                RequestTab.OUTGOING -> OutgoingRequestsContent(
-                                    requests = uiState.outgoingRequests,
-                                    isActionInProgress = uiState.isActionInProgress,
-                                    processingRequestId = uiState.processingRequestId,
-                                    isOffline = uiState.isOffline,
-                                    onCancel = { viewModel.cancelRequest(it) },
-                                    onNavigateToProfile = onNavigateToProfile
-                                )
+                            PremiumTabTransition(targetState = uiState.selectedTab) { tab ->
+                                when (tab) {
+                                    RequestTab.INCOMING -> IncomingRequestsContent(
+                                        requests = uiState.incomingRequests,
+                                        isActionInProgress = uiState.isActionInProgress,
+                                        processingRequestId = uiState.processingRequestId,
+                                        isOffline = uiState.isOffline,
+                                        onAccept = { viewModel.acceptRequest(it) },
+                                        onDecline = { viewModel.declineRequest(it) },
+                                        onNavigateToProfile = onNavigateToProfile
+                                    )
+                                    RequestTab.OUTGOING -> OutgoingRequestsContent(
+                                        requests = uiState.outgoingRequests,
+                                        isActionInProgress = uiState.isActionInProgress,
+                                        processingRequestId = uiState.processingRequestId,
+                                        isOffline = uiState.isOffline,
+                                        onCancel = { viewModel.cancelRequest(it) },
+                                        onNavigateToProfile = onNavigateToProfile
+                                    )
+                                }
                             }
                         }
                     }
@@ -264,15 +270,17 @@ private fun IncomingRequestsContent(
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            items(items = requests, key = { it.id }) { request ->
-                RequestListItem(
-                    request = request,
-                    isProcessing = isActionInProgress && processingRequestId == request.id,
-                    isOffline = isOffline,
-                    onAccept = { onAccept(request) },
-                    onDecline = { onDecline(request) },
-                    onClick = { onNavigateToProfile(request.fromUserId) }
-                )
+            itemsIndexed(items = requests, key = { _, request -> request.id }) { index, request ->
+                PremiumSlideInItem(index = index) {
+                    RequestListItem(
+                        request = request,
+                        isProcessing = isActionInProgress && processingRequestId == request.id,
+                        isOffline = isOffline,
+                        onAccept = { onAccept(request) },
+                        onDecline = { onDecline(request) },
+                        onClick = { onNavigateToProfile(request.fromUserId) }
+                    )
+                }
             }
         }
     }
@@ -299,14 +307,16 @@ private fun OutgoingRequestsContent(
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            items(items = requests, key = { it.id }) { request ->
-                SentRequestListItem(
-                    request = request,
-                    isProcessing = isActionInProgress && processingRequestId == request.id,
-                    isOffline = isOffline,
-                    onCancel = { onCancel(request) },
-                    onClick = { onNavigateToProfile(request.toUserId) }
-                )
+            itemsIndexed(items = requests, key = { _, request -> request.id }) { index, request ->
+                PremiumSlideInItem(index = index) {
+                    SentRequestListItem(
+                        request = request,
+                        isProcessing = isActionInProgress && processingRequestId == request.id,
+                        isOffline = isOffline,
+                        onCancel = { onCancel(request) },
+                        onClick = { onNavigateToProfile(request.toUserId) }
+                    )
+                }
             }
         }
     }

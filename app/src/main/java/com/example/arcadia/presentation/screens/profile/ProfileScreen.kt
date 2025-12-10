@@ -6,7 +6,10 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -52,12 +55,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -91,6 +96,12 @@ import com.example.arcadia.ui.theme.YellowAccent
 import com.example.arcadia.util.DisplayResult
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
+import kotlinx.coroutines.delay
+
+import com.example.arcadia.presentation.components.common.PremiumSlideInItem
+import com.example.arcadia.presentation.components.common.PremiumFloatingActionButton
+import com.example.arcadia.presentation.components.common.PremiumScaleButton
+import com.example.arcadia.presentation.components.common.PremiumScaleWrapper
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -255,76 +266,109 @@ fun ProfileScreen(
                         ) {
                             Spacer(modifier = Modifier.height(16.dp))
                             // Profile Header
-                            ProfileHeader(
-                                imageUrl = profileState.profileImageUrl,
-                                name = profileState.name,
-                                username = profileState.username,
-                                location = buildString {
-                                    if (!profileState.city.isNullOrEmpty()) append(profileState.city)
-                                    if (!profileState.city.isNullOrEmpty() && !profileState.country.isNullOrEmpty()) append(", ")
-                                    if (!profileState.country.isNullOrEmpty()) append(profileState.country)
-                                }.takeIf { it.isNotEmpty() }
-                            )
+                            PremiumSlideInItem(index = 0) {
+                                ProfileHeader(
+                                    imageUrl = profileState.profileImageUrl,
+                                    name = profileState.name,
+                                    username = profileState.username,
+                                    location = buildString {
+                                        if (!profileState.city.isNullOrEmpty()) append(profileState.city)
+                                        if (!profileState.city.isNullOrEmpty() && !profileState.country.isNullOrEmpty()) append(", ")
+                                        if (!profileState.country.isNullOrEmpty()) append(profileState.country)
+                                    }.takeIf { it.isNotEmpty() }
+                                )
+                            }
                             
                             // Friend Action Button - Requirements: 8.1-8.4, 8.10, 8.11
                             if (viewModel.shouldShowFriendActionButton()) {
-                                FriendActionButton(
-                                    status = friendshipState.status,
-                                    isLoading = friendshipState.isLoading,
-                                    onClick = { viewModel.onFriendActionButtonClick() }
-                                )
+                                PremiumSlideInItem(index = 1) {
+                                    FriendActionButton(
+                                        status = friendshipState.status,
+                                        isLoading = friendshipState.isLoading,
+                                        onClick = { viewModel.onFriendActionButtonClick() }
+                                    )
+                                }
                             }
 
                             // Bio Section
                             if (!profileState.description.isNullOrEmpty()) {
-                                BioCard(bio = profileState.description)
+                                PremiumSlideInItem(index = 2) {
+                                    BioCard(bio = profileState.description)
+                                }
                             }
 
                             // Gaming Stats Card
-                            GamingStatsCard(statsState = statsState)
+                            PremiumSlideInItem(index = 3) {
+                                GamingStatsCard(statsState = statsState)
+                            }
 
                             // Featured Badges Section (Requirements: 9.1, 9.3)
                             // BadgesSection handles hiding itself when badges list is empty
-                            BadgesSection(badges = featuredBadges)
+                            PremiumSlideInItem(index = 4) {
+                                BadgesSection(badges = featuredBadges)
+                            }
 
                             // Gaming Platforms Section
-                            GamingPlatformsCard(
-                                steamId = profileState.steamId,
-                                xboxGamertag = profileState.xboxGamertag,
-                                psnId = profileState.psnId
-                            )
-
-                            // Custom Profile Sections
-                            customSections.forEach { section ->
-                                CustomSectionCard(
-                                    section = section,
-                                    games = libraryGames.filter { it.rawgId in section.gameIds },
-                                    onGameClick = onGameClick,
-                                    onEditClick = if (isCurrentUser) { { 
-                                        sectionDraftOverride = null
-                                        sectionToEdit = section
-                                        showAddSectionSheet = true
-                                    } } else null,
-                                    onDeleteClick = if (isCurrentUser) { { viewModel.deleteCustomSection(section.id) } } else null
+                            PremiumSlideInItem(index = 5) {
+                                GamingPlatformsCard(
+                                    steamId = profileState.steamId,
+                                    xboxGamertag = profileState.xboxGamertag,
+                                    psnId = profileState.psnId
                                 )
                             }
 
-                            // My Library Preview
-                            LibraryPreviewCard(
-                                games = libraryGames.take(10),
-                                totalGames = statsState.totalGames,
-                                onGameClick = onGameClick,
-                                onSeeAllClick = { 
-                                    // Pass userId and username only if viewing another user's profile
-                                    if (isCurrentUser) {
-                                        onNavigateToMyGames(null, null)
-                                    } else {
-                                        onNavigateToMyGames(userId, profileState.username)
+                            // Custom Profile Sections
+                            customSections.forEachIndexed { index, section ->
+                                key(section.id) {
+                                    var isVisible by remember { mutableStateOf(true) }
+                                    
+                                    AnimatedVisibility(
+                                        visible = isVisible,
+                                        exit = shrinkVertically() + fadeOut(),
+                                        enter = expandVertically() + fadeIn()
+                                    ) {
+                                        PremiumSlideInItem(index = 6 + index) {
+                                            CustomSectionCard(
+                                                section = section,
+                                                games = libraryGames.filter { it.rawgId in section.gameIds },
+                                                onGameClick = onGameClick,
+                                                onEditClick = if (isCurrentUser) { { 
+                                                    sectionDraftOverride = null
+                                                    sectionToEdit = section
+                                                    showAddSectionSheet = true
+                                                } } else null,
+                                                onDeleteClick = if (isCurrentUser) { { isVisible = false } } else null
+                                            )
+                                        }
                                     }
-                                },
-                                expanded = showLibrarySection,
-                                onExpandClick = { showLibrarySection = !showLibrarySection }
-                            )
+                                    
+                                    LaunchedEffect(isVisible) {
+                                        if (!isVisible) {
+                                            delay(300) // Wait for animation
+                                            viewModel.deleteCustomSection(section.id)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // My Library Preview
+                            PremiumSlideInItem(index = 6 + customSections.size) {
+                                LibraryPreviewCard(
+                                    games = libraryGames.take(10),
+                                    totalGames = statsState.totalGames,
+                                    onGameClick = onGameClick,
+                                    onSeeAllClick = { 
+                                        // Pass userId and username only if viewing another user's profile
+                                        if (isCurrentUser) {
+                                            onNavigateToMyGames(null, null)
+                                        } else {
+                                            onNavigateToMyGames(userId, profileState.username)
+                                        }
+                                    },
+                                    expanded = showLibrarySection,
+                                    onExpandClick = { showLibrarySection = !showLibrarySection }
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(80.dp))
                         }
@@ -333,7 +377,7 @@ fun ProfileScreen(
             )
 
             if (isCurrentUser) {
-                FloatingActionButton(
+                PremiumFloatingActionButton(
                     onClick = { 
                         sectionDraftOverride = null
                         sectionToEdit = null
@@ -463,18 +507,23 @@ fun ProfileScreen(
 
 @Composable
 private fun CoolRoastButton(onClick: () -> Unit) {
-    FilledIconButton(
+    PremiumScaleWrapper(
         onClick = onClick,
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = Color(0xFFFF5722)
-        ),
         modifier = Modifier.size(40.dp)
     ) {
-        Text(
-            text = "🔥",
-            fontSize = 20.sp,
-            textAlign = TextAlign.Center
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFFF5722), CircleShape)
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "🔥",
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -522,7 +571,7 @@ private fun FriendActionButton(
         )
     }
     
-    Button(
+    PremiumScaleButton(
         onClick = onClick,
         enabled = enabled && !isLoading,
         modifier = Modifier

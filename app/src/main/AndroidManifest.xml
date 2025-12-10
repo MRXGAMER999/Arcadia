@@ -8,9 +8,11 @@
 
     <!-- Optional: For Google Sign-In -->
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+    
+    <!-- Camera Permission for QR Scanning -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
-    
+
     <!-- Push Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application

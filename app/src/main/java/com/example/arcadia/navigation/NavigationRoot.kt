@@ -13,6 +13,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import androidx.compose.animation.togetherWith
 import com.example.arcadia.presentation.screens.authScreen.AuthScreen
 import com.example.arcadia.presentation.screens.detailsScreen.DetailsScreen
 import com.example.arcadia.presentation.screens.friends.FriendRequestsScreen
@@ -112,6 +113,9 @@ fun NavigationRoot(
             .fillMaxSize()
             .background(Surface), // Set dark blue background to prevent white flash
         backStack = backStack,
+        transitionSpec = { enterTransition() togetherWith exitTransition() },
+        popTransitionSpec = { enterTransition() togetherWith exitTransition() },
+        predictivePopTransitionSpec = { enterTransition() togetherWith exitTransition() },
         // Add the decorator that preserves saveable state (including scroll positions)
         // for each NavEntry while it's on the back stack
         entryDecorators = listOf(

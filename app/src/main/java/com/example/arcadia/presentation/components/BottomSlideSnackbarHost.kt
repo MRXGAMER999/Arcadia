@@ -5,7 +5,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -43,18 +44,25 @@ fun BottomSlideSnackbarHost(
             visible = currentSnackbarData != null,
             enter = slideInVertically(
                 initialOffsetY = { it },
-                animationSpec = tween(durationMillis = 220)
-            ) + fadeIn(animationSpec = tween(durationMillis = 150)),
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)),
             exit = slideOutVertically(
                 targetOffsetY = { it },
-                animationSpec = tween(durationMillis = 180)
-            ) + fadeOut(animationSpec = tween(durationMillis = 150))
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium))
         ) {
-            SnackbarHost(
-                hostState = hostState,
-                snackbar = snackbar
-            )
+            currentSnackbarData?.let { snackbar(it) }
         }
     }
 }
+
+
+
+
 
