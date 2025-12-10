@@ -241,7 +241,7 @@ fun MyGamesScreen(
                 .padding(
                     start = paddingValues.calculateLeftPadding(LayoutDirection.Ltr),
                     end = paddingValues.calculateRightPadding(LayoutDirection.Ltr),
-                    top = if(isReadOnly) paddingValues.calculateTopPadding() else 0.dp
+                    top = if(isReadOnly || showBackButton) paddingValues.calculateTopPadding() else 0.dp
                 )
                 .background(Color.Transparent)
         ) {
