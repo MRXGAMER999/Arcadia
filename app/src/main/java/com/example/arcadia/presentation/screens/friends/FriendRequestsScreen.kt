@@ -20,7 +20,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -36,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.presentation.components.AddGameSnackbar
+import com.example.arcadia.presentation.components.BottomSlideSnackbarHost
 import com.example.arcadia.presentation.components.common.EmptyState
 import com.example.arcadia.presentation.components.common.ErrorState
 import com.example.arcadia.presentation.components.common.LoadingState
@@ -81,7 +81,7 @@ fun FriendRequestsScreen(
     
     Scaffold(
         containerColor = Surface,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { BottomSlideSnackbarHost(hostState = snackbarHostState) },
         topBar = {
             FriendRequestsTopBar(onNavigateBack = onNavigateBack)
         }

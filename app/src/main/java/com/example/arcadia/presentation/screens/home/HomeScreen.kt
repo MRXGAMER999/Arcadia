@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.arcadia.presentation.components.AddGameSnackbar
+import com.example.arcadia.presentation.components.BottomSlideSnackbarHost
 import com.example.arcadia.presentation.screens.home.components.HomeBottomBar
 import com.example.arcadia.presentation.screens.home.components.HomeTopBar
 import com.example.arcadia.presentation.screens.home.tabs.DiscoverTabContent
@@ -133,7 +133,7 @@ fun NewHomeScreen(
                 // But we anchor it to the Scaffold
                 Box(modifier = Modifier.fillMaxSize()) {
                     // Standard SnackbarHost for system messages (like "Press back again")
-                    SnackbarHost(
+                    BottomSlideSnackbarHost(
                         hostState = snackbarHostState,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
@@ -146,7 +146,7 @@ fun NewHomeScreen(
                         onDismiss = { viewModel.dismissSnackbar() },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 90.dp) // Slightly above standard snackbar/bottom bar
+                            .padding(bottom = 16.dp)
                     )
                 }
             }

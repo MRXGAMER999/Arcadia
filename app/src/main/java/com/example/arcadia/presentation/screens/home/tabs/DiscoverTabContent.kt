@@ -492,6 +492,12 @@ fun DiscoverTabContent(
             }
         }
         
+        // Scroll to top FAB
+        ScrollToTopFAB(
+            listState = listState,
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
+
         // Unsaved changes snackbar for add game flow
         UnsavedChangesSnackbar(
             visible = unsavedAddGameState.show,
@@ -499,12 +505,6 @@ fun DiscoverTabContent(
             onSave = { viewModel.saveUnsavedAddGameChanges() },
             onDismiss = { viewModel.dismissUnsavedAddGameChanges() },
             modifier = Modifier.align(Alignment.BottomCenter)
-        )
-        
-        // Scroll to top FAB
-        ScrollToTopFAB(
-            listState = listState,
-            modifier = Modifier.align(Alignment.BottomEnd)
         )
     }
 }

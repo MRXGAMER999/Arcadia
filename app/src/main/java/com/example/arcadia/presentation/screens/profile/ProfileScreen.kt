@@ -44,7 +44,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -81,6 +80,7 @@ import com.example.arcadia.presentation.screens.profile.components.ShareProfileD
 import com.example.arcadia.presentation.screens.profile.components.UnfriendConfirmationDialog
 import com.example.arcadia.presentation.screens.profile.components.shareProfileAsText
 import com.example.arcadia.presentation.components.AddGameSnackbar
+import com.example.arcadia.presentation.components.BottomSlideSnackbarHost
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.screens.profile.SectionDraft
 import com.example.arcadia.ui.theme.BebasNeueFont
@@ -149,7 +149,7 @@ fun ProfileScreen(
 
     Scaffold(
         containerColor = Surface,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { BottomSlideSnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -211,22 +211,6 @@ fun ProfileScreen(
                     containerColor = Surface
                 )
             )
-        },
-        floatingActionButton = {
-            if (isCurrentUser) {
-                FloatingActionButton(
-                    onClick = { 
-                        sectionDraftOverride = null
-                        sectionToEdit = null
-                        showAddSectionSheet = true 
-                    },
-                    containerColor = ButtonPrimary,
-                    contentColor = Surface,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Section")
-                }
-            }
         }
     ) { paddingValues ->
         Box(
@@ -348,12 +332,28 @@ fun ProfileScreen(
                 }
             )
 
-            val bottomPadding = if (isCurrentUser) 96.dp else 16.dp
+            if (isCurrentUser) {
+                FloatingActionButton(
+                    onClick = { 
+                        sectionDraftOverride = null
+                        sectionToEdit = null
+                        showAddSectionSheet = true 
+                    },
+                    containerColor = ButtonPrimary,
+                    contentColor = Surface,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Section")
+                }
+            }
 
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = bottomPadding),
+                    .padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -384,7 +384,8 @@ fun ProfileScreen(
                     visible = viewModel.showUnsavedSectionSnackbar,
                     onReopen = { viewModel.reopenUnsavedSectionDraft() },
                     onSave = { viewModel.saveUnsavedSection() },
-                    onDismiss = { viewModel.dismissUnsavedSectionSnackbar() }
+                    onDismiss = { viewModel.dismissUnsavedSectionSnackbar() },
+                    bottomPadding = 0.dp
                 )
             }
         }

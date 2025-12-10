@@ -24,7 +24,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -41,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.presentation.components.AddGameSnackbar
+import com.example.arcadia.presentation.components.BottomSlideSnackbarHost
 import com.example.arcadia.presentation.components.common.EmptyState
 import com.example.arcadia.presentation.components.common.ErrorState
 import com.example.arcadia.presentation.components.common.LoadingState
@@ -107,7 +107,7 @@ fun FriendsScreen(
     
     Scaffold(
         containerColor = Surface,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { BottomSlideSnackbarHost(hostState = snackbarHostState) },
         topBar = {
             FriendsTopBar(
                 pendingRequestCount = uiState.pendingRequestCount,
@@ -115,22 +115,6 @@ fun FriendsScreen(
                 onNotificationsClick = onNavigateToFriendRequests,
                 formatBadgeCount = viewModel::formatBadgeCount
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { 
-                    if (!uiState.isOffline) {
-                        viewModel.showAddFriendsSheet() 
-                    }
-                },
-                containerColor = if (uiState.isOffline) ButtonPrimary.copy(alpha = 0.5f) else ButtonPrimary,
-                contentColor = Surface
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add Friends"
-                )
-            }
         }
     ) { paddingValues ->
         Box(
@@ -169,6 +153,24 @@ fun FriendsScreen(
                         }
                     }
                 }
+            }
+
+            FloatingActionButton(
+                onClick = { 
+                    if (!uiState.isOffline) {
+                        viewModel.showAddFriendsSheet() 
+                    }
+                },
+                containerColor = if (uiState.isOffline) ButtonPrimary.copy(alpha = 0.5f) else ButtonPrimary,
+                contentColor = Surface,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Friends"
+                )
             }
 
             if (uiState.showActionSnackbar && uiState.actionSnackbarMessage != null) {

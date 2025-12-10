@@ -318,6 +318,12 @@ fun HomeTabContent(
             }
         }
         
+        // Scroll to top FAB
+        ScrollToTopFAB(
+            listState = listState,
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
+
         // Unsaved changes snackbar for add game flow
         UnsavedChangesSnackbar(
             visible = unsavedAddGameState.show,
@@ -325,12 +331,6 @@ fun HomeTabContent(
             onSave = { viewModel.saveUnsavedAddGameChanges() },
             onDismiss = { viewModel.dismissUnsavedAddGameChanges() },
             modifier = Modifier.align(Alignment.BottomCenter)
-        )
-        
-        // Scroll to top FAB
-        ScrollToTopFAB(
-            listState = listState,
-            modifier = Modifier.align(Alignment.BottomEnd)
         )
     }
 }

@@ -56,9 +56,9 @@ import com.example.arcadia.presentation.screens.roast.util.RoastShareHelper
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.remember
+import com.example.arcadia.presentation.components.BottomSlideSnackbarHost
 
 /**
  * Main Roast Screen composable with empty state, loading state, results state, 
@@ -108,7 +108,7 @@ fun RoastScreen(
                 onNavigateBack = onNavigateBack
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { BottomSlideSnackbarHost(hostState = snackbarHostState) },
         containerColor = Color.Transparent,
         modifier = modifier
             .shake(enabled = state.isShaking)
