@@ -27,42 +27,13 @@ class MyApplication : Application() {
         private const val EMULATOR_HOST = "192.168.1.8"
         private const val TAG = "MyApplication"
     }
+    
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
         
-        // Initialize OneSignal
-        initializeOneSignal()
-
-
-//            try {
-//                val host = EMULATOR_HOST
-//
-//                val firestoreInstance = FirebaseFirestore.getInstance()
-//                val authInstance = FirebaseAuth.getInstance()
-//                val storageInstance = FirebaseStorage.getInstance()
-//
-//                firestoreInstance.useEmulator(host, 8080)
-//                authInstance.useEmulator(host, 9099)
-//                storageInstance.useEmulator(host, 9199)
-//
-//                android.util.Log.d("MyApplication", "═══════════════════════════════════════")
-//                android.util.Log.d("MyApplication", "Firebase Emulator configured successfully")
-//                android.util.Log.d("MyApplication", "Host: $host")
-//                android.util.Log.d("MyApplication", "- Firestore: $host:8080")
-//                android.util.Log.d("MyApplication", "- Auth: $host:9099")
-//                android.util.Log.d("MyApplication", "- Storage: $host:9199")
-//                android.util.Log.d("MyApplication", "═══════════════════════════════════════")
-//
-//                // Test connection
-//                android.util.Log.d("MyApplication", "Testing connection to emulator...")
-//            } catch (e: IllegalStateException) {
-//                android.util.Log.w("MyApplication", "Emulator already configured or setup failed", e)
-//            } catch (e: Exception) {
-//                android.util.Log.e("MyApplication", "Failed to configure Firebase Emulator", e)
-//            }
-
-
+        // Initialize Koin first (critical path)
         startKoin {
             androidLogger()
             androidContext(this@MyApplication)
@@ -70,10 +41,13 @@ class MyApplication : Application() {
             analytics(onConfig = {apiKey()})
             modules(appModule)
         }
-
-        // Prefetch popular studios cache on startup (fire-and-forget)
-        val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        
+        // Defer non-critical initialization to background thread
         applicationScope.launch {
+            // Initialize OneSignal off main thread
+            initializeOneSignal()
+            
+            // Prefetch popular studios cache (fire-and-forget)
             try {
                 val cacheManager: StudioCacheManager = get()
                 cacheManager.prefetchPopularStudios()
@@ -87,8 +61,9 @@ class MyApplication : Application() {
     /**
      * Initializes OneSignal SDK for push notifications.
      * Requirements: 10.1, 10.2
+     * Note: Must be called from background thread, switches to Main for SDK init
      */
-    private fun initializeOneSignal() {
+    private suspend fun initializeOneSignal() {
         val appId = BuildConfig.ONESIGNAL_APP_ID
         
         if (appId.isBlank()) {
@@ -97,22 +72,21 @@ class MyApplication : Application() {
         }
         
         try {
-            // Enable verbose logging for debugging (disable in production)
-            OneSignal.Debug.logLevel = LogLevel.WARN
-            
-            // Initialize OneSignal with the app ID from BuildConfig
-            OneSignal.initWithContext(this, appId)
-            
-            // Request notification permission on Android 13+ (API 33+)
-            // This will prompt the user for POST_NOTIFICATIONS permission
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                CoroutineScope(Dispatchers.Main).launch {
+            // Switch to Main thread for OneSignal initialization (required by SDK)
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                // Enable verbose logging for debugging (disable in production)
+                OneSignal.Debug.logLevel = LogLevel.WARN
+                
+                // Initialize OneSignal with the app ID from BuildConfig
+                OneSignal.initWithContext(this@MyApplication, appId)
+                
+                // Request notification permission on Android 13+ (API 33+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     OneSignal.Notifications.requestPermission(false)
                 }
             }
             
-            // If user is already logged in, ensure OneSignal is logged in too
-            // This handles the case where the app was updated or reinstalled
+            // Sync login state can run on background thread
             syncOneSignalLoginState()
             
             android.util.Log.d(TAG, "OneSignal initialized successfully")

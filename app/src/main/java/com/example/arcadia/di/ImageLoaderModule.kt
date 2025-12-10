@@ -13,7 +13,9 @@ import org.koin.dsl.module
 import okio.Path.Companion.toOkioPath
 
 val imageLoaderModule = module {
-    single<ImageLoader> {
+    // ImageLoader - lazy initialization to avoid blocking startup
+    // Will be created on first image load request
+    single<ImageLoader>(createdAtStart = false) {
         ImageLoader.Builder(androidContext())
             // Increased memory cache for faster repeated loads
             .memoryCache {

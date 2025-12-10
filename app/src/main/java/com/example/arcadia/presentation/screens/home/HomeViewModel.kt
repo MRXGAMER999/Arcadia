@@ -1358,17 +1358,15 @@ class HomeViewModel(
             android.util.Log.d(TAG, "Fetching AI recommendations for ${libraryData.size} library games")
 
             // 3. Calculate request count
-            val count = if (isLoadMore) {
-                AI_RECOMMENDATION_COUNT + (discoveryFilterPage * AI_LOAD_MORE_COUNT)
-            } else {
-                AI_RECOMMENDATION_COUNT
-            }
+            val count = if (isLoadMore) AI_LOAD_MORE_COUNT else AI_RECOMMENDATION_COUNT
+            val excludeGames = lastDiscoveryResults.map { it.name }.takeLast(50)
             
             // 4. Get AI recommendations (uses sorted by confidence)
             val aiResult = aiRepository.getLibraryBasedRecommendations(
                 games = libraryData, 
                 count = count,
-                forceRefresh = forceRefresh
+                forceRefresh = forceRefresh,
+                excludeGames = excludeGames
             )
             
             aiResult.fold(

@@ -105,7 +105,8 @@ val networkModule = module {
     
     // Connection Pool - reuse connections for better performance
     // Increased pool size for better parallel request handling
-    single {
+    // Lazy initialization to avoid blocking startup
+    single(createdAtStart = false) {
         ConnectionPool(
             maxIdleConnections = 15,
             keepAliveDuration = 5,
@@ -114,7 +115,8 @@ val networkModule = module {
     }
     
     // OkHttpClient - optimized for performance with HTTP/2 and Brotli
-    single {
+    // Lazy initialization - only created when first network request is made
+    single(createdAtStart = false) {
         val cacheDir = androidContext().cacheDir.resolve("http_cache")
         OkHttpClient.Builder()
             // HTTP/2 support for multiplexing multiple requests over single connection
@@ -145,8 +147,8 @@ val networkModule = module {
             .build()
     }
     
-    // Retrofit
-    single {
+    // Retrofit - lazy initialization
+    single(createdAtStart = false) {
         val json = get<Json>()
         val contentType = "application/json".toMediaType()
         Retrofit.Builder()
@@ -156,13 +158,13 @@ val networkModule = module {
             .build()
     }
     
-    // RAWG API Service
-    single<RawgApiService> {
+    // RAWG API Service - lazy initialization
+    single<RawgApiService>(createdAtStart = false) {
         get<Retrofit>().create(RawgApiService::class.java)
     }
     
-    // Groq OkHttpClient (optimized for AI with Brotli compression)
-    single(named("groqClient")) {
+    // Groq OkHttpClient (optimized for AI with Brotli compression) - lazy
+    single(named("groqClient"), createdAtStart = false) {
         OkHttpClient.Builder()
             .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
             .connectionPool(get())
@@ -186,8 +188,8 @@ val networkModule = module {
             .build()
     }
     
-    // Groq Retrofit
-    single(named("groqRetrofit")) {
+    // Groq Retrofit - lazy initialization
+    single(named("groqRetrofit"), createdAtStart = false) {
         val json = get<Json>()
         val contentType = "application/json".toMediaType()
         Retrofit.Builder()
@@ -197,8 +199,8 @@ val networkModule = module {
             .build()
     }
     
-    // Groq API Service
-    single<GroqApiService> {
+    // Groq API Service - lazy initialization
+    single<GroqApiService>(createdAtStart = false) {
         get<Retrofit>(named("groqRetrofit")).create(GroqApiService::class.java)
     }
 }

@@ -37,22 +37,19 @@ val repositoryModule = module {
     
     // ==================== Firebase ====================
     
-    /** Firebase Firestore instance */
-    single { FirebaseFirestore.getInstance() }
+    /** Firebase Firestore instance - lazy to avoid blocking startup */
+    single(createdAtStart = false) { FirebaseFirestore.getInstance() }
     
     // ==================== Repositories ====================
     
     /** Repository for gamer/user data */
     single<GamerRepository> { GamerRepositoryImpl() }
     
-    /** OneSignal Notification Service */
-    single { OneSignalNotificationService() }
+    /** OneSignal notification service for push notifications (Requirements: 10.6, 10.7, 10.8) */
+    single { OneSignalNotificationService(get()) }
     
     /** Repository for friends and friend requests (Requirements: 1.1, 3.5, 6.3, 8.1-8.4, 14.1-14.7) */
     single<FriendsRepository> { FriendsRepositoryImpl(get(), get()) }
-    
-    /** OneSignal notification service for push notifications (Requirements: 10.6, 10.7, 10.8) */
-    single { OneSignalNotificationService(get()) }
     
     /** 
      * Repository for game data from RAWG API
@@ -71,25 +68,25 @@ val repositoryModule = module {
     
     // ==================== Studio Cache Dependencies ====================
     
-    /** Local database for studio caching */
-    single { StudioCacheDatabase.getInstance(androidContext()) }
+    /** Local database for studio caching - lazy to avoid blocking startup */
+    single(createdAtStart = false) { StudioCacheDatabase.getInstance(androidContext()) }
     
     /** Manager for studio cache operations */
-    single { StudioCacheManager(get()) }
+    single(createdAtStart = false) { StudioCacheManager(get()) }
     
     // ==================== Game Cache Dependencies (Paging 3) ====================
     
-    /** Local database for game caching (AI recommendations + feedback) */
-    single { GameCacheDatabase.getInstance(androidContext()) }
+    /** Local database for game caching (AI recommendations + feedback) - lazy */
+    single(createdAtStart = false) { GameCacheDatabase.getInstance(androidContext()) }
     
     /** DAO for cached games (used by Paging 3 RemoteMediator) */
-    single { get<GameCacheDatabase>().cachedGamesDao() }
+    single(createdAtStart = false) { get<GameCacheDatabase>().cachedGamesDao() }
     
     /** DAO for recommendation feedback (tracks user interactions for AI improvement) */
-    single<RecommendationFeedbackDao> { get<GameCacheDatabase>().recommendationFeedbackDao() }
+    single<RecommendationFeedbackDao>(createdAtStart = false) { get<GameCacheDatabase>().recommendationFeedbackDao() }
     
     /** DAO for roast storage (Requirements: 6.1) */
-    single { get<GameCacheDatabase>().roastDao() }
+    single(createdAtStart = false) { get<GameCacheDatabase>().roastDao() }
     
     /** Repository for roast data persistence (Requirements: 6.1) */
     single<RoastRepository> { RoastRepositoryImpl(get()) }

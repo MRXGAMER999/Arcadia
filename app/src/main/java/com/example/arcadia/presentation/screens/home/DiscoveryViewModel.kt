@@ -61,6 +61,7 @@ class DiscoveryViewModel(
         private const val DEVELOPER_SEARCH_DEBOUNCE_MS = 300L
         private const val DEFAULT_PAGE_SIZE = 40
         private const val MIN_GAMES_THRESHOLD = 15
+        private const val AI_RECOMMENDATION_BATCH = 12
     }
 
     // Discovery state exposed to UI
@@ -765,15 +766,17 @@ class DiscoveryViewModel(
             val limitedLibrary = libraryState.data.take(50)
             android.util.Log.d(TAG, "Using ${limitedLibrary.size} of ${libraryState.data.size} library games for AI analysis")
 
-            // 2. Calculate count based on page
-            val count = if (isLoadMore) (discoveryFilterPage + 1) * 10 else 10
+            // 2. Use fixed batch size and send prior recs to avoid duplicates without growing tokens
+            val count = AI_RECOMMENDATION_BATCH
+            val excludeGames = lastDiscoveryResults.map { it.name }.takeLast(50)
             
             // 3. Get recommendations from AI (already sorted by confidence)
             // Use limited library to avoid token limits with large libraries
             val aiResult = aiRepository.getLibraryBasedRecommendations(
                 games = limitedLibrary, 
                 count = count,
-                forceRefresh = forceRefresh
+                forceRefresh = forceRefresh,
+                excludeGames = excludeGames
             )
             
             aiResult.fold(
