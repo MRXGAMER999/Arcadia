@@ -189,7 +189,7 @@ object CacheKeys {
     fun gamesByGenre(genreId: Int, page: Int, pageSize: Int) = "games_genre_${genreId}_${page}_$pageSize"
     fun searchGames(query: String, page: Int, pageSize: Int) = "games_search_${query.hashCode()}_${page}_$pageSize"
     fun filteredGames(hash: Int, page: Int) = "games_filtered_${hash}_$page"
-    fun studioGames(slugs: String, page: Int) = "games_studio_${slugs.hashCode()}_$page"
+    fun studioGames(slugs: String, page: Int, pageSize: Int) = "games_studio_${slugs.hashCode()}_${page}_$pageSize"
     
     // Game details cache keys
     fun gameDetails(gameId: Int) = "game_details_$gameId"

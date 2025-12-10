@@ -217,11 +217,14 @@ fun FriendsScreen(
     )
     
     if (uiState.reciprocalRequest != null && uiState.reciprocalRequestTargetUser != null) {
-        ReciprocalRequestDialog(
-            username = uiState.reciprocalRequestTargetUser!!.username,
-            onAccept = { viewModel.acceptReciprocalRequest() },
-            onDismiss = { viewModel.dismissReciprocalRequestDialog() }
-        )
+        val targetUser = uiState.reciprocalRequestTargetUser
+        targetUser?.let { user ->
+            ReciprocalRequestDialog(
+                username = user.username,
+                onAccept = { viewModel.acceptReciprocalRequest() },
+                onDismiss = { viewModel.dismissReciprocalRequestDialog() }
+            )
+        }
     }
     
     uiState.limitReachedType?.let { limitType ->

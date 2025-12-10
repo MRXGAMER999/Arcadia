@@ -24,12 +24,13 @@ class GeminiAIClient : AIClient {
     }
     
     override val providerName: String = "Google Gemini"
+    private val apiKey: String = BuildConfig.GEMINI_API_KEY
     
     // Lazy-initialized models to avoid creating them until needed
     private val jsonModel: GenerativeModel by lazy {
         GenerativeModel(
             modelName = MODEL_NAME,
-            apiKey = BuildConfig.GEMINI_API_KEY,
+            apiKey = apiKey,
             generationConfig = generationConfig {
                 temperature = 0.2f
                 topK = 32
@@ -43,7 +44,7 @@ class GeminiAIClient : AIClient {
     private val textModel: GenerativeModel by lazy {
         GenerativeModel(
             modelName = MODEL_NAME,
-            apiKey = BuildConfig.GEMINI_API_KEY,
+            apiKey = apiKey,
             generationConfig = generationConfig {
                 temperature = 0.7f
                 topK = 40
@@ -60,20 +61,22 @@ class GeminiAIClient : AIClient {
         model: String?
     ): String {
         return try {
+            ensureApiKey()
             Log.d(TAG, "Generating JSON content...")
             val response = jsonModel.generateContent(prompt)
-            val text = response.text?.trim()
-            
-            if (text.isNullOrBlank()) {
+            val cleaned = response.text
+                ?.removePrefix("```json")
+                ?.removePrefix("```")
+                ?.removeSuffix("```")
+                ?.trim()
+
+            if (cleaned.isNullOrBlank()) {
                 throw AIClientException.EmptyResponse()
             }
-            
+
             // Clean up Gemini's markdown formatting
-            text.removePrefix("```json")
-                .removePrefix("```")
-                .removeSuffix("```")
-                .trim()
-                
+            cleaned
+
         } catch (e: AIClientException) {
             throw e
         } catch (e: SerializationException) {
@@ -94,6 +97,7 @@ class GeminiAIClient : AIClient {
         model: String?
     ): String {
         return try {
+            ensureApiKey()
             Log.d(TAG, "Generating text content...")
             val response = textModel.generateContent(prompt)
             val text = response.text?.trim()
@@ -122,6 +126,7 @@ class GeminiAIClient : AIClient {
         model: String?
     ): Flow<String> = flow {
         try {
+            ensureApiKey()
             Log.d(TAG, "Starting streaming generation...")
             textModel.generateContentStream(prompt).collect { chunk ->
                 chunk.text?.let { emit(it) }
@@ -164,6 +169,12 @@ class GeminiAIClient : AIClient {
                 AIClientException.NetworkError(message, e)
             
             else -> AIClientException.ApiError(message, e)
+        }
+    }
+
+    private fun ensureApiKey() {
+        if (apiKey.isBlank()) {
+            throw AIClientException.AuthenticationError("Gemini API key is not configured.")
         }
     }
 }

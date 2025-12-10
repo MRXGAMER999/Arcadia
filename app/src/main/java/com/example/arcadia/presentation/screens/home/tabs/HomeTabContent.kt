@@ -283,38 +283,39 @@ fun HomeTabContent(
         
         // Game Rating Sheet for adding games (Home Tab)
         if (addGameSheetState.isOpen && addGameSheetState.originalGame != null) {
-            val game = addGameSheetState.originalGame!!
-            // Use unsaved entry if reopening, otherwise create fresh entry
-            val initialEntry = addGameSheetState.unsavedEntry ?: game.toGameListEntry()
-            // Original entry is always from the fresh game (for change detection)
-            val originalEntry = game.toGameListEntry()
-            
-            GameRatingSheet(
-                game = initialEntry,
-                isOpen = true,
-                onDismiss = { viewModel.dismissStatusPicker() },
-                onSave = { entry ->
-                    // Use addGameWithEntry to preserve all fields (rating, aspects, hoursPlayed, etc.)
-                    val entryWithGameData = entry.copy(
-                        rawgId = game.id,
-                        name = game.name,
-                        backgroundImage = game.backgroundImage,
-                        genres = game.genres,
-                        platforms = game.platforms,
-                        developers = game.developers,
-                        publishers = game.publishers,
-                        releaseDate = game.released
-                    )
-                    viewModel.addGameWithEntry(entryWithGameData)
-                },
-                onRemove = null,
-                isInLibrary = false,
-                onDismissWithUnsavedChanges = { unsavedEntry ->
-                    // Show snackbar with option to reopen or save
-                    viewModel.handleSheetDismissedWithUnsavedChanges(unsavedEntry, game)
-                },
-                originalEntry = originalEntry
-            )
+            addGameSheetState.originalGame?.let { game ->
+                // Use unsaved entry if reopening, otherwise create fresh entry
+                val initialEntry = addGameSheetState.unsavedEntry ?: game.toGameListEntry()
+                // Original entry is always from the fresh game (for change detection)
+                val originalEntry = game.toGameListEntry()
+
+                GameRatingSheet(
+                    game = initialEntry,
+                    isOpen = true,
+                    onDismiss = { viewModel.dismissStatusPicker() },
+                    onSave = { entry ->
+                        // Use addGameWithEntry to preserve all fields (rating, aspects, hoursPlayed, etc.)
+                        val entryWithGameData = entry.copy(
+                            rawgId = game.id,
+                            name = game.name,
+                            backgroundImage = game.backgroundImage,
+                            genres = game.genres,
+                            platforms = game.platforms,
+                            developers = game.developers,
+                            publishers = game.publishers,
+                            releaseDate = game.released
+                        )
+                        viewModel.addGameWithEntry(entryWithGameData)
+                    },
+                    onRemove = null,
+                    isInLibrary = false,
+                    onDismissWithUnsavedChanges = { unsavedEntry ->
+                        // Show snackbar with option to reopen or save
+                        viewModel.handleSheetDismissedWithUnsavedChanges(unsavedEntry, game)
+                    },
+                    originalEntry = originalEntry
+                )
+            }
         }
         
         // Unsaved changes snackbar for add game flow

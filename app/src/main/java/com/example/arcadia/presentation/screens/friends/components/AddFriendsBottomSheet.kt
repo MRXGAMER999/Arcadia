@@ -935,11 +935,13 @@ private fun MyCodeContent(currentUserId: String) {
                         .padding(dimens.paddingLarge),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        bitmap = qrCodeBitmap!!.asImageBitmap(),
-                        contentDescription = "Your QR Code",
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    qrCodeBitmap?.let { bitmap ->
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Your QR Code",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
             else -> {

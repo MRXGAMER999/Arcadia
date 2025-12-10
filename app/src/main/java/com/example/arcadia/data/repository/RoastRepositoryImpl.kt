@@ -6,8 +6,11 @@ import com.example.arcadia.data.local.entity.toRoastInsights
 import com.example.arcadia.domain.model.ai.RoastInsights
 import com.example.arcadia.domain.repository.RoastRepository
 import com.example.arcadia.domain.repository.RoastWithTimestamp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.serialization.json.Json
 
 /**
  * Implementation of RoastRepository using Room database for local storage.
@@ -19,6 +22,9 @@ class RoastRepositoryImpl(
     private val roastDao: RoastDao
 ) : RoastRepository {
     
+    // Shared Json instance to avoid repeated serializer creation
+    private val json = Json { ignoreUnknownKeys = true }
+    
     /**
      * Get the last saved roast as a Flow for reactive updates.
      * Converts the Room entity to domain model.
@@ -26,9 +32,9 @@ class RoastRepositoryImpl(
      * @return Flow emitting the last saved RoastInsights or null
      */
     override fun getLastRoast(userId: String): Flow<RoastInsights?> {
-        return roastDao.getLastRoast(userId).map { entity ->
-            entity?.toRoastInsights()
-        }
+        return roastDao.getLastRoast(userId)
+            .map { entity -> entity?.toRoastInsights() }
+            .flowOn(Dispatchers.Default)
     }
     
     /**
@@ -38,23 +44,24 @@ class RoastRepositoryImpl(
      * @return Flow emitting the last saved RoastWithTimestamp or null
      */
     override fun getLastRoastWithTimestamp(userId: String): Flow<RoastWithTimestamp?> {
-        return roastDao.getLastRoast(userId).map { entity ->
-            entity?.let {
-                // Parse badges manually here since we can't easily add it to toRoastInsights return
-                val badges = try {
-                    kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                        .decodeFromString<List<com.example.arcadia.domain.model.ai.Badge>>(it.badges)
-                } catch (e: Exception) {
-                    emptyList()
-                }
+        return roastDao.getLastRoast(userId)
+            .map { entity ->
+                entity?.let {
+                    // Parse badges manually here since we can't easily add it to toRoastInsights return
+                    val badges = try {
+                        json.decodeFromString<List<com.example.arcadia.domain.model.ai.Badge>>(it.badges)
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
 
-                RoastWithTimestamp(
-                    roast = it.toRoastInsights(),
-                    badges = badges,
-                    generatedAt = it.generatedAt
-                )
+                    RoastWithTimestamp(
+                        roast = it.toRoastInsights(),
+                        badges = badges,
+                        generatedAt = it.generatedAt
+                    )
+                }
             }
-        }
+            .flowOn(Dispatchers.Default)
     }
     
     /**

@@ -10,6 +10,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
+import io.kotzilla.sdk.analytics.koin.analytics
+import io.kotzilla.sdk.android.security.apiKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -64,6 +66,8 @@ class MyApplication : Application() {
         startKoin {
             androidLogger()
             androidContext(this@MyApplication)
+            // Add kotzilla analytics
+            analytics(onConfig = {apiKey()})
             modules(appModule)
         }
 

@@ -215,8 +215,9 @@ class RoastViewModel(
             
             // Save badges to cache if self-roast
             if (targetUserId == null && state.roast != null) {
+                val roast = state.roast
                 gamerRepository.getCurrentUserId()?.let { userId ->
-                    roastRepository.saveRoast(userId, state.roast!!, badges)
+                    roast?.let { roastRepository.saveRoast(userId, it, badges) }
                 }
             }
         }.onFailure { error ->

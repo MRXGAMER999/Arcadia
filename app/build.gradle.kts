@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.google.services)
     alias(libs.plugins.ksp)
     alias(libs.plugins.onesignal)
+    alias(libs.plugins.kotzilla)
 }
 
 android {
@@ -67,6 +68,10 @@ android {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         }
     }
+    kotzilla {
+        composeInstrumentation = true
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -126,6 +131,9 @@ dependencies {
     implementation(libs.koin.core)
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
+
+    //kotzilla
+    implementation(libs.kotzilla.sdk.compose)
     
     // Reorderable - drag and drop for LazyColumn/LazyVerticalGrid
     implementation("sh.calvin.reorderable:reorderable:2.4.0")

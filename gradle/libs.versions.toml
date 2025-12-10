@@ -3,6 +3,7 @@ agp = "8.13.1"
 coilCompose = "3.3.0"
 generativeai = "0.9.0"
 kotlin = "2.2.21"
+kotzilla = "1.4.1"
 room = "2.8.4"
 paging = "3.3.6"
 material3 = "1.5.0-alpha10"
@@ -66,6 +67,7 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 
+kotzilla-sdk-compose = { module = "io.kotzilla:kotzilla-sdk-compose", version.ref = "kotzilla" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 
 # Koin dependencies
@@ -117,3 +119,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 google-services = { id = "com.google.gms.google-services", version = "4.4.4" }
 ksp = { id = "com.google.devtools.ksp", version = "2.2.20-2.0.3" }
 onesignal = { id = "com.onesignal.androidsdk.onesignal-gradle-plugin", version = "0.14.0" }
+kotzilla = { id = "io.kotzilla.kotzilla-plugin", version.ref = "kotzilla" }

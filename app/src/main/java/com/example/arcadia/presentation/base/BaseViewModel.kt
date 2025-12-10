@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 
 /**
  * Base ViewModel class with common functionality for all ViewModels.
@@ -43,6 +45,7 @@ abstract class BaseViewModel : ViewModel() {
             val result = block()
             stateFlow.value = RequestState.Success(result)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             stateFlow.value = RequestState.Error(e.message ?: "Unknown error occurred")
         }
     }
@@ -187,6 +190,8 @@ abstract class BaseViewModel : ViewModel() {
         updateProgress: ((Float) -> Unit)? = null,
         onTimeout: suspend () -> Unit
     ): UndoOperation {
+        var cancelledByUser = false
+
         val job = viewModelScope.launch {
             val startTime = System.currentTimeMillis()
             val updateInterval = 50L // Update 20 times per second
@@ -208,7 +213,27 @@ abstract class BaseViewModel : ViewModel() {
             onTimeout()
         }
 
-        return UndoOperation(job, onTimeout, viewModelScope)
+        job.invokeOnCompletion { cause ->
+            if (cause is CancellationException && !cancelledByUser) {
+                // Ensure the timeout operation still executes even if the ViewModel scope is cancelled
+                CoroutineScope(Dispatchers.Default).launch {
+                    try {
+                        onTimeout()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // swallow to avoid crashing fallback path
+                    }
+                }
+            }
+        }
+
+        return UndoOperation(
+            job = job,
+            operation = onTimeout,
+            scope = viewModelScope,
+            onCancel = { cancelledByUser = true }
+        )
     }
 
     override fun onCleared() {
@@ -223,12 +248,14 @@ abstract class BaseViewModel : ViewModel() {
 class UndoOperation(
     private val job: Job,
     private val operation: suspend () -> Unit,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val onCancel: () -> Unit = {}
 ) {
     /**
      * Cancel the scheduled operation (undo).
      */
     fun cancel() {
+        onCancel()
         job.cancel()
     }
 
@@ -236,6 +263,7 @@ class UndoOperation(
      * Execute the operation immediately, bypassing the countdown.
      */
     fun executeNow() {
+        onCancel()
         job.cancel()
         scope.launch { operation() }
     }

@@ -91,8 +91,9 @@ fun RoastScreen(
 
     // Handle badge save notifications
     LaunchedEffect(state.badgeSaveError, state.badgesSaved) {
-        if (state.badgeSaveError != null) {
-            snackbarHostState.showSnackbar(state.badgeSaveError!!)
+        val badgeError = state.badgeSaveError
+        if (badgeError != null) {
+            snackbarHostState.showSnackbar(badgeError)
             viewModel.clearBadgeSaveState()
         } else if (state.badgesSaved) {
             snackbarHostState.showSnackbar("Badges saved to profile!")
@@ -152,19 +153,20 @@ fun RoastScreen(
                 
                 // Results state
                 state.roast != null -> {
+                    val roast = state.roast
                     val scrollState = rememberScrollState()
-                    LaunchedEffect(state.roast) {
+                    LaunchedEffect(roast) {
                         scrollState.scrollTo(0)
                     }
                     Column(modifier = Modifier.verticalScroll(scrollState)) {
                         AnimatedRoastResultCard(
-                            roast = state.roast!!,
+                            roast = roast ?: return@Column,
                             generatedAt = state.generatedAt ?: 0L,
                             revealPhase = state.revealPhase,
                             reduceMotion = state.reduceMotion,
                             onRegenerate = { viewModel.regenerateRoast() },
                             onShare = { 
-                                RoastShareHelper.shareRoast(context, state.roast!!)
+                                roast?.let { RoastShareHelper.shareRoast(context, it) }
                             },
                             badgesContent = {
                                 if (state.badges.isNotEmpty()) {

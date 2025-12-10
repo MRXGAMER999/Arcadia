@@ -289,10 +289,16 @@ class GameRepositoryImpl(
                 coroutineScope {
                     val gameDeferred = async { apiService.getGameDetails(gameId) }
                     val videosDeferred = async { 
-                        try { apiService.getGameVideos(gameId) } catch (e: Exception) { null } 
+                        try { apiService.getGameVideos(gameId) } catch (e: Exception) { 
+                            if (e is CancellationException) throw e
+                            null 
+                        } 
                     }
                     val screenshotsDeferred = async { 
-                        try { apiService.getGameScreenshots(gameId) } catch (e: Exception) { null } 
+                        try { apiService.getGameScreenshots(gameId) } catch (e: Exception) { 
+                            if (e is CancellationException) throw e
+                            null 
+                        } 
                     }
                     
                     val gameDto = gameDeferred.await()
@@ -338,66 +344,60 @@ class GameRepositoryImpl(
         emit(RequestState.Loading)
         
         val slugsHash = "${developerSlugs.orEmpty()}_${publisherSlugs.orEmpty()}".hashCode()
-        val cacheKey = CacheKeys.studioGames("$slugsHash", page)
+        val cacheKey = CacheKeys.studioGames("$slugsHash", page, pageSize)
         
         // Check cache first
         cacheManager.get<List<Game>>(cacheKey)?.let { cached ->
-            Log.d(TAG, "Cache hit for studio games (page $page)")
+            Log.d(TAG, "Cache hit for studio games (page $page, size $pageSize)")
             emit(RequestState.Success(cached))
             return@flow
         }
         
         try {
             val games = deduplicator.dedupe(cacheKey) {
-                // Fetch multiple pages in parallel for more results
-                val pagesToFetch = listOf(1, 2, 3)
-                val fetchPageSize = 40 // Max per page
-                
                 coroutineScope {
                     val deferredResults = mutableListOf<kotlinx.coroutines.Deferred<List<GameDto>>>()
-                    
-                    // Parallel fetch by developers (multiple pages)
+
+                    // Fetch by developers (requested page)
                     if (!developerSlugs.isNullOrBlank()) {
-                        pagesToFetch.forEach { pageNum ->
-                            deferredResults.add(async {
-                                try {
-                                    apiService.getGames(
-                                        page = pageNum,
-                                        pageSize = fetchPageSize,
-                                        developers = developerSlugs,
-                                        ordering = "-rating,-added"
-                                    ).results.also {
-                                        Log.d(TAG, "Fetched ${it.size} games by developers (page $pageNum)")
-                                    }
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Error fetching developers page $pageNum: ${e.message}")
-                                    emptyList()
+                        deferredResults.add(async {
+                            try {
+                                apiService.getGames(
+                                    page = page,
+                                    pageSize = pageSize,
+                                    developers = developerSlugs,
+                                    ordering = "-rating,-added"
+                                ).results.also {
+                                    Log.d(TAG, "Fetched ${it.size} games by developers (page $page, size $pageSize)")
                                 }
-                            })
-                        }
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                Log.w(TAG, "Error fetching developers page $page: ${e.message}")
+                                emptyList()
+                            }
+                        })
                     }
-                    
-                    // Parallel fetch by publishers (multiple pages)
+
+                    // Fetch by publishers (requested page)
                     if (!publisherSlugs.isNullOrBlank()) {
-                        pagesToFetch.forEach { pageNum ->
-                            deferredResults.add(async {
-                                try {
-                                    apiService.getGames(
-                                        page = pageNum,
-                                        pageSize = fetchPageSize,
-                                        publishers = publisherSlugs,
-                                        ordering = "-rating,-added"
-                                    ).results.also {
-                                        Log.d(TAG, "Fetched ${it.size} games by publishers (page $pageNum)")
-                                    }
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Error fetching publishers page $pageNum: ${e.message}")
-                                    emptyList()
+                        deferredResults.add(async {
+                            try {
+                                apiService.getGames(
+                                    page = page,
+                                    pageSize = pageSize,
+                                    publishers = publisherSlugs,
+                                    ordering = "-rating,-added"
+                                ).results.also {
+                                    Log.d(TAG, "Fetched ${it.size} games by publishers (page $page, size $pageSize)")
                                 }
-                            })
-                        }
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                Log.w(TAG, "Error fetching publishers page $page: ${e.message}")
+                                emptyList()
+                            }
+                        })
                     }
-                    
+
                     // Wait for all parallel requests to complete
                     val allGameDtos = deferredResults.awaitAll().flatten()
                     
@@ -412,12 +412,15 @@ class GameRepositoryImpl(
                         }
                     }
                     
-                    // Sort by rating (best first)
-                    uniqueGames.sortedByDescending { it.rating }
+                    // Sort by rating (best first) and apply pagination
+                    val sorted = uniqueGames.sortedByDescending { it.rating }
+                    val startIndex = ((page - 1) * pageSize).coerceAtLeast(0)
+                    if (startIndex >= sorted.size) emptyList()
+                    else sorted.drop(startIndex).take(pageSize)
                 }
             }
             
-            Log.d(TAG, "Total unique games for studios: ${games.size}")
+            Log.d(TAG, "Total unique games for studios (page $page, size $pageSize): ${games.size}")
             cacheManager.put(cacheKey, games)
             emit(RequestState.Success(games))
         } catch (e: CancellationException) {
@@ -473,6 +476,7 @@ class GameRepositoryImpl(
                                     ordering = ordering ?: "-rating,-added"
                                 ).results
                             } catch (e: Exception) {
+                                if (e is CancellationException) throw e
                                 Log.w(TAG, "Failed to fetch by developers: ${e.message}")
                                 emptyList()
                             }
@@ -489,6 +493,7 @@ class GameRepositoryImpl(
                                     ordering = ordering ?: "-rating,-added"
                                 ).results
                             } catch (e: Exception) {
+                                if (e is CancellationException) throw e
                                 Log.w(TAG, "Failed to fetch by publishers: ${e.message}")
                                 emptyList()
                             }
