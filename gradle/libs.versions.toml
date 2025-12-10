@@ -28,7 +28,7 @@ okhttp = "5.3.2"
 zxing = "3.5.4"
 mlkitBarcodeScanning = "17.3.0"
 cameraX = "1.5.2"
-accompanistPermissions = "0.36.0"
+accompanistPermissions = "0.37.3"
 # OneSignal
 onesignal = "5.4.1"
 

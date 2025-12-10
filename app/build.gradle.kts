@@ -68,14 +68,16 @@ android {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         }
     }
-    kotzilla {
-        composeInstrumentation = true
-    }
+
 
     buildFeatures {
         compose = true
         buildConfig = true
     }
+}
+
+kotzilla {
+    composeInstrumentation = true
 }
 
 dependencies {

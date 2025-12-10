@@ -12,11 +12,11 @@ object GroqConfig {
     const val BASE_URL = "https://api.groq.com/"
     
     // Primary model - Kimi K2 (best quality but has rate limits)
-    const val MODEL_NAME = "llama-3.3-70b-versatile"
+    const val MODEL_NAME = "moonshotai/kimi-k2-instruct-0905"
     
     // Fallback models in order of preference (used when primary fails)
     val FALLBACK_MODELS = listOf(
-        "moonshotai/kimi-k2-instruct-0905",
+        "llama-3.3-70b-versatile",
         "meta-llama/llama-4-scout-17b-16e-instruct",
     )
     

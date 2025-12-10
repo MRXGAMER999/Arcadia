@@ -10,6 +10,8 @@ import com.example.arcadia.domain.model.DiscoveryFilterState
 import com.example.arcadia.domain.model.DiscoverySortOrder
 import com.example.arcadia.domain.model.DiscoverySortType
 import com.example.arcadia.domain.model.Game
+import com.example.arcadia.domain.model.GameListEntry
+import com.example.arcadia.domain.model.GameStatus
 import com.example.arcadia.domain.model.ReleaseTimeframe
 import com.example.arcadia.domain.model.StudioFilterState
 import com.example.arcadia.domain.model.StudioFilterType
@@ -369,8 +371,8 @@ class DiscoveryViewModel(
     fun loadMoreDiscoveryResults() {
         if (isLoadingMoreDiscovery || !discoveryFilterState.hasActiveFilters) return
 
+        isLoadingMoreDiscovery = true
         launchWithKey("load_more_discovery") {
-            isLoadingMoreDiscovery = true
             try {
                 if (discoveryFilterState.sortType == DiscoverySortType.AI_RECOMMENDATION) {
                     // Increment page before fetching to get more games
@@ -760,11 +762,24 @@ class DiscoveryViewModel(
             // Update gamesInLibrary to ensure we have the latest library state
             val currentLibraryIds = libraryState.data.map { it.rawgId }.toSet()
             gamesInLibrary = currentLibraryIds
+            val allOwnedGameNames = libraryState.data.map { it.name }.toSet()
             
             // Limit library size for AI analysis to prevent token limit issues
+            // Sort by RELEVANCE instead of just recency to give AI the best context
+            // 1. High Rating (>= 8.0)
+            // 2. Active/Finished status
+            // 3. Significant playtime (> 10h)
+            // 4. Recently added
+            val sortedLibrary = libraryState.data.sortedWith(
+                compareByDescending<GameListEntry> { (it.rating ?: 0f) >= 8f }
+                    .thenByDescending { it.status == GameStatus.FINISHED || it.status == GameStatus.PLAYING }
+                    .thenByDescending { it.hoursPlayed >= 10 }
+                    .thenByDescending { it.addedAt }
+            )
+            
             // Use top 50 most recent/relevant games for analysis
-            val limitedLibrary = libraryState.data.take(50)
-            android.util.Log.d(TAG, "Using ${limitedLibrary.size} of ${libraryState.data.size} library games for AI analysis")
+            val limitedLibrary = sortedLibrary.take(50)
+            android.util.Log.d(TAG, "Using ${limitedLibrary.size} of ${libraryState.data.size} library games for AI analysis (sorted by relevance)")
 
             // 2. Use fixed batch size and send prior recs to avoid duplicates without growing tokens
             val count = AI_RECOMMENDATION_BATCH
@@ -776,7 +791,8 @@ class DiscoveryViewModel(
                 games = limitedLibrary, 
                 count = count,
                 forceRefresh = forceRefresh,
-                excludeGames = excludeGames
+                excludeGames = excludeGames,
+                allOwnedGames = allOwnedGameNames
             )
             
             aiResult.fold(
@@ -868,7 +884,19 @@ class DiscoveryViewModel(
                                     .first()
                             }
                             if (searchResult is RequestState.Success && searchResult.data.isNotEmpty()) {
-                                searchResult.data.first()
+                                val game = searchResult.data.first()
+                                // VALIDATION: Ensure game is actually released (AI sometimes hallucinates dates)
+                                val isReleased = try {
+                                    game.released?.let { dateStr ->
+                                        // Simple string comparison YYYY-MM-DD works, or use LocalDate
+                                        val releasedDate = java.time.LocalDate.parse(dateStr, java.time.format.DateTimeFormatter.ISO_DATE)
+                                        releasedDate.isBefore(java.time.LocalDate.now()) || releasedDate.isEqual(java.time.LocalDate.now())
+                                    } ?: true // Assume released if null, or false? Let's assume released to be safe, or check status
+                                } catch (e: Exception) {
+                                    true 
+                                }
+                                
+                                if (isReleased) game else null
                             } else {
                                 null
                             }

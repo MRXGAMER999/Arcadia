@@ -52,7 +52,8 @@ interface AIRepository {
         games: List<GameListEntry>,
         count: Int = 10,
         forceRefresh: Boolean = false,
-        excludeGames: List<String> = emptyList()
+        excludeGames: List<String> = emptyList(),
+        allOwnedGames: Set<String>? = null
     ): Result<AIGameSuggestions>
 
     // ==================== Profile Analysis ====================

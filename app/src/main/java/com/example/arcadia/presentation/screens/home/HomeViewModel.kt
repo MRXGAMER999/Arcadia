@@ -9,8 +9,6 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.filter
 import com.example.arcadia.domain.repository.AIRepository
-import com.example.arcadia.domain.repository.FriendsRepository
-import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.presentation.base.LibraryAwareViewModel
 import com.example.arcadia.domain.model.DiscoveryFilterState
 import com.example.arcadia.domain.model.DiscoverySortOrder
@@ -24,7 +22,7 @@ import com.example.arcadia.domain.repository.GameListRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.PagedGameRepository
 import com.example.arcadia.domain.usecase.AddGameToLibraryUseCase
-import com.example.arcadia.domain.usecase.ParallelGameFilter // Kept for DI, may be used for future local filtering
+import com.example.arcadia.domain.usecase.GetPendingFriendRequestsCountUseCase
 import com.example.arcadia.util.PreferencesManager
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.Job
@@ -36,7 +34,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -63,10 +60,8 @@ class HomeViewModel(
     private val aiRepository: AIRepository,
     private val preferencesManager: PreferencesManager,
     addGameToLibraryUseCase: AddGameToLibraryUseCase,
-    @Suppress("unused") private val parallelGameFilter: ParallelGameFilter, // Kept for potential future local filtering
     private val pagedGameRepository: PagedGameRepository, // Paging 3 repository for AI recommendations
-    private val friendsRepository: FriendsRepository, // For pending friend request count
-    private val gamerRepository: GamerRepository // For current user ID
+    private val getPendingFriendRequestsCountUseCase: GetPendingFriendRequestsCountUseCase // For pending friend request badge
 ) : LibraryAwareViewModel(gameListRepository, addGameToLibraryUseCase) {
     
     companion object {
@@ -185,10 +180,8 @@ class HomeViewModel(
      * Requirements: 2.3, 2.4, 2.5
      */
     private fun observePendingFriendRequestCount() {
-        val userId = gamerRepository.getCurrentUserId() ?: return
-        
         launchWithKey("pending_friend_request_count") {
-            friendsRepository.getPendingRequestCountRealtime(userId).collect { count ->
+            getPendingFriendRequestsCountUseCase().collect { count ->
                 _pendingFriendRequestCount.value = count
             }
         }

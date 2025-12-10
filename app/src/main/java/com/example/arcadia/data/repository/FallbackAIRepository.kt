@@ -52,11 +52,12 @@ class FallbackAIRepository(
         games: List<GameListEntry>,
         count: Int,
         forceRefresh: Boolean,
-        excludeGames: List<String>
+        excludeGames: List<String>,
+        allOwnedGames: Set<String>?
     ): Result<AIGameSuggestions> {
         return tryWithFallbackAndRetry("getLibraryBasedRecommendations") {
-            primaryRepository.getLibraryBasedRecommendations(games, count, forceRefresh, excludeGames)
-        } ?: fallbackRepository.getLibraryBasedRecommendations(games, count, forceRefresh, excludeGames)
+            primaryRepository.getLibraryBasedRecommendations(games, count, forceRefresh, excludeGames, allOwnedGames)
+        } ?: fallbackRepository.getLibraryBasedRecommendations(games, count, forceRefresh, excludeGames, allOwnedGames)
     }
 
     // ==================== Profile Analysis ====================

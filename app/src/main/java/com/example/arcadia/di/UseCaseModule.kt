@@ -9,6 +9,7 @@ import com.example.arcadia.domain.usecase.FilterGamesUseCase
 import com.example.arcadia.domain.usecase.GetAIGameSuggestionsUseCase
 import com.example.arcadia.domain.usecase.GetNewReleasesUseCase
 import com.example.arcadia.domain.usecase.GetPopularGamesUseCase
+import com.example.arcadia.domain.usecase.GetPendingFriendRequestsCountUseCase
 import com.example.arcadia.domain.usecase.GetRecommendedGamesUseCase
 import com.example.arcadia.domain.usecase.GetUpcomingGamesUseCase
 import com.example.arcadia.domain.usecase.ParallelGameFilter
@@ -84,6 +85,11 @@ val useCaseModule = module {
     
     /** Filters games by various criteria */
     factory { FilterGamesUseCase() }
+    
+    // ==================== Social Use Cases ====================
+    
+    /** Observes pending friend requests for badge display */
+    factory { GetPendingFriendRequestsCountUseCase(get(), get()) }
     
     // ==================== Studio Use Cases ====================
     

@@ -193,7 +193,8 @@ class AIRecommendationsRemoteMediator(
             val aiResult = aiRepository.getLibraryBasedRecommendations(
                 games = limitedLibrary,
                 count = recommendationCount,
-                forceRefresh = true
+                forceRefresh = true,
+                allOwnedGames = userLibrary.map { it.name }.toSet()
             )
             
             val suggestions = aiResult.getOrElse { error ->
@@ -381,7 +382,8 @@ class AIRecommendationsRemoteMediator(
                 games = userLibrary,
                 count = recommendationCount,
                 forceRefresh = true,
-                excludeGames = alreadyRecommendedGames // Tell AI to not recommend these again
+                excludeGames = alreadyRecommendedGames, // Tell AI to not recommend these again
+                allOwnedGames = userLibrary.map { it.name }.toSet()
             )
             
             val suggestions = aiResult.getOrElse { error ->

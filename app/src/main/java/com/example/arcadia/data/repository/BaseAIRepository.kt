@@ -316,7 +316,8 @@ abstract class BaseAIRepository(
         games: List<GameListEntry>,
         count: Int,
         forceRefresh: Boolean,
-        excludeGames: List<String>
+        excludeGames: List<String>,
+        allOwnedGames: Set<String>?
     ): Result<AIGameSuggestions> {
         if (games.isEmpty()) {
             return Result.failure(AIError.EmptyResponseError(
@@ -353,7 +354,7 @@ abstract class BaseAIRepository(
 
         // Create new request with deduplication
         val deferred = CoroutineScope(Dispatchers.IO).async {
-            performLibraryBasedRecommendations(games, count, cacheKey, excludeGames)
+            performLibraryBasedRecommendations(games, count, cacheKey, excludeGames, allOwnedGames)
         }
 
         deduplicationMutex.withLock {
@@ -373,7 +374,8 @@ abstract class BaseAIRepository(
         games: List<GameListEntry>,
         count: Int,
         cacheKey: String,
-        excludeGames: List<String> = emptyList()
+        excludeGames: List<String> = emptyList(),
+        allOwnedGames: Set<String>? = null
     ): Result<AIGameSuggestions> {
         return try {
             val libraryString = buildEnhancedLibraryString(games)
@@ -406,7 +408,7 @@ abstract class BaseAIRepository(
                 ?: return Result.failure(AIError.InvalidResponseError(rawResponse = text))
             
             // Filter out games already in library
-            val filteredSuggestions = filterOwnedGames(suggestions, games)
+            val filteredSuggestions = filterOwnedGames(suggestions, allOwnedGames ?: games.map { it.name }.toSet())
             
             Log.d(TAG, "Returning ${filteredSuggestions.games.size} recommendations (filtered from ${suggestions.games.size})")
             
@@ -563,9 +565,9 @@ abstract class BaseAIRepository(
     
     private fun filterOwnedGames(
         suggestions: AIGameSuggestions, 
-        ownedGames: List<GameListEntry>
+        ownedGameNames: Set<String>
     ): AIGameSuggestions {
-        val libraryNames = ownedGames.map { it.name.lowercase() }.toSet()
+        val libraryNames = ownedGameNames.map { it.lowercase() }.toSet()
         
         val filteredGames = suggestions.games.filter { gameName ->
             val lowerName = gameName.lowercase()
