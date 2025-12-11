@@ -94,8 +94,7 @@ val repositoryModule = module {
     /** Repository for user's game list - now using Appwrite (Requirements: 10.2) */
     single<GameListRepository> {
         GameListRepositoryImpl(
-            tablesDb = get(),
-            realtime = get()
+            remoteDataSource = get()
         )
     }
     
