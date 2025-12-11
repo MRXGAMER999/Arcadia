@@ -257,8 +257,17 @@ class FriendsViewModel(
         val userId = currentUserId ?: return
         
         launchWithKey("pending_count") {
-            friendsRepository.getPendingRequestCountRealtime(userId).collect { count ->
-                _uiState.update { it.copy(pendingRequestCount = count) }
+            friendsRepository.getPendingRequestCountRealtime(userId).collect { state ->
+                when (state) {
+                    is RequestState.Success -> _uiState.update { it.copy(pendingRequestCount = state.data) }
+                    is RequestState.Error -> {
+                        Log.w(TAG, "Failed to load pending request count: ${state.message}")
+                        _uiState.update { it.copy(pendingRequestCount = 0) }
+                    }
+                    RequestState.Loading, RequestState.Idle -> {
+                        // Keep existing count to avoid flicker
+                    }
+                }
             }
         }
     }

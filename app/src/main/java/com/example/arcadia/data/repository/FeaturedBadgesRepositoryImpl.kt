@@ -1,110 +1,67 @@
 package com.example.arcadia.data.repository
 
+import android.util.Log
+import com.example.arcadia.data.datasource.GamerRemoteDataSource
 import com.example.arcadia.domain.model.ai.Badge
 import com.example.arcadia.domain.repository.FeaturedBadgesRepository
-import com.google.firebase.Firebase
-import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
- * Implementation of FeaturedBadgesRepository using Firestore.
- * 
- * Firestore Structure:
- * users/{userId}
- * └── featuredBadges: [
- *       { "title": "Badge Title", "emoji": "🎮", "reason": "Why earned" },
- *       ...
- *     ]
- * 
- * Requirements: 8.3
+ * Refactored FeaturedBadgesRepository implementation.
+ * Uses GamerRemoteDataSource to access user data.
  */
-class FeaturedBadgesRepositoryImpl : FeaturedBadgesRepository {
-    
-    private val firestore = Firebase.firestore
-    private val usersCollection = firestore.collection("users")
+class FeaturedBadgesRepositoryImpl(
+    private val remoteDataSource: GamerRemoteDataSource
+) : FeaturedBadgesRepository {
     
     companion object {
+        private const val TAG = "FeaturedBadgesRepo"
         private const val FEATURED_BADGES_FIELD = "featuredBadges"
         private const val MAX_FEATURED_BADGES = 3
+        
+        private val json = Json { 
+            ignoreUnknownKeys = true 
+            encodeDefaults = true
+        }
     }
     
     override suspend fun saveFeaturedBadges(userId: String, badges: List<Badge>): Result<Unit> {
         return try {
-            // Enforce max 3 badges limit
             val badgesToSave = badges.take(MAX_FEATURED_BADGES)
+            val badgesJson = json.encodeToString(badgesToSave)
             
-            // Convert badges to Firestore-compatible maps
-            val badgeMaps = badgesToSave.map { badge ->
-                mapOf(
-                    "title" to badge.title,
-                    "emoji" to badge.emoji,
-                    "reason" to badge.reason
-                )
-            }
+            remoteDataSource.updateUser(userId, mapOf(FEATURED_BADGES_FIELD to badgesJson))
             
-            usersCollection
-                .document(userId)
-                .update(FEATURED_BADGES_FIELD, badgeMaps)
-                .await()
-            
+            Log.d(TAG, "Featured badges saved successfully for user: $userId")
             Result.success(Unit)
         } catch (e: Exception) {
-            android.util.Log.e("FeaturedBadgesRepo", "Error saving featured badges: ${e.message}", e)
+            Log.e(TAG, "Error saving featured badges: ${e.message}", e)
             Result.failure(e)
         }
     }
 
-    
-    override fun getFeaturedBadges(userId: String): Flow<List<Badge>> = callbackFlow {
-        val listenerRegistration = usersCollection
-            .document(userId)
-            .addSnapshotListener { documentSnapshot, error ->
-                if (error != null) {
-                    android.util.Log.e("FeaturedBadgesRepo", "Error listening for badges: ${error.message}")
-                    trySend(emptyList())
-                    return@addSnapshotListener
-                }
-                
-                if (documentSnapshot != null && documentSnapshot.exists()) {
-                    val badges = parseFeaturedBadges(documentSnapshot.get(FEATURED_BADGES_FIELD))
-                    trySend(badges)
-                } else {
-                    trySend(emptyList())
-                }
+    override fun getFeaturedBadges(userId: String): Flow<List<Badge>> {
+        return remoteDataSource.observeUser(userId)
+            .map { row ->
+                parseFeaturedBadges(row.data[FEATURED_BADGES_FIELD])
             }
-        
-        awaitClose {
-            listenerRegistration.remove()
-        }
     }
     
-    /**
-     * Parses the featuredBadges field from Firestore into a list of Badge objects.
-     * Handles various data formats gracefully.
-     */
-    @Suppress("UNCHECKED_CAST")
     private fun parseFeaturedBadges(data: Any?): List<Badge> {
         if (data == null) return emptyList()
         
         return try {
-            val badgesList = data as? List<Map<String, Any?>> ?: return emptyList()
+            val jsonString = data as? String
+            if (jsonString.isNullOrEmpty()) return emptyList()
             
-            badgesList.mapNotNull { badgeMap ->
-                val title = badgeMap["title"] as? String
-                val emoji = badgeMap["emoji"] as? String
-                val reason = badgeMap["reason"] as? String ?: ""
-                
-                if (title != null && emoji != null) {
-                    Badge(title = title, emoji = emoji, reason = reason)
-                } else {
-                    null
-                }
-            }
+            json.decodeFromString<List<Badge>>(jsonString)
         } catch (e: Exception) {
-            android.util.Log.e("FeaturedBadgesRepo", "Error parsing badges: ${e.message}")
+            Log.e(TAG, "Error parsing badges JSON: ${e.message}")
             emptyList()
         }
     }

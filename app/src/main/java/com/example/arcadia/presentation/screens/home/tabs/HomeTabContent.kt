@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.arcadia.data.remote.mapper.toGameListEntry
+import com.example.arcadia.domain.model.Game
 import com.example.arcadia.presentation.components.ScrollToTopFAB
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
@@ -42,13 +43,11 @@ import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.util.RequestState
 
 import androidx.paging.LoadState
-import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.LazyPagingItems
 
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collect
@@ -65,16 +64,14 @@ fun HomeTabContent(
     viewModel: HomeViewModel,
     onGameClick: (Int) -> Unit,
     snackbarHostState: SnackbarHostState,
-    listState: LazyListState = rememberLazyListState()
+    listState: LazyListState = rememberLazyListState(),
+    aiPagingItems: LazyPagingItems<Game>
 ) {
     val screenState = viewModel.screenState
     val addGameSheetState by viewModel.addGameSheetState.collectAsState()
     val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
     val pullToRefreshState = rememberPullToRefreshState()
     
-    // Use offline-capable Paging 3 flow for recommendations
-    val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
-
     // Manage scroll state manually for Paging 3 using ViewModel state
     // This ensures persistence even if the View is destroyed/recreated
     
@@ -237,7 +234,10 @@ fun HomeTabContent(
                     // Show cached data (limit to 3)
                     items(
                         count = minOf(aiPagingItems.itemCount, 3),
-                        key = { index -> aiPagingItems[index]?.id ?: index }
+                        key = { index -> 
+                            val item = aiPagingItems[index]
+                            if (item != null) "${item.id}-$index" else index
+                        }
                     ) { index ->
                         val game = aiPagingItems[index]
                         if (game != null) {

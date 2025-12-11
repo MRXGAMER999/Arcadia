@@ -24,7 +24,6 @@ import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.domain.repository.GameRepository
 import com.example.arcadia.domain.repository.PagedGameRepository
 import com.example.arcadia.domain.repository.RoastRepository
-import com.google.firebase.firestore.FirebaseFirestore
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -35,64 +34,102 @@ import org.koin.dsl.module
  */
 val repositoryModule = module {
     
-    // ==================== Firebase ====================
-    
-    /** Firebase Firestore instance - lazy to avoid blocking startup */
-    single(createdAtStart = false) { FirebaseFirestore.getInstance() }
-    
+    // ==================== Data Sources ====================
+
+    single<com.example.arcadia.data.datasource.FriendsRemoteDataSource> {
+        com.example.arcadia.data.datasource.FriendsRemoteDataSourceImpl(
+            tablesDbLazy = lazy { get() },
+            realtimeLazy = lazy { get() }
+        )
+    }
+
+    single<com.example.arcadia.data.datasource.GameListRemoteDataSource> {
+        com.example.arcadia.data.datasource.GameListRemoteDataSourceImpl(
+            tablesDbLazy = lazy { get() },
+            realtimeLazy = lazy { get() }
+        )
+    }
+
+    single<com.example.arcadia.data.datasource.GamerRemoteDataSource> {
+        com.example.arcadia.data.datasource.GamerRemoteDataSourceImpl(
+            tablesDbLazy = lazy { get() },
+            storageLazy = lazy { get() },
+            realtimeLazy = lazy { get() }
+        )
+    }
+
     // ==================== Repositories ====================
-    
-    /** Repository for gamer/user data */
-    single<GamerRepository> { GamerRepositoryImpl() }
-    
+
+    /** Repository for gamer/user data - now using Appwrite (Requirements: 10.2) */
+    single<GamerRepository> {
+        GamerRepositoryImpl(
+            context = androidContext(),
+            remoteDataSource = get()
+        )
+    }
+
     /** OneSignal notification service for push notifications (Requirements: 10.6, 10.7, 10.8) */
     single { OneSignalNotificationService(get()) }
-    
-    /** Repository for friends and friend requests (Requirements: 1.1, 3.5, 6.3, 8.1-8.4, 14.1-14.7) */
-    single<FriendsRepository> { FriendsRepositoryImpl(get(), get()) }
-    
-    /** 
-     * Repository for game data from RAWG API
+
+    /** Repository for friends and friend requests - now using Appwrite (Requirements: 10.2) */
+    single<FriendsRepository> {
+        FriendsRepositoryImpl(
+            remoteDataSource = get(),
+            notificationService = get()
+        )
+    }
+
+    /**
+     * Repository for game data from RAWG APIok
      * Now includes caching and request deduplication for faster performance
      */
-    single<GameRepository> { 
+    single<GameRepository> {
         GameRepositoryImpl(
             apiService = get(),
             cacheManager = get(),
             deduplicator = get()
-        ) 
+        )
+    }
+
+    /** Repository for user's game list - now using Appwrite (Requirements: 10.2) */
+    single<GameListRepository> {
+        GameListRepositoryImpl(
+            tablesDb = get(),
+            realtime = get()
+        )
     }
     
-    /** Repository for user's game list (Firebase) */
-    single<GameListRepository> { GameListRepositoryImpl() }
-    
     // ==================== Studio Cache Dependencies ====================
-    
+
     /** Local database for studio caching - lazy to avoid blocking startup */
     single(createdAtStart = false) { StudioCacheDatabase.getInstance(androidContext()) }
-    
+
     /** Manager for studio cache operations */
     single(createdAtStart = false) { StudioCacheManager(get()) }
-    
+
     // ==================== Game Cache Dependencies (Paging 3) ====================
-    
+
     /** Local database for game caching (AI recommendations + feedback) - lazy */
     single(createdAtStart = false) { GameCacheDatabase.getInstance(androidContext()) }
-    
+
     /** DAO for cached games (used by Paging 3 RemoteMediator) */
     single(createdAtStart = false) { get<GameCacheDatabase>().cachedGamesDao() }
-    
+
     /** DAO for recommendation feedback (tracks user interactions for AI improvement) */
     single<RecommendationFeedbackDao>(createdAtStart = false) { get<GameCacheDatabase>().recommendationFeedbackDao() }
-    
+
     /** DAO for roast storage (Requirements: 6.1) */
     single(createdAtStart = false) { get<GameCacheDatabase>().roastDao() }
-    
+
     /** Repository for roast data persistence (Requirements: 6.1) */
     single<RoastRepository> { RoastRepositoryImpl(get()) }
-    
-    /** Repository for featured badges on user profiles (Requirements: 8.3) */
-    single<FeaturedBadgesRepository> { FeaturedBadgesRepositoryImpl() }
+
+    /** Repository for featured badges on user profiles - now using Appwrite (Requirements: 6.1, 6.2, 6.3, 10.2) */
+    single<FeaturedBadgesRepository> {
+        FeaturedBadgesRepositoryImpl(
+            remoteDataSource = get()
+        )
+    }
     
     /** 
      * Paged Game Repository for Paging 3 integration.

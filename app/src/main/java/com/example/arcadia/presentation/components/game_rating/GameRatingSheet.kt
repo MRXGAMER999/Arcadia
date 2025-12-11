@@ -182,101 +182,107 @@ fun GameRatingSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight()
-                    .verticalScroll(scrollState)
                     .padding(horizontal = 18.dp)
                     .padding(bottom = 24.dp, top = 8.dp)
             ) {
-                SheetTitle(
-                    gameName = game.name,
-                    rating = if (sliderValue > 0) String.format("%.1f", sliderValue) else "Not Rated",
-                    ratingDescription = getRatingDescription(sliderValue),
-                    onClose = {
-                        // Same behavior as dismissing the sheet
-                        if (saveClicked || isRemovalInProgress) {
-                            onDismiss()
-                            return@SheetTitle
-                        }
-                        
-                        val currentHasChanges = hasChanges()
-                        
-                        if (!isInLibrary) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                ) {
+                    SheetTitle(
+                        gameName = game.name,
+                        rating = if (sliderValue > 0) String.format("%.1f", sliderValue) else "Not Rated",
+                        ratingDescription = getRatingDescription(sliderValue),
+                        onClose = {
+                            // Same behavior as dismissing the sheet
+                            if (saveClicked || isRemovalInProgress) {
+                                onDismiss()
+                                return@SheetTitle
+                            }
+                            
+                            val currentHasChanges = hasChanges()
+                            
+                            if (!isInLibrary) {
+                                if (currentHasChanges && onDismissWithUnsavedChanges != null) {
+                                    onDismissWithUnsavedChanges(buildCurrentEntry())
+                                }
+                                onDismiss()
+                                return@SheetTitle
+                            }
+                            
                             if (currentHasChanges && onDismissWithUnsavedChanges != null) {
                                 onDismissWithUnsavedChanges(buildCurrentEntry())
                             }
                             onDismiss()
-                            return@SheetTitle
                         }
-                        
-                        if (currentHasChanges && onDismissWithUnsavedChanges != null) {
-                            onDismissWithUnsavedChanges(buildCurrentEntry())
-                        }
-                        onDismiss()
+                    )
+
+                    // Hide Playtime and Aspects sections for "Want to Play" games
+                    if (selectedClassification != GameStatus.WANT) {
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        GameBestAspectsSection(
+                            isExpanded = isBestAspectsExpanded,
+                            onToggleExpanded = { isBestAspectsExpanded = !isBestAspectsExpanded },
+                            aspectsList = aspectsList,
+                            selectedAspects = selectedAspects,
+                            onAspectToggle = { aspect ->
+                                selectedAspects = if (selectedAspects.contains(aspect)) {
+                                    selectedAspects - aspect
+                                } else {
+                                    selectedAspects + aspect
+                                }
+                            },
+                            onAspectEdit = { oldAspect, newAspect ->
+                                aspectsList = aspectsList.map { if (it == oldAspect) newAspect else it }
+                                if (selectedAspects.contains(oldAspect)) {
+                                    selectedAspects = selectedAspects - oldAspect + newAspect
+                                }
+                            },
+                            onAspectDelete = { aspect ->
+                                aspectsList = aspectsList - aspect
+                                selectedAspects = selectedAspects - aspect
+                            },
+                            onAspectAdd = { newAspect ->
+                                if (!aspectsList.contains(newAspect)) {
+                                    aspectsList = aspectsList + newAspect
+                                }
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        PlaytimeSection(
+                            isExpanded = isPlaytimeExpanded,
+                            onToggleExpanded = { isPlaytimeExpanded = !isPlaytimeExpanded },
+                            selectedPlaytime = selectedPlaytime,
+                            onPlaytimeSelect = { selectedPlaytime = it }
+                        )
                     }
-                )
 
-                // Hide Playtime and Aspects sections for "Want to Play" games
-                if (selectedClassification != GameStatus.WANT) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    GameBestAspectsSection(
-                        isExpanded = isBestAspectsExpanded,
-                        onToggleExpanded = { isBestAspectsExpanded = !isBestAspectsExpanded },
-                        aspectsList = aspectsList,
-                        selectedAspects = selectedAspects,
-                        onAspectToggle = { aspect ->
-                            selectedAspects = if (selectedAspects.contains(aspect)) {
-                                selectedAspects - aspect
-                            } else {
-                                selectedAspects + aspect
-                            }
-                        },
-                        onAspectEdit = { oldAspect, newAspect ->
-                            aspectsList = aspectsList.map { if (it == oldAspect) newAspect else it }
-                            if (selectedAspects.contains(oldAspect)) {
-                                selectedAspects = selectedAspects - oldAspect + newAspect
-                            }
-                        },
-                        onAspectDelete = { aspect ->
-                            aspectsList = aspectsList - aspect
-                            selectedAspects = selectedAspects - aspect
-                        },
-                        onAspectAdd = { newAspect ->
-                            if (!aspectsList.contains(newAspect)) {
-                                aspectsList = aspectsList + newAspect
-                            }
-                        }
+                    // Classification section (right above rating)
+                    ClassificationSection(
+                        isExpanded = isClassificationExpanded,
+                        onToggleExpanded = { isClassificationExpanded = !isClassificationExpanded },
+                        selectedClassification = selectedClassification,
+                        onClassificationSelect = { selectedClassification = it }
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    PlaytimeSection(
-                        isExpanded = isPlaytimeExpanded,
-                        onToggleExpanded = { isPlaytimeExpanded = !isPlaytimeExpanded },
-                        selectedPlaytime = selectedPlaytime,
-                        onPlaytimeSelect = { selectedPlaytime = it }
+                    SlideToRateSection(
+                        isExpanded = isSlideToRateExpanded,
+                        onToggleExpanded = { isSlideToRateExpanded = !isSlideToRateExpanded },
+                        sliderValue = sliderValue,
+                        onSliderChange = { sliderValue = it },
+                        onClearRating = { sliderValue = 0f }
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Classification section (right above rating)
-                ClassificationSection(
-                    isExpanded = isClassificationExpanded,
-                    onToggleExpanded = { isClassificationExpanded = !isClassificationExpanded },
-                    selectedClassification = selectedClassification,
-                    onClassificationSelect = { selectedClassification = it }
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                SlideToRateSection(
-                    isExpanded = isSlideToRateExpanded,
-                    onToggleExpanded = { isSlideToRateExpanded = !isSlideToRateExpanded },
-                    sliderValue = sliderValue,
-                    onSliderChange = { sliderValue = it },
-                    onClearRating = { sliderValue = 0f }
-                )
-                
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Row(

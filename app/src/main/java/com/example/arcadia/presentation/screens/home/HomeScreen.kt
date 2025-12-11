@@ -42,6 +42,7 @@ import com.example.arcadia.presentation.screens.home.tabs.DiscoverTabContent
 import com.example.arcadia.presentation.screens.home.tabs.HomeTabContent
 import com.example.arcadia.presentation.screens.home.tabs.LibraryTabContent
 import com.example.arcadia.ui.theme.Surface
+import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -75,6 +76,8 @@ fun NewHomeScreen(
     val snackbarState by viewModel.snackbarState.collectAsState()
     val pendingFriendRequestCount by viewModel.pendingFriendRequestCount.collectAsState()
     val scope = rememberCoroutineScope()
+    // Keep paging collection alive across tab switches to avoid flicker
+    val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
     
     // Double back to exit logic
     var backPressedOnce by remember { mutableStateOf(false) }
@@ -181,13 +184,15 @@ fun NewHomeScreen(
                             viewModel = viewModel,
                             onGameClick = onGameClick,
                             snackbarHostState = snackbarHostState,
-                            listState = homeTabListState
+                            listState = homeTabListState,
+                            aiPagingItems = aiPagingItems
                         )
                         1 -> DiscoverTabContent(
                             viewModel = viewModel,
                             onGameClick = onGameClick,
                             snackbarHostState = snackbarHostState,
-                            listState = discoverTabListState
+                            listState = discoverTabListState,
+                            aiPagingItems = aiPagingItems
                         )
                         2 -> LibraryTabContent(
                             onGameClick = onGameClick,

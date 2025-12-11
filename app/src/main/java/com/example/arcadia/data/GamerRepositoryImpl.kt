@@ -1,6 +1,10 @@
 package com.example.arcadia.data
 
+import android.content.Context
 import android.net.Uri
+import android.util.Log
+import com.example.arcadia.data.datasource.GamerRemoteDataSource
+import com.example.arcadia.data.mapper.GamerMapper
 import com.example.arcadia.domain.model.Gamer
 import com.example.arcadia.domain.model.ProfileSection
 import com.example.arcadia.domain.repository.GamerRepository
@@ -8,20 +12,36 @@ import com.example.arcadia.util.RequestState
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
-import com.google.firebase.firestore.firestore
-import com.google.firebase.storage.storage
 import com.onesignal.OneSignal
+import io.appwrite.models.InputFile
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
-import java.util.UUID
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.io.File
 
-class GamerRepositoryImpl: GamerRepository {
-    
+/**
+ * Refactored GamerRepository implementation.
+ * Delegates data operations to GamerRemoteDataSource and mapping to GamerMapper.
+ */
+class GamerRepositoryImpl(
+    private val context: Context,
+    private val remoteDataSource: GamerRemoteDataSource
+) : GamerRepository {
+
     companion object {
         private const val TAG = "GamerRepositoryImpl"
+        private val json = Json { 
+            ignoreUnknownKeys = true 
+            encodeDefaults = true
+        }
     }
+
     override fun getCurrentUserId(): String? {
         return Firebase.auth.currentUser?.uid
     }
@@ -32,59 +52,37 @@ class GamerRepositoryImpl: GamerRepository {
         onError: (String) -> Unit
     ) {
         try {
-            android.util.Log.d("GamerRepository", "createUser called for user: ${user?.uid}")
-            
-            if (user != null){
-                val database = Firebase.firestore
-                android.util.Log.d("GamerRepository", "Got Firestore instance")
-                
-                val userCollection = database.collection("users")
-                android.util.Log.d("GamerRepository", "Checking if user document exists...")
-                
-                val userDoc = userCollection.document(user.uid).get().await()
-                android.util.Log.d("GamerRepository", "User doc exists: ${userDoc.exists()}")
-                
-                if(userDoc.exists()){
-                    // Existing user - return their profile completion status
-                    val gamer = userDoc.toObject(Gamer::class.java)
-                    android.util.Log.d(TAG, "Existing user, profileComplete: ${gamer?.profileComplete}")
-                    
-                    // Login to OneSignal with user ID and save player ID
-                    loginToOneSignal(user.uid)
-                    
-                    onSuccess(gamer?.profileComplete ?: false)
-                } else {
-                    // New user - create user with profileComplete = false
-                    android.util.Log.d("GamerRepository", "Creating new user document")
-                    val userData = hashMapOf(
-                        "id" to user.uid,
-                        "name" to (user.displayName ?: "Unknown"),
-                        "email" to (user.email ?: "Unknown"),
-                        "username" to "",
-                        "country" to null,
-                        "city" to null,
-                        "gender" to null,
-                        "description" to "",
-                        "profileImageUrl" to (user.photoUrl?.toString()),
-                        "profileComplete" to false
-                    )
-
-                    userCollection.document(user.uid).set(userData).await()
-                    android.util.Log.d(TAG, "User document created successfully")
-                    
-                    // Login to OneSignal with user ID and save player ID
-                    loginToOneSignal(user.uid)
-                    
-                    onSuccess(false) // New user, profile not complete
-                }
-
-            } else {
-                android.util.Log.e("GamerRepository", "User is null")
+            if (user == null) {
                 onError("User is not available")
+                return
             }
 
+            try {
+                val existingDoc = remoteDataSource.getUser(user.uid)
+                val profileComplete = existingDoc.data["profileComplete"] as? Boolean ?: false
+                loginToOneSignal(user.uid)
+                onSuccess(profileComplete)
+            } catch (e: Exception) {
+                // Assume 404 or error means create new
+                // Ideally check for 404 specifically, but for now generic catch
+                Log.d(TAG, "Creating new user document")
+                
+                val userData = mapOf(
+                    "name" to (user.displayName ?: "Unknown"),
+                    "email" to (user.email ?: "Unknown"),
+                    "username" to "",
+                    "profileImageUrl" to (user.photoUrl?.toString()),
+                    "profileComplete" to false,
+                    "isProfilePublic" to true,
+                    "friendRequestsSentToday" to 0
+                )
+
+                remoteDataSource.createUser(user.uid, userData)
+                loginToOneSignal(user.uid)
+                onSuccess(false)
+            }
         } catch (e: Exception) {
-            android.util.Log.e("GamerRepository", "Error in createUser: ${e.message}", e)
+            Log.e(TAG, "Error in createUser: ${e.message}", e)
             onError(e.message ?: "Error while creating customer")
         }
     }
@@ -92,89 +90,40 @@ class GamerRepositoryImpl: GamerRepository {
     override fun readCustomerFlow(): Flow<RequestState<Gamer>> = callbackFlow {
         val userId = getCurrentUserId()
         if (userId == null) {
-            send(RequestState.Error("User is not available"))
+            trySend(RequestState.Error("User is not available"))
             close()
             return@callbackFlow
         }
 
-        val database = Firebase.firestore
-        val listenerRegistration = database.collection("users")
-            .document(userId)
-            .addSnapshotListener { documentSnapshot, error ->
-                if (error != null) {
-                    trySend(RequestState.Error("Error: ${error.message}"))
-                    return@addSnapshotListener
-                }
-
-                if (documentSnapshot != null && documentSnapshot.exists()) {
-                    // Try to parse as Gamer
-                    var gamer = documentSnapshot.toObject(Gamer::class.java)
-
-                    // Migration: Handle old data structure with firstName/lastName
-                    if (gamer != null && gamer.name.isBlank()) {
-                        val firstName = documentSnapshot.getString("firstName") ?: ""
-                        val lastName = documentSnapshot.getString("lastName") ?: ""
-                        val fullName = "$firstName $lastName".trim()
-
-                        if (fullName.isNotBlank()) {
-                            // Migrate old structure to new
-                            gamer = gamer.copy(name = fullName)
-
-                            // Update Firestore with new structure (fire and forget)
-                            database.collection("users")
-                                .document(userId)
-                                .update(
-                                    mapOf(
-                                        "name" to fullName,
-                                        "username" to (gamer.username.ifBlank { "" })
-                                    )
-                                )
-                                .addOnFailureListener { e ->
-                                    android.util.Log.e("GamerRepository", "Migration failed: ${e.message}")
-                                }
-                        }
-                    }
-
-                    if (gamer != null) {
-                        trySend(RequestState.Success(gamer))
-                    } else {
-                        trySend(RequestState.Error("Error parsing customer data"))
-                    }
-                } else {
-                    trySend(RequestState.Error("Customer data does not exist"))
-                }
+        val job = remoteDataSource.observeUser(userId)
+            .map { row ->
+                val gamer = GamerMapper.toGamer(row)
+                RequestState.Success(gamer) as RequestState<Gamer>
             }
+            .catch { e ->
+                Log.e(TAG, "Error observing user: ${e.message}", e)
+                emit(RequestState.Error("Error fetching user: ${e.message}"))
+            }
+            .onEach { trySend(it) }
+            .launchIn(this)
 
-        awaitClose {
-            listenerRegistration.remove()
-        }
+        awaitClose { job.cancel() }
     }
 
     override fun getGamer(userId: String): Flow<RequestState<Gamer>> = callbackFlow {
-        val database = Firebase.firestore
-        val listenerRegistration = database.collection("users")
-            .document(userId)
-            .addSnapshotListener { documentSnapshot, error ->
-                if (error != null) {
-                    trySend(RequestState.Error("Error: ${error.message}"))
-                    return@addSnapshotListener
-                }
-
-                if (documentSnapshot != null && documentSnapshot.exists()) {
-                    val gamer = documentSnapshot.toObject(Gamer::class.java)
-                    if (gamer != null) {
-                        trySend(RequestState.Success(gamer))
-                    } else {
-                        trySend(RequestState.Error("Error parsing user data"))
-                    }
-                } else {
-                    trySend(RequestState.Error("User not found"))
-                }
+        val job = remoteDataSource.observeUser(userId)
+            .map { row ->
+                val gamer = GamerMapper.toGamer(row)
+                RequestState.Success(gamer) as RequestState<Gamer>
             }
+            .catch { e ->
+                Log.e(TAG, "Error observing gamer: ${e.message}", e)
+                emit(RequestState.Error("Error fetching user: ${e.message}"))
+            }
+            .onEach { trySend(it) }
+            .launchIn(this)
 
-        awaitClose {
-            listenerRegistration.remove()
-        }
+        awaitClose { job.cancel() }
     }
 
     override suspend fun updateGamer(
@@ -183,46 +132,30 @@ class GamerRepositoryImpl: GamerRepository {
         onError: (String) -> Unit
     ) {
         try {
-            val userId = getCurrentUserId()
-            if (userId != null) {
-                val firestore = Firebase.firestore
-                val userCollection = firestore.collection("users")
-                val existingUser = userCollection
-                    .document(gamer.id)
-                    .get()
-                    .await()
-                if (existingUser.exists()) {
-                    val updates = mutableMapOf<String, Any?>(
-                        "name" to gamer.name,
-                        "username" to gamer.username,
-                        "country" to gamer.country,
-                        "city" to gamer.city,
-                        "gender" to gamer.gender,
-                        "description" to gamer.description,
-                        "profileComplete" to gamer.profileComplete,
-                        "steamId" to gamer.steamId,
-                        "xboxGamertag" to gamer.xboxGamertag,
-                        "psnId" to gamer.psnId
-                    )
-                    
-                    // Only update profileImageUrl if it's not null
-                    if (gamer.profileImageUrl != null) {
-                        updates["profileImageUrl"] = gamer.profileImageUrl
-                    }
-                    
-                    userCollection
-                        .document(gamer.id)
-                        .update(updates)
-                        .await()
-                    onSuccess()
-                } else {
-                    onError("User not found")
-                }
-            } else {
-                onError("User is not available")
+            val userId = getCurrentUserId() ?: return onError("User is not available")
+
+            val updates = mutableMapOf<String, Any?>(
+                "name" to gamer.name,
+                "username" to gamer.username,
+                "country" to gamer.country,
+                "city" to gamer.city,
+                "gender" to gamer.gender,
+                "description" to gamer.description,
+                "profileComplete" to gamer.profileComplete,
+                "steamId" to gamer.steamId,
+                "xboxGamertag" to gamer.xboxGamertag,
+                "psnId" to gamer.psnId
+            )
+
+            if (gamer.profileImageUrl != null) {
+                updates["profileImageUrl"] = gamer.profileImageUrl
             }
+
+            remoteDataSource.updateUser(gamer.id, updates)
+            onSuccess()
         } catch (e: Exception) {
-            onError(e.message ?: "Error updating user")
+            Log.e(TAG, "Error updating gamer: ${e.message}", e)
+            onError(e.message ?: "Error updating profile")
         }
     }
 
@@ -230,43 +163,24 @@ class GamerRepositoryImpl: GamerRepository {
         customSections: List<ProfileSection>?,
         isProfilePublic: Boolean?
     ): RequestState<Unit> {
-        return try {
-            val userId = getCurrentUserId()
-            if (userId != null) {
-                val firestore = Firebase.firestore
-                val userCollection = firestore.collection("users")
-                
-                val updates = mutableMapOf<String, Any?>()
-                
-                customSections?.let {
-                    updates["customSections"] = it.map { section ->
-                        mapOf(
-                            "id" to section.id,
-                            "title" to section.title,
-                            "type" to section.type.name,
-                            "gameIds" to section.gameIds,
-                            "order" to section.order
-                        )
-                    }
-                }
-                
-                isProfilePublic?.let {
-                    updates["isProfilePublic"] = it
-                }
-                
-                if (updates.isNotEmpty()) {
-                    userCollection
-                        .document(userId)
-                        .update(updates)
-                        .await()
-                }
-                
-                RequestState.Success(Unit)
-            } else {
-                RequestState.Error("User is not available")
+        try {
+            val userId = getCurrentUserId() ?: return RequestState.Error("User is not available")
+            val updates = mutableMapOf<String, Any?>()
+            
+            if (customSections != null) {
+                updates["customSections"] = json.encodeToString(customSections)
             }
+            if (isProfilePublic != null) {
+                updates["isProfilePublic"] = isProfilePublic
+            }
+            
+            if (updates.isNotEmpty()) {
+                remoteDataSource.updateUser(userId, updates)
+            }
+            return RequestState.Success(Unit)
         } catch (e: Exception) {
-            RequestState.Error(e.message ?: "Error updating user")
+            Log.e(TAG, "Error updating gamer settings: ${e.message}", e)
+            return RequestState.Error(e.message ?: "Error updating settings")
         }
     }
 
@@ -276,57 +190,41 @@ class GamerRepositoryImpl: GamerRepository {
         onError: (String) -> Unit
     ) {
         try {
-            val userId = getCurrentUserId()
-            if (userId == null) {
-                onError("User is not available")
-                return
-            }
-
-            // Get the current profile image URL to delete the old image
-            val database = Firebase.firestore
-            val userDoc = database.collection("users").document(userId).get().await()
-            val oldImageUrl = userDoc.getString("profileImageUrl")
+            val userId = getCurrentUserId() ?: return onError("User is not available")
             
-            // Delete the old image if it exists and is from Firebase Storage
-            // Don't delete external URLs (e.g., Google profile pictures)
-            if (!oldImageUrl.isNullOrEmpty() && oldImageUrl.contains("firebasestorage.googleapis.com")) {
-                try {
-                    val oldImageRef = Firebase.storage.getReferenceFromUrl(oldImageUrl)
-                    oldImageRef.delete().await()
-                    android.util.Log.d("GamerRepository", "Old profile image deleted successfully")
-                } catch (e: Exception) {
-                    // Log but don't fail the upload if deletion fails
-                    android.util.Log.w("GamerRepository", "Failed to delete old profile image: ${e.message}")
+            val file = File(context.cacheDir, "profile_image.jpg")
+            val inputStream = context.contentResolver.openInputStream(imageUri)
+                ?: return onError("Unable to read image from the selected source")
+
+            inputStream.use { input ->
+                file.outputStream().use { output ->
+                    input.copyTo(output)
                 }
-            } else if (!oldImageUrl.isNullOrEmpty()) {
-                android.util.Log.d("GamerRepository", "Skipping deletion of external profile image (e.g., Google): $oldImageUrl")
             }
 
-            // Create a unique filename for the new image
-            val imageFileName = "profile_${userId}_${UUID.randomUUID()}.jpg"
-            val storageRef = Firebase.storage.reference
-            val profileImagesRef = storageRef.child("profile_images/$imageFileName")
+            if (!file.exists() || file.length() == 0L) {
+                return onError("Selected image is empty or could not be read")
+            }
 
-            // Upload the new file
-            profileImagesRef.putFile(imageUri).await()
+            // Delete old profile image if present
+            runCatching {
+                val existingUrl = remoteDataSource.getUser(userId).data["profileImageUrl"] as? String
+                extractFileIdFromUrl(existingUrl)?.let { remoteDataSource.deleteProfileImage(it) }
+            }.onFailure { e ->
+                Log.w(TAG, "Failed to delete previous profile image: ${e.message}")
+            }
 
-            // Get the download URL
-            val downloadUrl = profileImagesRef.downloadUrl.await()
+            val inputFile = InputFile.fromFile(file)
+            val fileId = remoteDataSource.uploadProfileImage(inputFile)
 
-            // CRITICAL: Immediately update Firestore with the new image URL
-            // This ensures that subsequent uploads will properly delete this image
-            // and prevents orphaned images in Storage (cost savings)
-            database.collection("users")
-                .document(userId)
-                .update("profileImageUrl", downloadUrl.toString())
-                .await()
+            // Get the accessible URL (or ID) and persist it on the user document
+            val imageUrl = remoteDataSource.getProfileImageUrl(fileId)
+            remoteDataSource.updateUser(userId, mapOf("profileImageUrl" to imageUrl))
 
-            android.util.Log.d("GamerRepository", "Profile image URL updated in Firestore")
-
-            onSuccess(downloadUrl.toString())
+            onSuccess(imageUrl)
         } catch (e: Exception) {
-            android.util.Log.e("GamerRepository", "Error uploading profile image: ${e.message}", e)
-            onError(e.message ?: "Error uploading profile image")
+            Log.e(TAG, "Error uploading profile image: ${e.message}", e)
+            onError(e.message ?: "Error uploading image")
         }
     }
 
@@ -335,118 +233,68 @@ class GamerRepositoryImpl: GamerRepository {
         onError: (String) -> Unit
     ) {
         try {
-            val userId = getCurrentUserId()
-            if (userId == null) {
-                onError("User is not available")
-                return
+            val userId = getCurrentUserId() ?: return onError("User is not available")
+
+            // Delete stored file if we have its id
+            runCatching {
+                val existingUrl = remoteDataSource.getUser(userId).data["profileImageUrl"] as? String
+                extractFileIdFromUrl(existingUrl)?.let { remoteDataSource.deleteProfileImage(it) }
+            }.onFailure { e ->
+                Log.w(TAG, "Failed to delete profile image file: ${e.message}")
             }
 
-            // Get the current profile image URL
-            val database = Firebase.firestore
-            val userDoc = database.collection("users").document(userId).get().await()
-            val imageUrl = userDoc.getString("profileImageUrl")
-            
-            if (imageUrl.isNullOrEmpty()) {
-                onError("No profile image to delete")
-                return
-            }
-
-            // Only delete from Storage if it's a Firebase Storage URL
-            // Don't delete external URLs (e.g., Google profile pictures)
-            if (imageUrl.contains("firebasestorage.googleapis.com")) {
-                val imageRef = Firebase.storage.getReferenceFromUrl(imageUrl)
-                imageRef.delete().await()
-                android.util.Log.d("GamerRepository", "Profile image deleted from Storage")
-            } else {
-                android.util.Log.d("GamerRepository", "Skipping Storage deletion for external URL")
-            }
-            
-            // Remove the URL from Firestore (regardless of source)
-            database.collection("users")
-                .document(userId)
-                .update("profileImageUrl", null)
-                .await()
-            
-            android.util.Log.d("GamerRepository", "Profile image URL removed from Firestore")
+            remoteDataSource.updateUser(userId, mapOf("profileImageUrl" to null))
             onSuccess()
         } catch (e: Exception) {
-            android.util.Log.e("GamerRepository", "Error deleting profile image: ${e.message}", e)
+            Log.e(TAG, "Error deleting profile image: ${e.message}", e)
             onError(e.message ?: "Error deleting profile image")
         }
     }
 
     override suspend fun signOut(): RequestState<Unit> {
         return try {
-            // Logout from OneSignal before signing out from Firebase
-            // Requirements: 10.5
             logoutFromOneSignal()
-            
             Firebase.auth.signOut()
             RequestState.Success(Unit)
         } catch (e: Exception) {
             RequestState.Error(e.message ?: "Error signing out")
         }
     }
-    
-    /**
-     * Logs in to OneSignal with the user's Firebase UID as external ID.
-     * Also saves the OneSignal player ID to Firestore for push notification targeting.
-     * Requirements: 10.3, 10.4
-     */
-    private fun loginToOneSignal(userId: String) {
+
+    private suspend fun loginToOneSignal(userId: String) {
         try {
-            // Login to OneSignal with the Firebase user ID as external ID
             OneSignal.login(userId)
-            android.util.Log.d(TAG, "OneSignal login called for user: $userId")
-            
-            // Get the OneSignal subscription ID (player ID) and save to Firestore
-            // The subscription ID is the unique identifier for push notification targeting
             val subscriptionId = OneSignal.User.pushSubscription.id
             if (!subscriptionId.isNullOrBlank()) {
-                saveOneSignalPlayerId(userId, subscriptionId)
-            } else {
-                android.util.Log.w(TAG, "OneSignal subscription ID not available yet")
-                // The subscription ID will be available after OneSignal processes the login
-                // The next time the user opens the app, we'll try to save it again
+                remoteDataSource.updateUser(userId, mapOf("oneSignalPlayerId" to subscriptionId))
             }
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Failed to login to OneSignal", e)
-            // Don't fail the auth flow if OneSignal login fails
+            Log.e(TAG, "Failed to login to OneSignal", e)
         }
     }
-    
-    /**
-     * Saves the OneSignal player ID to the user's Firestore document.
-     * Requirements: 10.4
-     */
-    private fun saveOneSignalPlayerId(userId: String, playerId: String) {
-        try {
-            val database = Firebase.firestore
-            database.collection("users")
-                .document(userId)
-                .update("oneSignalPlayerId", playerId)
-                .addOnSuccessListener {
-                    android.util.Log.d(TAG, "OneSignal player ID saved to Firestore: $playerId")
-                }
-                .addOnFailureListener { e ->
-                    android.util.Log.e(TAG, "Failed to save OneSignal player ID: ${e.message}", e)
-                }
-        } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error saving OneSignal player ID", e)
-        }
-    }
-    
-    /**
-     * Logs out from OneSignal to disassociate the device from the user.
-     * Requirements: 10.5
-     */
+
     private fun logoutFromOneSignal() {
         try {
             OneSignal.logout()
-            android.util.Log.d(TAG, "OneSignal logout called")
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Failed to logout from OneSignal", e)
-            // Don't fail the sign out flow if OneSignal logout fails
+            Log.e(TAG, "Failed to logout from OneSignal", e)
+        }
+    }
+
+    private fun extractFileIdFromUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return try {
+            val marker = "/files/"
+            val idx = url.indexOf(marker)
+            if (idx >= 0) {
+                val start = idx + marker.length
+                val end = url.indexOf('/', start).takeIf { it >= 0 } ?: url.length
+                url.substring(start, end)
+            } else {
+                url // if only fileId was stored
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 }

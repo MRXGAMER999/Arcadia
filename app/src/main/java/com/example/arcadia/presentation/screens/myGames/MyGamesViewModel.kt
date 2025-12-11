@@ -16,6 +16,7 @@ import com.example.arcadia.presentation.components.MediaLayout
 import com.example.arcadia.presentation.components.QuickSettingsState
 import com.example.arcadia.presentation.components.SortType
 import com.example.arcadia.util.RequestState
+import kotlin.math.roundToInt
 
 data class MyGamesScreenState(
     val games: RequestState<List<GameListEntry>> = RequestState.Idle,
@@ -303,7 +304,7 @@ class MyGamesViewModel(
                             
                             // Apply client-side filtering with current state (not captured)
                             // This ensures we always use the latest filter settings even when
-                            // Firestore updates trigger the snapshot listener
+                            // Appwrite realtime updates trigger the listener
                             applyCurrentFilters()
                         }
                         is RequestState.Error -> {
@@ -680,14 +681,16 @@ class MyGamesViewModel(
             // Resume Firebase listener
             isFirebaseListenerPaused = false
             
-            // Silent reload to sync with Firebase (no loading indicator)
-            loadGames(showLoadingIndicator = false)
+            // Note: We do NOT reload here. The existing Realtime subscription (which we just un-paused)
+            // will receive the update event from the server and update the UI automatically.
+            // Restarting the flow here causes a race condition in the Appwrite SDK (ConcurrentModificationException).
         }
     }
     
     /**
      * Called when reorder is complete (item dropped at new position).
-     * Updates importance values and queues batch save.
+     * Updates importance values using a midpoint algorithm to minimize writes.
+     * Enforces that reordering only happens within the same rating bucket.
      */
     fun onReorderComplete(fromIndex: Int, toIndex: Int) {
         val currentGames = (screenState.games as? RequestState.Success)?.data ?: return
@@ -695,29 +698,103 @@ class MyGamesViewModel(
         if (fromIndex >= currentGames.size || toIndex >= currentGames.size) return
         
         val movedGame = currentGames[fromIndex]
+        val targetGame = currentGames[toIndex]
+
+        // Fix: Strictly enforce that we can only reorder within the same rating bucket.
+        // Repository sorting prioritizes Rating over Importance, so cross-rating moves would snap back.
+        val movedRating = movedGame.rating?.let { (it * 10f).roundToInt() } ?: 0
+        val targetRating = targetGame.rating?.let { (it * 10f).roundToInt() } ?: 0
         
-        // Create new list with reordered games
+        if (movedRating != targetRating) {
+            android.util.Log.w("MyGamesVM", "Blocked reorder across different ratings: $movedRating vs $targetRating")
+            // Trigger a state update to revert the UI drag
+            screenState = screenState.copy(games = RequestState.Success(currentGames))
+            return
+        }
+        
+        // Create mutable list to calculate new positions
         val mutableGames = currentGames.toMutableList()
         mutableGames.removeAt(fromIndex)
         val adjustedToIndex = toIndex.coerceIn(0, mutableGames.size)
         mutableGames.add(adjustedToIndex, movedGame)
         
-        // Recalculate importance for ALL games based on their new positions
-        val importanceUpdates = mutableMapOf<String, Int>()
+        // Midpoint Algorithm: Calculate importance based on neighbors
+        val prevImportance = if (adjustedToIndex - 1 >= 0) mutableGames[adjustedToIndex - 1].importance else null
+        val nextImportance = if (adjustedToIndex + 1 < mutableGames.size) mutableGames[adjustedToIndex + 1].importance else null
+
+        // Check for rating boundaries of neighbors to ensure we are calculating within the bucket
+        val prevGame = if (adjustedToIndex - 1 >= 0) mutableGames[adjustedToIndex - 1] else null
+        val nextGame = if (adjustedToIndex + 1 < mutableGames.size) mutableGames[adjustedToIndex + 1] else null
         
-        val updatedGames = mutableGames.mapIndexed { index, game ->
-            val newImportance = (mutableGames.size - index) * 1000
-            if (game.importance != newImportance) {
-                importanceUpdates[game.id] = newImportance
+        val prevRating = prevGame?.rating?.let { (it * 10f).roundToInt() } ?: 0
+        val nextRating = nextGame?.rating?.let { (it * 10f).roundToInt() } ?: 0
+
+        // Determine effective neighbors within the same rating bucket
+        val effectivePrevImportance = if (prevGame != null && prevRating == movedRating) prevImportance else null
+        val effectiveNextImportance = if (nextGame != null && nextRating == movedRating) nextImportance else null
+
+        // Default step size for importance
+        val IMPORTANCE_STEP = 100000 // Large enough to allow many subdivisions
+
+        var newImportance: Int
+        var needsNormalization = false
+
+        if (effectivePrevImportance == null && effectiveNextImportance == null) {
+            // Only item in this bucket or list
+             newImportance = 0 // Default
+        } else if (effectivePrevImportance == null) {
+             // Moved to top of its bucket
+             newImportance = (effectiveNextImportance ?: 0) + IMPORTANCE_STEP
+        } else if (effectiveNextImportance == null) {
+             // Moved to bottom of its bucket
+             newImportance = effectivePrevImportance - IMPORTANCE_STEP
+        } else {
+             // Between two items
+             val gap = effectivePrevImportance - effectiveNextImportance
+             if (gap < 2) {
+                 // Collision: Gap too small to fit an integer. Need to re-normalize this bucket.
+                 needsNormalization = true
+                 newImportance = effectivePrevImportance // Placeholder, will be overwritten by normalization
+             } else {
+                 newImportance = effectiveNextImportance + (gap / 2)
+             }
+        }
+        
+        val importanceUpdates = mutableMapOf<String, Int>()
+
+        if (needsNormalization) {
+            // "Write Storm" Fallback: Only happens if user subdivides a gap ~30 times (2^30).
+            // Re-space all items in this rating bucket.
+            android.util.Log.i("MyGamesVM", "Normalizing importance for rating bucket $movedRating")
+            val bucketGames = mutableGames.filter { 
+                val r = it.rating?.let { v -> (v * 10f).roundToInt() } ?: 0
+                r == movedRating 
             }
-            game.copy(importance = newImportance)
+            
+            bucketGames.forEachIndexed { index, game ->
+                val normalizedImportance = (bucketGames.size - index) * IMPORTANCE_STEP
+                if (game.importance != normalizedImportance) {
+                    importanceUpdates[game.id] = normalizedImportance
+                }
+                // Update local list object as well
+                val gameIndex = mutableGames.indexOfFirst { it.id == game.id }
+                if (gameIndex != -1) {
+                    mutableGames[gameIndex] = game.copy(importance = normalizedImportance)
+                }
+            }
+        } else {
+            // Optimized Path: Update only the moved item (1 Write)
+            if (movedGame.importance != newImportance) {
+                importanceUpdates[movedGame.id] = newImportance
+            }
+            mutableGames[adjustedToIndex] = movedGame.copy(importance = newImportance)
         }
         
         // Update UI immediately (optimistic update)
         screenState = screenState.copy(
-            games = RequestState.Success(updatedGames),
+            games = RequestState.Success(mutableGames),
             allGames = screenState.allGames.map { existing ->
-                updatedGames.find { it.id == existing.id } ?: existing
+                mutableGames.find { it.id == existing.id } ?: existing
             }
         )
         
@@ -780,12 +857,13 @@ class MyGamesViewModel(
     override fun onCleared() {
         super.onCleared()
         
-        // Save any pending importance updates before clearing
+        // Save any pending importance updates before clearing.
+        // Use NonCancellable to ensure the network request survives ViewModel scope cancellation.
         if (pendingImportanceUpdates.isNotEmpty()) {
-            // Note: This is a best-effort save since we're being cleared
-            // In production, you might want to use a WorkManager for guaranteed delivery
             launchWithKey("final_save") {
-                savePendingImportanceUpdates()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    savePendingImportanceUpdates()
+                }
             }
         }
         

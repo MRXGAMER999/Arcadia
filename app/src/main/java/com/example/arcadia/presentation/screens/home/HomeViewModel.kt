@@ -181,8 +181,17 @@ class HomeViewModel(
      */
     private fun observePendingFriendRequestCount() {
         launchWithKey("pending_friend_request_count") {
-            getPendingFriendRequestsCountUseCase().collect { count ->
-                _pendingFriendRequestCount.value = count
+            getPendingFriendRequestsCountUseCase().collect { state ->
+                when (state) {
+                    is RequestState.Success -> _pendingFriendRequestCount.value = state.data
+                    is RequestState.Error -> {
+                        android.util.Log.w(TAG, "Pending requests count failed: ${state.message}")
+                        _pendingFriendRequestCount.value = 0
+                    }
+                    RequestState.Loading, RequestState.Idle -> {
+                        // Preserve existing value during loading/idle to avoid flicker
+                    }
+                }
             }
         }
     }
@@ -371,7 +380,7 @@ class HomeViewModel(
             return
         }
         
-        val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }
+        val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }.distinctBy { it.id }
         android.util.Log.d(TAG, "Refiltered discovery: ${lastDiscoveryResults.size} -> ${filtered.size} games")
         screenState = screenState.copy(recommendedGames = RequestState.Success(filtered))
         
@@ -388,7 +397,12 @@ class HomeViewModel(
     private fun loadPopularGames(pageSize: Int = DEFAULT_PAGE_SIZE): Job {
         return launchWithKey("popular_games") {
             gameRepository.getPopularGames(page = 1, pageSize = pageSize).collect { state ->
-                screenState = screenState.copy(popularGames = state)
+                val uniqueState = if (state is RequestState.Success) {
+                    RequestState.Success(state.data.distinctBy { it.id })
+                } else {
+                    state
+                }
+                screenState = screenState.copy(popularGames = uniqueState)
             }
         }
     }
@@ -410,7 +424,12 @@ class HomeViewModel(
                 page = 1,
                 pageSize = pageSize
             ).collect { state ->
-                screenState = screenState.copy(upcomingGames = state)
+                val uniqueState = if (state is RequestState.Success) {
+                    RequestState.Success(state.data.distinctBy { it.id })
+                } else {
+                    state
+                }
+                screenState = screenState.copy(upcomingGames = uniqueState)
             }
         }
     }
@@ -422,7 +441,12 @@ class HomeViewModel(
     private fun loadNewReleases(pageSize: Int = DEFAULT_PAGE_SIZE): Job {
         return launchWithKey("new_releases") {
             gameRepository.getNewReleases(page = 1, pageSize = pageSize).collect { state ->
-                screenState = screenState.copy(newReleases = state)
+                val uniqueState = if (state is RequestState.Success) {
+                    RequestState.Success(state.data.distinctBy { it.id })
+                } else {
+                    state
+                }
+                screenState = screenState.copy(newReleases = uniqueState)
             }
         }
     }
@@ -517,7 +541,7 @@ class HomeViewModel(
         val excludeIds = gamesInLibrary.value
 
         // Always filter with the latest data to include newly loaded games
-        val filtered = lastRecommended.filter { it.id !in excludeIds }
+        val filtered = lastRecommended.filter { it.id !in excludeIds }.distinctBy { it.id }
         
         // Only skip if nothing has changed (same exclude set AND same filtered result size)
         if (excludeIds == lastExcludeIds && filtered.size == lastFilteredRecommendations.size && lastFilteredRecommendations.isNotEmpty()) {
@@ -679,7 +703,7 @@ class HomeViewModel(
                 if (state is RequestState.Success) {
                     android.util.Log.d(TAG, "Refresh: Got ${state.data.size} new discovery games (Replacing list)")
                     lastDiscoveryResults = state.data
-                    val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }
+                    val filtered = lastDiscoveryResults.filter { !isGameInLibrary(it.id) }.distinctBy { it.id }
                     screenState = screenState.copy(
                         recommendedGames = RequestState.Success(filtered)
                     )
@@ -795,11 +819,11 @@ class HomeViewModel(
                 ).collect { state ->
                     when (state) {
                         is RequestState.Success -> {
-                            val filtered = state.data.filter { !isGameInLibrary(it.id) }
+                            val filtered = state.data.filter { !isGameInLibrary(it.id) }.distinctBy { it.id }
                             studioFilteredGames.addAll(filtered)
                             android.util.Log.d("HomeViewModel", "Studio filter: ${state.data.size} games, ${filtered.size} after library filter")
                             screenState = screenState.copy(
-                                recommendedGames = RequestState.Success(studioFilteredGames.toList())
+                                recommendedGames = RequestState.Success(studioFilteredGames.distinctBy { it.id }.toList())
                             )
                             // Check if we got fewer games than expected (no more pages)
                             studioFilterState = studioFilterState.copy(
@@ -868,13 +892,13 @@ class HomeViewModel(
                             val existingIds = studioFilteredGames.map { it.id }.toSet()
                             val newGames = state.data.filter { 
                                 !isGameInLibrary(it.id) && it.id !in existingIds 
-                            }
+                            }.distinctBy { it.id }
                             
                             studioFilteredGames.addAll(newGames)
                             android.util.Log.d("HomeViewModel", "Loaded ${newGames.size} more games (total: ${studioFilteredGames.size})")
                             
                             screenState = screenState.copy(
-                                recommendedGames = RequestState.Success(studioFilteredGames.toList())
+                                recommendedGames = RequestState.Success(studioFilteredGames.distinctBy { it.id }.toList())
                             )
                             
                             studioFilterState = studioFilterState.copy(
@@ -1147,7 +1171,7 @@ class HomeViewModel(
                         is RequestState.Success -> {
                             // Cache unfiltered results
                             lastDiscoveryResults = state.data
-                            val filtered = state.data.filter { !isGameInLibrary(it.id) }
+                            val filtered = state.data.filter { !isGameInLibrary(it.id) }.distinctBy { it.id }
                             android.util.Log.d("HomeViewModel", "Discovery filter: ${state.data.size} games, ${filtered.size} after library filter")
                             screenState = screenState.copy(
                                 recommendedGames = RequestState.Success(filtered)
@@ -1218,7 +1242,7 @@ class HomeViewModel(
                     if (state is RequestState.Success && state.data.isNotEmpty()) {
                         // Add new results to cache
                         lastDiscoveryResults = lastDiscoveryResults + state.data
-                        val filtered = lastDiscoveryResults.filter { it.id !in gamesInLibrary.value }
+                        val filtered = lastDiscoveryResults.filter { it.id !in gamesInLibrary.value }.distinctBy { it.id }
                         android.util.Log.d(TAG, "Loaded more discovery: +${state.data.size} games, total filtered: ${filtered.size}")
                         screenState = screenState.copy(
                             recommendedGames = RequestState.Success(filtered)

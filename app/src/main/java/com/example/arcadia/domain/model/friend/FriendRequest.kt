@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Represents a friend request between two users.
- * Stored in the friendRequests collection in Firestore.
+ * Stored in the friendRequests collection in Appwrite.
  */
 @Serializable
 data class FriendRequest(

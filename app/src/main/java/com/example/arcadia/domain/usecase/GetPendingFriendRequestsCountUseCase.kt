@@ -2,6 +2,7 @@ package com.example.arcadia.domain.usecase
 
 import com.example.arcadia.domain.repository.FriendsRepository
 import com.example.arcadia.domain.repository.GamerRepository
+import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -13,11 +14,20 @@ class GetPendingFriendRequestsCountUseCase(
     private val gamerRepository: GamerRepository,
     private val friendsRepository: FriendsRepository
 ) {
-    operator fun invoke(): Flow<Int> {
-        val userId = gamerRepository.getCurrentUserId() ?: return flowOf(0)
+    operator fun invoke(): Flow<RequestState<Int>> {
+        val userId = gamerRepository.getCurrentUserId()
+            ?: return flowOf(RequestState.Error("User not authenticated"))
         return friendsRepository.getPendingRequestCountRealtime(userId)
     }
 }
+
+
+
+
+
+
+
+
 
 
 

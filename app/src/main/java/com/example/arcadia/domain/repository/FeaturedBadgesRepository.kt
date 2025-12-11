@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
  */
 interface FeaturedBadgesRepository {
     /**
-     * Saves the user's selected featured badges to Firestore.
+     * Saves the user's selected featured badges to Appwrite.
      * 
      * @param userId The ID of the user whose badges are being saved
      * @param badges The list of badges to feature (max 3)
@@ -22,7 +22,7 @@ interface FeaturedBadgesRepository {
     
     /**
      * Retrieves the featured badges for a user as a Flow.
-     * Emits updates when the badges change in Firestore.
+     * Emits updates when the badges change in Appwrite.
      * 
      * @param userId The ID of the user whose badges to retrieve
      * @return Flow emitting the list of featured badges

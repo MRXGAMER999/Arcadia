@@ -560,7 +560,15 @@ private fun ReorderableListView(
     isReadOnly: Boolean = false
 ) {
     // Local mutable list for live reordering
-    var localGames by remember(games) { mutableStateOf(games) }
+    var localGames by remember { mutableStateOf(games) }
+    var draggedItemKey by remember { mutableStateOf<Any?>(null) }
+    
+    // Sync localGames with source games only when NOT dragging to prevent resets
+    LaunchedEffect(games, screenState.isDragging) {
+        if (!screenState.isDragging) {
+            localGames = games
+        }
+    }
     
     val reorderableState = rememberReorderableLazyListState(
         lazyListState = listState,
@@ -573,6 +581,7 @@ private fun ReorderableListView(
             val toIndex = to.index - 1
             
             if (fromIndex >= 0 && toIndex >= 0 && fromIndex < localGames.size && toIndex < localGames.size) {
+                // Allow visual drag anywhere to "make space" - validation happens on drop in ViewModel
                 localGames = localGames.toMutableList().apply {
                     add(toIndex, removeAt(fromIndex))
                 }
@@ -590,19 +599,18 @@ private fun ReorderableListView(
         } else {
             // Drag ended - commit changes
             val currentGames = (screenState.games as? RequestState.Success)?.data
-            if (currentGames != null && localGames != currentGames) {
-                // Find what changed
-                for (i in localGames.indices) {
-                    if (i >= currentGames.size || localGames[i].id != currentGames[i].id) {
-                        // Find original index
-                        val originalIndex = currentGames.indexOfFirst { it.id == localGames[i].id }
-                        if (originalIndex >= 0 && originalIndex != i) {
-                            viewModel.onReorderComplete(originalIndex, i)
-                            break
-                        }
-                    }
+            val key = draggedItemKey
+            
+            if (currentGames != null && key != null) {
+                // Find where the dragged item ended up
+                val newIndex = localGames.indexOfFirst { it.id == key }
+                val oldIndex = currentGames.indexOfFirst { it.id == key }
+                
+                if (newIndex != -1 && oldIndex != -1 && newIndex != oldIndex) {
+                    viewModel.onReorderComplete(oldIndex, newIndex)
                 }
             }
+            draggedItemKey = null
             if (screenState.isDragging) {
                 viewModel.onDragEnd()
             }
@@ -638,6 +646,11 @@ private fun ReorderableListView(
                 state = reorderableState,
                 key = game.id
             ) { isDragging ->
+                // Report dragging state to parent
+                LaunchedEffect(isDragging) {
+                    if (isDragging) draggedItemKey = game.id
+                }
+
                 val elevation by animateDpAsState(
                     targetValue = if (isDragging) 16.dp else 0.dp,
                     label = "elevation"
@@ -702,7 +715,15 @@ private fun ReorderableGridView(
     isReadOnly: Boolean = false
 ) {
     // Local mutable list for live reordering
-    var localGames by remember(games) { mutableStateOf(games) }
+    var localGames by remember { mutableStateOf(games) }
+    var draggedItemKey by remember { mutableStateOf<Any?>(null) }
+
+    // Sync localGames with source games only when NOT dragging to prevent resets
+    LaunchedEffect(games, screenState.isDragging) {
+        if (!screenState.isDragging) {
+            localGames = games
+        }
+    }
     
     val reorderableState = rememberReorderableLazyGridState(
         lazyGridState = gridState,
@@ -715,6 +736,7 @@ private fun ReorderableGridView(
             val toIndex = to.index - 1
             
             if (fromIndex >= 0 && toIndex >= 0 && fromIndex < localGames.size && toIndex < localGames.size) {
+                // Allow visual drag anywhere to "make space" - validation happens on drop in ViewModel
                 localGames = localGames.toMutableList().apply {
                     add(toIndex, removeAt(fromIndex))
                 }
@@ -732,19 +754,18 @@ private fun ReorderableGridView(
         } else {
             // Drag ended - commit changes
             val currentGames = (screenState.games as? RequestState.Success)?.data
-            if (currentGames != null && localGames != currentGames) {
-                // Find what changed
-                for (i in localGames.indices) {
-                    if (i >= currentGames.size || localGames[i].id != currentGames[i].id) {
-                        // Find original index
-                        val originalIndex = currentGames.indexOfFirst { it.id == localGames[i].id }
-                        if (originalIndex >= 0 && originalIndex != i) {
-                            viewModel.onReorderComplete(originalIndex, i)
-                            break
-                        }
-                    }
+            val key = draggedItemKey
+            
+            if (currentGames != null && key != null) {
+                // Find where the dragged item ended up
+                val newIndex = localGames.indexOfFirst { it.id == key }
+                val oldIndex = currentGames.indexOfFirst { it.id == key }
+                
+                if (newIndex != -1 && oldIndex != -1 && newIndex != oldIndex) {
+                    viewModel.onReorderComplete(oldIndex, newIndex)
                 }
             }
+            draggedItemKey = null
             viewModel.onDragEnd()
         }
     }
@@ -780,6 +801,11 @@ private fun ReorderableGridView(
                 state = reorderableState,
                 key = game.id
             ) { isDragging ->
+                // Report dragging state to parent
+                LaunchedEffect(isDragging) {
+                    if (isDragging) draggedItemKey = game.id
+                }
+
                 val elevation by animateDpAsState(
                     targetValue = if (isDragging) 16.dp else 0.dp,
                     label = "elevation"

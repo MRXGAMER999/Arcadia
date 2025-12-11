@@ -74,11 +74,11 @@ interface FriendsRepository {
      * @param userId The user whose pending request count to observe
      * @return Flow emitting the count of pending incoming requests
      */
-    fun getPendingRequestCountRealtime(userId: String): Flow<Int>
+    fun getPendingRequestCountRealtime(userId: String): Flow<RequestState<Int>>
     
     /**
      * Send a friend request to another user.
-     * Validates limits and creates request document in Firestore.
+     * Validates limits and creates request document in Appwrite.
      * @param fromUserId Sender's user ID
      * @param fromUsername Sender's username
      * @param fromProfileImageUrl Sender's profile image URL (nullable)
@@ -114,7 +114,7 @@ interface FriendsRepository {
     
     /**
      * Cancel a sent friend request.
-     * Deletes the request document from Firestore.
+     * Deletes the request document from Appwrite.
      * @param requestId The ID of the request to cancel
      * @return Result of the operation
      */

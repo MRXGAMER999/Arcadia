@@ -20,7 +20,7 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.01"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -35,17 +35,38 @@ android {
             val groqApiKey = localProperties.getProperty("GROQ_API_KEY", "")
             val onesignalAppId = localProperties.getProperty("ONESIGNAL_APP_ID", "")
             val onesignalRestApiKey = localProperties.getProperty("ONESIGNAL_REST_API_KEY", "")
+            // Appwrite Configuration
+            val appwriteEndpoint = localProperties.getProperty("APPWRITE_ENDPOINT", "")
+            val appwriteProjectId = localProperties.getProperty("APPWRITE_PROJECT_ID", "")
+            val appwriteDatabaseId = localProperties.getProperty("APPWRITE_DATABASE_ID", "")
+            val appwriteBucketId = localProperties.getProperty("APPWRITE_BUCKET_ID", "")
+            val appwriteSelfSigned = localProperties
+                .getProperty("APPWRITE_SELF_SIGNED", "false")
+                .toBoolean()
+                .toString()
             buildConfigField("String", "RAWG_API_KEY", "\"$rawgApiKey\"")
             buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
             buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
             buildConfigField("String", "ONESIGNAL_APP_ID", "\"$onesignalAppId\"")
             buildConfigField("String", "ONESIGNAL_REST_API_KEY", "\"$onesignalRestApiKey\"")
+            // Appwrite BuildConfig fields
+            buildConfigField("String", "APPWRITE_ENDPOINT", "\"$appwriteEndpoint\"")
+            buildConfigField("String", "APPWRITE_PROJECT_ID", "\"$appwriteProjectId\"")
+            buildConfigField("String", "APPWRITE_DATABASE_ID", "\"$appwriteDatabaseId\"")
+            buildConfigField("String", "APPWRITE_BUCKET_ID", "\"$appwriteBucketId\"")
+            buildConfigField("Boolean", "APPWRITE_SELF_SIGNED", appwriteSelfSigned)
         } else {
             buildConfigField("String", "RAWG_API_KEY", "\"\"")
             buildConfigField("String", "GEMINI_API_KEY", "\"\"")
             buildConfigField("String", "GROQ_API_KEY", "\"\"")
             buildConfigField("String", "ONESIGNAL_APP_ID", "\"\"")
             buildConfigField("String", "ONESIGNAL_REST_API_KEY", "\"\"")
+            // Appwrite fallback values
+            buildConfigField("String", "APPWRITE_ENDPOINT", "\"\"")
+            buildConfigField("String", "APPWRITE_PROJECT_ID", "\"\"")
+            buildConfigField("String", "APPWRITE_DATABASE_ID", "\"\"")
+            buildConfigField("String", "APPWRITE_BUCKET_ID", "\"\"")
+            buildConfigField("Boolean", "APPWRITE_SELF_SIGNED", "false")
         }
     }
 
@@ -81,6 +102,13 @@ kotzilla {
     composeInstrumentation = true
 }
 
+configurations.all {
+    resolutionStrategy {
+        // Force OkHttp version to resolve conflict with Appwrite SDK
+        force("com.squareup.okhttp3:okhttp:4.12.0")
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.compose.material3)
@@ -93,11 +121,9 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
-    // Firebase (🔥)
+    // Firebase (🔥) - Only Auth is needed, Firestore/Storage migrated to Appwrite
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
-    implementation(libs.firebase.firestore)
-    implementation(libs.firebase.storage)
 
     //Icons
     implementation(libs.androidx.compose.material.icons.extended)
@@ -116,6 +142,9 @@ dependencies {
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
+
+    // Appwrite
+    implementation(libs.appwrite)
 
     // Splash screen
     implementation(libs.androidx.core.splashscreen)

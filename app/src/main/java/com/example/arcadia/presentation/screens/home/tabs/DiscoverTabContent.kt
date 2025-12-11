@@ -31,9 +31,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
-import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.LazyPagingItems
 import com.example.arcadia.data.remote.mapper.toGameListEntry
 import com.example.arcadia.domain.model.DiscoverySortType
+import com.example.arcadia.domain.model.Game
 import com.example.arcadia.presentation.components.DiscoveryFilterDialog
 import com.example.arcadia.presentation.components.ScrollToTopFAB
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
@@ -59,7 +60,6 @@ import com.example.arcadia.ui.theme.TextSecondary
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collect
@@ -75,7 +75,8 @@ fun DiscoverTabContent(
     viewModel: HomeViewModel,
     onGameClick: (Int) -> Unit,
     snackbarHostState: SnackbarHostState,
-    listState: LazyListState = rememberLazyListState()
+    listState: LazyListState = rememberLazyListState(),
+    aiPagingItems: LazyPagingItems<Game>
 ) {
     val screenState = viewModel.screenState
     val discoveryFilterState = viewModel.discoveryFilterState
@@ -83,9 +84,6 @@ fun DiscoverTabContent(
     val addGameSheetState by viewModel.addGameSheetState.collectAsState()
     val unsavedAddGameState by viewModel.unsavedAddGameState.collectAsState()
     val pullToRefreshState = rememberPullToRefreshState()
-    
-    // Collect Paging 3 items at composable scope (must be called unconditionally)
-    val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
     
     LaunchedEffect(aiPagingItems.loadState, aiPagingItems.itemCount) {
         if (aiPagingItems.itemCount == 0 && aiPagingItems.loadState.refresh is LoadState.NotLoading) {
@@ -279,7 +277,10 @@ fun DiscoverTabContent(
                             } else {
                                 items(
                                     count = aiPagingItems.itemCount,
-                                    key = { index -> aiPagingItems[index]?.id ?: index }
+                                    key = { index -> 
+                                        val item = aiPagingItems[index]
+                                        if (item != null) "${item.id}-$index" else index
+                                    }
                                 ) { index ->
                                     val game = aiPagingItems[index]
                                     if (game != null) {

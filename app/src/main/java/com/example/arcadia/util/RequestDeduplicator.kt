@@ -3,6 +3,8 @@ package com.example.arcadia.util
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -72,6 +74,9 @@ class RequestDeduplicator {
                 try {
                     dedupeResult.deferred.await()
                 } catch (e: CancellationException) {
+                    // Check if the current coroutine is cancelled. If so, rethrow.
+                    currentCoroutineContext().ensureActive()
+                    // The existing request was cancelled, but we are still active.
                     // Retry with a fresh request
                     dedupe(key, block)
                 }

@@ -342,7 +342,7 @@ class FriendRequestsViewModel(
 
     /**
      * Cancels a sent friend request.
-     * Deletes the request document from Firestore.
+     * Deletes the request document from Appwrite.
      * Requirements: 7.4, 13.1, 13.2
      */
     fun cancelRequest(request: FriendRequest) {

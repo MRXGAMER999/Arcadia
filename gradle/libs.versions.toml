@@ -23,7 +23,7 @@ playServicesAuth = "21.4.0"
 firebaseBom = "34.6.0"
 koin-bom = "4.1.1"
 retrofit = "3.0.0"
-okhttp = "5.3.2"
+okhttp = "4.12.0"
 # QR Code and Camera dependencies
 zxing = "3.5.4"
 mlkitBarcodeScanning = "17.3.0"
@@ -50,6 +50,8 @@ firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "fir
 firebase-auth = { module = "com.google.firebase:firebase-auth" }
 firebase-firestore = { module = "com.google.firebase:firebase-firestore" }
 firebase-storage = { module = "com.google.firebase:firebase-storage" }
+
+appwrite = { module = "io.appwrite:sdk-for-android", version = "11.4.0" }
 
 generativeai = { module = "com.google.ai.client.generativeai:generativeai", version.ref = "generativeai" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinSerialization" }

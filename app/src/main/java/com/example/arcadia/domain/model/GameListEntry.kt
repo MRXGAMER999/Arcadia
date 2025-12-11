@@ -7,7 +7,7 @@ import androidx.compose.runtime.Immutable
  */
 @Immutable
 data class GameListEntry(
-    val id: String = "", // Firestore document ID
+    val id: String = "", // Appwrite document ID
     val rawgId: Int = 0, // Game ID from RAWG API
     val name: String = "",
     val backgroundImage: String? = null,

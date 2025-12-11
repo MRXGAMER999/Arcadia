@@ -1,7 +1,7 @@
 package com.example.arcadia.data.remote.dto
 
 /**
- * Firestore DTO for GameListEntry
+ * Appwrite DTO for GameListEntry
  */
 data class GameListEntryDto(
     val rawgId: Int = 0,

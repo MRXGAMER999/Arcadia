@@ -49,7 +49,7 @@ import com.example.arcadia.domain.model.ai.Badge
  * a maximum of three badges
  * 
  * Requirements: 8.3 - WHEN a user confirms featured badge selection THEN the System 
- * SHALL save the selection to Firestore
+ * SHALL save the selection to Appwrite
  * 
  * Requirements: 8.5 - WHEN selecting badges THEN the System SHALL display a count 
  * indicator showing selected badges out of maximum allowed

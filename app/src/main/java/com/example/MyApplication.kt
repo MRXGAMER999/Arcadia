@@ -4,12 +4,12 @@ import android.app.Application
 import android.os.Build
 import com.example.arcadia.BuildConfig
 import com.example.arcadia.data.local.StudioCacheManager
+// import com.example.arcadia.data.appwrite.AppwriteClientProvider
 import com.example.arcadia.di.appModule
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.example.arcadia.util.AppwriteConstants
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
+import io.appwrite.services.TablesDB
 import io.kotzilla.sdk.analytics.koin.analytics
 import io.kotzilla.sdk.android.security.apiKey
 import kotlinx.coroutines.CoroutineScope
@@ -95,6 +95,16 @@ class MyApplication : Application() {
         }
     }
     
+    //    private suspend fun initializeAppwrite() {
+    //        runCatching {
+    //            AppwriteClientProvider.ping(applicationContext)
+    //        }.onSuccess {
+    //            android.util.Log.d(TAG, "Appwrite initialized and connectivity ping sent")
+    //        }.onFailure { throwable ->
+    //            android.util.Log.e(TAG, "Appwrite initialization failed", throwable)
+    //        }
+    //    }
+    
     /**
      * Syncs OneSignal login state with Firebase Auth.
      * If user is already logged in to Firebase, ensure OneSignal is logged in too.
@@ -108,10 +118,10 @@ class MyApplication : Application() {
                 OneSignal.login(currentUser.uid)
                 android.util.Log.d(TAG, "OneSignal login synced for existing user: ${currentUser.uid}")
                 
-                // Try to save the player ID to Firestore
+                // Try to save the player ID to Appwrite
                 val subscriptionId = OneSignal.User.pushSubscription.id
                 if (!subscriptionId.isNullOrBlank()) {
-                    saveOneSignalPlayerIdToFirestore(currentUser.uid, subscriptionId)
+                    saveOneSignalPlayerIdToAppwrite(currentUser.uid, subscriptionId)
                 }
             }
         } catch (e: Exception) {
@@ -120,22 +130,22 @@ class MyApplication : Application() {
     }
     
     /**
-     * Saves the OneSignal player ID to Firestore.
+     * Saves the OneSignal player ID to Appwrite.
      */
-    private fun saveOneSignalPlayerIdToFirestore(userId: String, playerId: String) {
-        try {
-            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(userId)
-                .update("oneSignalPlayerId", playerId)
-                .addOnSuccessListener {
-                    android.util.Log.d(TAG, "OneSignal player ID saved to Firestore: $playerId")
-                }
-                .addOnFailureListener { e ->
-                    android.util.Log.e(TAG, "Failed to save OneSignal player ID: ${e.message}", e)
-                }
-        } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error saving OneSignal player ID", e)
+    private fun saveOneSignalPlayerIdToAppwrite(userId: String, playerId: String) {
+        applicationScope.launch {
+            try {
+                val tablesDb: TablesDB = get()
+                tablesDb.updateRow(
+                    databaseId = BuildConfig.APPWRITE_DATABASE_ID,
+                    tableId = AppwriteConstants.USERS_COLLECTION_ID,
+                    rowId = userId,
+                    data = mapOf("oneSignalPlayerId" to playerId)
+                )
+                android.util.Log.d(TAG, "OneSignal player ID saved to Appwrite: $playerId")
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Failed to save OneSignal player ID to Appwrite: ${e.message}", e)
+            }
         }
     }
 }
