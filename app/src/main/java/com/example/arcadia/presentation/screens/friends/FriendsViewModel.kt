@@ -417,6 +417,12 @@ class FriendsViewModel(
             _uiState.update { it.copy(actionError = SESSION_EXPIRED_MESSAGE) }
             return
         }
+
+        // Prevent double-taps / repeated requests while an action is running
+        if (_uiState.value.isActionInProgress) return
+
+        // If UI already thinks it's sent/received/friends, don't send again
+        if (targetUser.friendshipStatus != FriendshipStatus.NOT_FRIENDS) return
         
         // Prevent self-request
         if (targetUser.userId == userId) {
@@ -430,8 +436,20 @@ class FriendsViewModel(
             return
         }
         
+        // Lock UI immediately + optimistically flip the button state so it can't be clicked again
+        _uiState.update { state ->
+            state.copy(
+                isActionInProgress = true,
+                actionError = null,
+                // Optimistic UI: mark as REQUEST_SENT immediately
+                searchResults = state.searchResults.map { user ->
+                    if (user.userId == targetUser.userId) user.copy(friendshipStatus = FriendshipStatus.REQUEST_SENT)
+                    else user
+                }
+            )
+        }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isActionInProgress = true, actionError = null) }
             
             try {
                 // Check for reciprocal request first
@@ -513,16 +531,18 @@ class FriendsViewModel(
                                 actionTargetName = targetUser.username
                             )
                         }
-                        // Refresh search results to update status
-                        if (_uiState.value.searchQuery.length >= MIN_SEARCH_LENGTH) {
-                            performSearch(_uiState.value.searchQuery)
-                        }
+                        // No need to re-search for UI; we already set REQUEST_SENT optimistically.
                     }
                     is RequestState.Error -> {
                         _uiState.update { 
                             it.copy(
                                 isActionInProgress = false,
-                                actionError = result.message
+                                actionError = result.message,
+                                // Revert optimistic state on failure
+                                searchResults = it.searchResults.map { user ->
+                                    if (user.userId == targetUser.userId) user.copy(friendshipStatus = FriendshipStatus.NOT_FRIENDS)
+                                    else user
+                                }
                             )
                         }
                     }
@@ -533,7 +553,12 @@ class FriendsViewModel(
                 _uiState.update { 
                     it.copy(
                         isActionInProgress = false,
-                        actionError = "Failed to send friend request"
+                        actionError = "Failed to send friend request",
+                        // Revert optimistic state on failure
+                        searchResults = it.searchResults.map { user ->
+                            if (user.userId == targetUser.userId) user.copy(friendshipStatus = FriendshipStatus.NOT_FRIENDS)
+                            else user
+                        }
                     )
                 }
             }

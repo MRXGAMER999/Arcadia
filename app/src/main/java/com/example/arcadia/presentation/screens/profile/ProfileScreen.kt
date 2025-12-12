@@ -143,8 +143,11 @@ fun ProfileScreen(
     // Show error messages via snackbar
     LaunchedEffect(friendshipState.error) {
         friendshipState.error?.let { error ->
-            snackbarHostState.showSnackbar(error)
-            viewModel.clearFriendshipError()
+            try {
+                snackbarHostState.showSnackbar(error)
+            } finally {
+                viewModel.clearFriendshipError()
+            }
         }
     }
     

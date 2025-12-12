@@ -171,7 +171,8 @@ class GameListRemoteDataSourceImpl(
             tableId = GAMES_COLLECTION_ID,
             queries = listOf(
                 Query.equal(FIELD_USER_ID, userId),
-                Query.equal(FIELD_RAWG_ID, rawgId),
+                // Appwrite table currently stores rawgId as STRING
+                Query.equal(FIELD_RAWG_ID, rawgId.toString()),
                 Query.limit(1)
             )
         )

@@ -1,10 +1,12 @@
 package com.example.arcadia.presentation.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
@@ -40,24 +42,34 @@ fun BottomSlideSnackbarHost(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        AnimatedVisibility(
-            visible = currentSnackbarData != null,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = spring(
+        AnimatedContent(
+            targetState = currentSnackbarData,
+            transitionSpec = {
+                val enterSpec = spring<androidx.compose.ui.unit.IntOffset>(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessLow
                 )
-            ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = spring(
+                val exitSpec = spring<androidx.compose.ui.unit.IntOffset>(
                     dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessMedium
                 )
-            ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium))
-        ) {
-            currentSnackbarData?.let { snackbar(it) }
+
+                (slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = enterSpec
+                ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                .togetherWith(
+                    slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = exitSpec
+                    ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium))
+                )
+            },
+            label = "SnackbarAnimation"
+        ) { snackbarData ->
+            if (snackbarData != null) {
+                snackbar(snackbarData)
+            }
         }
     }
 }

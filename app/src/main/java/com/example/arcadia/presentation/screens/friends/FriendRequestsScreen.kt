@@ -71,8 +71,11 @@ fun FriendRequestsScreen(
     // Show snackbar for action errors
     LaunchedEffect(uiState.actionError) {
         uiState.actionError?.let { error ->
-            snackbarHostState.showSnackbar(error)
-            viewModel.clearActionError()
+            try {
+                snackbarHostState.showSnackbar(error)
+            } finally {
+                viewModel.clearActionError()
+            }
         }
     }
     
