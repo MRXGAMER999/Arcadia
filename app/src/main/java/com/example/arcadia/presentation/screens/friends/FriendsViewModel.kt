@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Mode for the Add Friends bottom sheet.
@@ -66,10 +67,6 @@ data class FriendsUiState(
     val searchResults: List<UserSearchResult> = emptyList(),
     /** Whether a search is in progress */
     val isSearching: Boolean = false,
-    /** Whether more friends can be loaded (pagination) */
-    val canLoadMore: Boolean = true,
-    /** Whether more friends are being loaded */
-    val isLoadingMore: Boolean = false,
     /** Current QR code mode (MY_CODE or SCAN) */
     val qrCodeMode: QRCodeMode = QRCodeMode.MY_CODE,
     /** Search hint message */
@@ -116,15 +113,14 @@ class FriendsViewModel(
         private const val TAG = "FriendsViewModel"
         private const val SEARCH_DEBOUNCE_MS = 300L
         private const val MIN_SEARCH_LENGTH = 2
-        private const val PAGINATION_SIZE = 20
         private const val NETWORK_ERROR_MESSAGE = "Network error. Please check your connection."
+        private const val USER_INFO_TIMEOUT_MS = 5000L
+        private const val SESSION_EXPIRED_MESSAGE = "User session expired. Please log in again."
+        private const val OFFLINE_ERROR_MESSAGE = "You're offline. Please check your connection."
     }
 
     private val _uiState = MutableStateFlow(FriendsUiState())
     val uiState: StateFlow<FriendsUiState> = _uiState.asStateFlow()
-
-    /** The last loaded friend's username for pagination */
-    private var lastLoadedUsername: String? = null
 
     /** Job for search debouncing */
     private var searchJob: Job? = null
@@ -179,12 +175,9 @@ class FriendsViewModel(
                             it.copy(
                                 friends = state.data,
                                 isLoading = false,
-                                error = null,
-                                canLoadMore = state.data.size >= PAGINATION_SIZE
+                                error = null
                             )
                         }
-                        // Update last loaded username for pagination
-                        lastLoadedUsername = state.data.lastOrNull()?.username
                     }
                     is RequestState.Error -> {
                         _uiState.update { 
@@ -197,43 +190,6 @@ class FriendsViewModel(
                     is RequestState.Idle -> {
                         // No-op
                     }
-                }
-            }
-        }
-    }
-
-    /**
-     * Loads more friends for pagination.
-     * Requirements: 15.1, 15.2
-     */
-    fun loadMoreFriends() {
-        val userId = currentUserId ?: return
-        if (_uiState.value.isLoadingMore || !_uiState.value.canLoadMore) return
-
-        launchWithKey("load_more_friends") {
-            _uiState.update { it.copy(isLoadingMore = true) }
-            
-            friendsRepository.getFriendsPaginated(
-                userId = userId,
-                limit = PAGINATION_SIZE,
-                lastUsername = lastLoadedUsername
-            ).collect { state ->
-                when (state) {
-                    is RequestState.Success -> {
-                        val newFriends = state.data
-                        _uiState.update { currentState ->
-                            currentState.copy(
-                                friends = currentState.friends + newFriends,
-                                isLoadingMore = false,
-                                canLoadMore = newFriends.size >= PAGINATION_SIZE
-                            )
-                        }
-                        lastLoadedUsername = newFriends.lastOrNull()?.username
-                    }
-                    is RequestState.Error -> {
-                        _uiState.update { it.copy(isLoadingMore = false) }
-                    }
-                    else -> {}
                 }
             }
         }
@@ -379,7 +335,7 @@ class FriendsViewModel(
             _uiState.update { 
                 it.copy(
                     searchResults = emptyList(),
-                    searchHint = if (query.isEmpty()) "Type at least 2 characters" else "Type at least 2 characters",
+                    searchHint = "Type at least 2 characters",
                     isSearching = false
                 )
             }
@@ -443,12 +399,30 @@ class FriendsViewModel(
     // ==================== Friend Request Operations ====================
 
     /**
+     * Shows an error message when user tries to perform action while offline.
+     * Requirements: 13.3, 13.4
+     */
+    fun showOfflineError() {
+        _uiState.update { it.copy(actionError = OFFLINE_ERROR_MESSAGE) }
+    }
+
+    /**
      * Sends a friend request to a user from search results.
      * Checks for reciprocal requests and validates limits first.
      * Requirements: 3.13, 3.14, 3.15, 3.18, 13.1, 13.2
      */
     fun sendFriendRequest(targetUser: UserSearchResult) {
-        val userId = currentUserId ?: return
+        val userId = currentUserId
+        if (userId == null) {
+            _uiState.update { it.copy(actionError = SESSION_EXPIRED_MESSAGE) }
+            return
+        }
+        
+        // Prevent self-request
+        if (targetUser.userId == userId) {
+            _uiState.update { it.copy(actionError = "You cannot send a friend request to yourself") }
+            return
+        }
         
         // Check network connectivity - Requirements: 13.1, 13.4
         if (!isOnline()) {
@@ -571,7 +545,11 @@ class FriendsViewModel(
      * Requirements: 3.24, 13.1, 13.2
      */
     fun acceptFriendRequestFromSearch(targetUser: UserSearchResult) {
-        val userId = currentUserId ?: return
+        val userId = currentUserId
+        if (userId == null) {
+            _uiState.update { it.copy(actionError = SESSION_EXPIRED_MESSAGE) }
+            return
+        }
         
         // Check network connectivity - Requirements: 13.1, 13.4
         if (!isOnline()) {
@@ -654,6 +632,8 @@ class FriendsViewModel(
      */
     fun acceptReciprocalRequest() {
         val request = _uiState.value.reciprocalRequest ?: return
+        val targetUser = _uiState.value.reciprocalRequestTargetUser
+        val targetUsername = targetUser?.username
         
         // Check network connectivity - Requirements: 13.1, 13.4
         if (!isOnline()) {
@@ -677,10 +657,10 @@ class FriendsViewModel(
                     _uiState.update { 
                         it.copy(
                             isActionInProgress = false,
-                                actionSuccess = null,
-                                showActionSnackbar = true,
-                                actionSnackbarMessage = "Friend added",
-                                actionTargetName = _uiState.value.reciprocalRequestTargetUser?.username
+                            actionSuccess = null,
+                            showActionSnackbar = true,
+                            actionSnackbarMessage = "Friend added",
+                            actionTargetName = targetUsername
                         )
                     }
                     // Refresh search results
@@ -760,18 +740,22 @@ class FriendsViewModel(
 
     /**
      * Gets the current user's username and profile image URL.
+     * Uses timeout to prevent indefinite blocking.
      */
     private suspend fun getCurrentUserInfo(): Pair<String, String?>? {
         val userId = currentUserId ?: return null
         
         return try {
-            val state = gamerRepository.readCustomerFlow()
-                .filter { it is RequestState.Success }
-                .first()
+            val state = withTimeoutOrNull(USER_INFO_TIMEOUT_MS) {
+                gamerRepository.readCustomerFlow()
+                    .filter { it is RequestState.Success }
+                    .first()
+            }
             
             if (state is RequestState.Success) {
                 Pair(state.data.username, state.data.profileImageUrl)
             } else {
+                Log.w(TAG, "Timeout or null state when getting current user info")
                 null
             }
         } catch (e: Exception) {

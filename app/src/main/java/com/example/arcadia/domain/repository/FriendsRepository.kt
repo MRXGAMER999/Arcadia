@@ -11,6 +11,18 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Repository interface for managing friends and friend requests.
  * Provides methods for CRUD operations, real-time listeners, search, and validation.
+ * 
+ * Error Handling:
+ * - Methods returning RequestState will return RequestState.Error with a descriptive message on failure
+ * - Methods returning Boolean will return false on error (with logging)
+ * - Methods returning nullable types will return null on error (with logging)
+ * - Flow-based methods will emit RequestState.Error on failure
+ * 
+ * Limits:
+ * - Maximum friends: 500
+ * - Maximum pending outgoing requests: 100
+ * - Daily request limit: 20
+ * - Decline cooldown: 24 hours
  */
 interface FriendsRepository {
     
@@ -22,19 +34,6 @@ interface FriendsRepository {
      * @return Flow emitting the friends list sorted alphabetically by username
      */
     fun getFriendsRealtime(userId: String): Flow<RequestState<List<Friend>>>
-    
-    /**
-     * Get paginated friends list for efficient loading.
-     * @param userId The user whose friends list to retrieve
-     * @param limit Maximum number of friends to return (default 20)
-     * @param lastUsername Username to start after for pagination (null for first page)
-     * @return Flow emitting the paginated friends list
-     */
-    fun getFriendsPaginated(
-        userId: String, 
-        limit: Int, 
-        lastUsername: String?
-    ): Flow<RequestState<List<Friend>>>
     
     /**
      * Remove a friend from both users' friends lists.
@@ -49,7 +48,7 @@ interface FriendsRepository {
      * Check if two users are friends.
      * @param userId The first user's ID
      * @param friendUserId The second user's ID
-     * @return True if they are friends, false otherwise
+     * @return True if they are friends, false otherwise (also returns false on error)
      */
     suspend fun isFriend(userId: String, friendUserId: String): Boolean
     

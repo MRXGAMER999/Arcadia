@@ -9,8 +9,10 @@ import io.appwrite.Query
 import io.appwrite.models.Row
 import io.appwrite.services.Realtime
 import io.appwrite.services.TablesDB
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -40,7 +42,10 @@ class FriendsRemoteDataSourceImpl(
         // Initial fetch
         try {
             val initialDocs = fetchFriends(userId)
-            trySend(initialDocs)
+            val result = trySend(initialDocs)
+            if (result.isFailure) {
+                Log.w(TAG, "Failed to send initial friends data")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching initial friends: ${e.message}", e)
             // Don't close, let realtime try
@@ -52,7 +57,10 @@ class FriendsRemoteDataSourceImpl(
             launch {
                 try {
                     val docs = fetchFriends(userId)
-                    trySend(docs)
+                    val result = trySend(docs)
+                    if (result.isFailure) {
+                        Log.w(TAG, "Failed to send updated friends data, buffer may be full")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error refreshing friends: ${e.message}", e)
                 }
@@ -60,7 +68,7 @@ class FriendsRemoteDataSourceImpl(
         }
 
         awaitClose { subscription.close() }
-    }
+    }.buffer(Channel.CONFLATED)
 
     private suspend fun fetchFriends(userId: String): List<Row<Map<String, Any>>> {
         val docs = tablesDb.listRows(
@@ -73,22 +81,6 @@ class FriendsRemoteDataSourceImpl(
             )
         )
         return docs.rows
-    }
-
-    override suspend fun getFriends(userId: String, limit: Int, cursor: String?): List<Row<Map<String, Any>>> {
-        val queries = mutableListOf(
-            Query.equal("userId", userId),
-            Query.orderAsc("friendUsername"),
-            Query.limit(limit)
-        )
-        if (cursor != null) {
-            queries.add(Query.cursorAfter(cursor))
-        }
-        return tablesDb.listRows(
-            databaseId = DATABASE_ID,
-            tableId = FRIENDSHIPS_COLLECTION_ID,
-            queries = queries
-        ).rows
     }
 
     override suspend fun removeFriend(currentUserId: String, friendUserId: String) {
@@ -134,7 +126,10 @@ class FriendsRemoteDataSourceImpl(
 
     override fun observeIncomingFriendRequests(userId: String): Flow<List<Row<Map<String, Any>>>> = callbackFlow {
         try {
-            trySend(fetchIncomingRequests(userId))
+            val result = trySend(fetchIncomingRequests(userId))
+            if (result.isFailure) {
+                Log.w(TAG, "Failed to send initial incoming requests")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching initial incoming requests: ${e.message}", e)
         }
@@ -144,14 +139,17 @@ class FriendsRemoteDataSourceImpl(
         ) {
             launch {
                 try {
-                    trySend(fetchIncomingRequests(userId))
+                    val result = trySend(fetchIncomingRequests(userId))
+                    if (result.isFailure) {
+                        Log.w(TAG, "Failed to send updated incoming requests, buffer may be full")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error refreshing incoming requests: ${e.message}", e)
                 }
             }
         }
         awaitClose { subscription.close() }
-    }
+    }.buffer(Channel.CONFLATED)
 
     private suspend fun fetchIncomingRequests(userId: String): List<Row<Map<String, Any>>> {
         return tablesDb.listRows(
@@ -167,7 +165,10 @@ class FriendsRemoteDataSourceImpl(
 
     override fun observeOutgoingFriendRequests(userId: String): Flow<List<Row<Map<String, Any>>>> = callbackFlow {
         try {
-            trySend(fetchOutgoingRequests(userId))
+            val result = trySend(fetchOutgoingRequests(userId))
+            if (result.isFailure) {
+                Log.w(TAG, "Failed to send initial outgoing requests")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching initial outgoing requests: ${e.message}", e)
         }
@@ -177,14 +178,17 @@ class FriendsRemoteDataSourceImpl(
         ) {
             launch {
                 try {
-                    trySend(fetchOutgoingRequests(userId))
+                    val result = trySend(fetchOutgoingRequests(userId))
+                    if (result.isFailure) {
+                        Log.w(TAG, "Failed to send updated outgoing requests, buffer may be full")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error refreshing outgoing requests: ${e.message}", e)
                 }
             }
         }
         awaitClose { subscription.close() }
-    }
+    }.buffer(Channel.CONFLATED)
 
     private suspend fun fetchOutgoingRequests(userId: String): List<Row<Map<String, Any>>> {
         return tablesDb.listRows(
@@ -325,17 +329,54 @@ class FriendsRemoteDataSourceImpl(
 
     override suspend fun getUsers(userIds: List<String>): List<Row<Map<String, Any>>> {
         if (userIds.isEmpty()) return emptyList()
-        // Appwrite doesn't support "in" query easily for IDs in one go usually, 
-        // but we can try Query.equal("\$id", userIds) if supported or loop.
-        // For now, let's loop or use multiple queries if list is small.
-        // Or better, use Query.equal("\$id", userIds) if supported by SDK/Backend.
-        // Assuming it supports list for equal.
         return tablesDb.listRows(
             databaseId = DATABASE_ID,
             tableId = USERS_COLLECTION_ID,
-            queries = listOf(Query.equal("\$id", userIds))
+            queries = listOf(
+                Query.equal("\$id", userIds),
+                Query.limit(500)
+            )
         ).rows
     }
+
+    override fun observeUsersByIds(userIds: List<String>): Flow<List<Row<Map<String, Any>>>> = callbackFlow {
+        if (userIds.isEmpty()) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
+
+        // Initial fetch
+        try {
+            val initialUsers = getUsers(userIds)
+            val result = trySend(initialUsers)
+            if (result.isFailure) {
+                Log.w(TAG, "Failed to send initial users data")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching initial users: ${e.message}", e)
+            trySend(emptyList())
+        }
+
+        // Subscribe to users table changes
+        val subscription = realtime.subscribe(
+            "databases.$DATABASE_ID.tables.$USERS_COLLECTION_ID.rows"
+        ) {
+            launch {
+                try {
+                    val users = getUsers(userIds)
+                    val result = trySend(users)
+                    if (result.isFailure) {
+                        Log.w(TAG, "Failed to send updated users data, buffer may be full")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error refreshing users: ${e.message}", e)
+                }
+            }
+        }
+
+        awaitClose { subscription.close() }
+    }.buffer(Channel.CONFLATED)
 
     override fun observePendingRequestCount(userId: String): Flow<Int> = callbackFlow {
         val query = listOf(
@@ -345,7 +386,10 @@ class FriendsRemoteDataSourceImpl(
         
         try {
             val count = tablesDb.listRows(DATABASE_ID, FRIEND_REQUESTS_COLLECTION_ID, query).total.toInt()
-            trySend(count)
+            val result = trySend(count)
+            if (result.isFailure) {
+                Log.w(TAG, "Failed to send initial pending count")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching pending count: ${e.message}", e)
         }
@@ -356,14 +400,17 @@ class FriendsRemoteDataSourceImpl(
             launch {
                 try {
                     val count = tablesDb.listRows(DATABASE_ID, FRIEND_REQUESTS_COLLECTION_ID, query).total.toInt()
-                    trySend(count)
+                    val result = trySend(count)
+                    if (result.isFailure) {
+                        Log.w(TAG, "Failed to send updated pending count, buffer may be full")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error refreshing pending count: ${e.message}", e)
                 }
             }
         }
         awaitClose { subscription.close() }
-    }
+    }.buffer(Channel.CONFLATED)
 
     override suspend fun getFriendship(userId: String, friendUserId: String): Row<Map<String, Any>>? {
         val docs = tablesDb.listRows(
@@ -385,6 +432,8 @@ class FriendsRemoteDataSourceImpl(
             queries = listOf(
                 Query.equal("fromUserId", fromUserId),
                 Query.equal("toUserId", toUserId),
+                Query.equal("status", FriendRequestStatus.PENDING.name.lowercase()),
+                Query.orderDesc("createdAt"),
                 Query.limit(1)
             )
         )
@@ -419,14 +468,15 @@ class FriendsRemoteDataSourceImpl(
         }
     }
 
-    override suspend fun deleteOldDeclinedRequests(userId: String, olderThan: Long) {
+    override suspend fun deleteOldDeclinedRequests(userId: String, olderThan: Long, maxDeletes: Int) {
         val docs = tablesDb.listRows(
             databaseId = DATABASE_ID,
             tableId = FRIEND_REQUESTS_COLLECTION_ID,
             queries = listOf(
                 Query.equal("toUserId", userId),
                 Query.equal("status", FriendRequestStatus.DECLINED.name.lowercase()),
-                Query.lessThan("updatedAt", olderThan)
+                Query.lessThan("updatedAt", olderThan),
+                Query.limit(maxDeletes)
             )
         )
         docs.rows.forEach { doc ->

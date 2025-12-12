@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.Flow
 interface FriendsRemoteDataSource {
     // Friends
     fun observeFriends(userId: String): Flow<List<Row<Map<String, Any>>>>
-    suspend fun getFriends(userId: String, limit: Int, cursor: String? = null): List<Row<Map<String, Any>>>
     suspend fun removeFriend(currentUserId: String, friendUserId: String)
     suspend fun isFriend(userId: String, friendUserId: String): Boolean
     
@@ -30,6 +29,7 @@ interface FriendsRemoteDataSource {
     suspend fun getUser(userId: String): Row<Map<String, Any>>
     suspend fun getUsers(userIds: List<String>): List<Row<Map<String, Any>>>
     suspend fun updateUser(userId: String, data: Map<String, Any>)
+    fun observeUsersByIds(userIds: List<String>): Flow<List<Row<Map<String, Any>>>>
     
     // Additional methods for missing repository features
     fun observePendingRequestCount(userId: String): Flow<Int>
@@ -37,5 +37,5 @@ interface FriendsRemoteDataSource {
     suspend fun getFriendRequest(fromUserId: String, toUserId: String): Row<Map<String, Any>>?
     suspend fun getDeclinedRequests(toUserId: String, fromUserId: String): List<Row<Map<String, Any>>>
     suspend fun updateFriendshipProfile(userId: String, friendUserId: String, username: String?, profileImageUrl: String?)
-    suspend fun deleteOldDeclinedRequests(userId: String, olderThan: Long)
+    suspend fun deleteOldDeclinedRequests(userId: String, olderThan: Long, maxDeletes: Int = 10)
 }

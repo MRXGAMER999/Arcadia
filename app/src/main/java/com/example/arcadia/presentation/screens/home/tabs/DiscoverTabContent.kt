@@ -57,7 +57,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.arcadia.ui.theme.TextSecondary
 
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -277,10 +276,7 @@ fun DiscoverTabContent(
                             } else {
                                 items(
                                     count = aiPagingItems.itemCount,
-                                    key = { index -> 
-                                        val item = aiPagingItems[index]
-                                        if (item != null) "${item.id}-$index" else index
-                                    }
+                                    key = { index -> aiPagingItems[index]?.id ?: index }
                                 ) { index ->
                                     val game = aiPagingItems[index]
                                     if (game != null) {

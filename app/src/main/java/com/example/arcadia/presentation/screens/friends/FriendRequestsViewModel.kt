@@ -37,10 +37,14 @@ data class FriendRequestsUiState(
     val incomingRequests: List<FriendRequest> = emptyList(),
     /** List of outgoing (sent) friend requests */
     val outgoingRequests: List<FriendRequest> = emptyList(),
-    /** Whether requests are loading */
-    val isLoading: Boolean = false,
-    /** Error message if loading failed */
-    val error: String? = null,
+    /** Whether incoming requests are loading */
+    val isLoadingIncoming: Boolean = false,
+    /** Whether outgoing requests are loading */
+    val isLoadingOutgoing: Boolean = false,
+    /** Error message for incoming requests */
+    val incomingError: String? = null,
+    /** Error message for outgoing requests */
+    val outgoingError: String? = null,
     /** Whether an action (accept/decline/cancel) is in progress */
     val isActionInProgress: Boolean = false,
     /** ID of the request currently being processed */
@@ -58,8 +62,18 @@ data class FriendRequestsUiState(
     /** Whether the device is currently offline - Requirements: 13.3, 13.4 */
     val isOffline: Boolean = false,
     /** Type of limit reached for showing dialog - Requirements: 6.11 */
-    val limitReachedType: LimitType? = null
-)
+    val limitReachedType: LimitType? = null,
+    /** Cooldown hours for declined request limit - Requirements: 3.26 */
+    val cooldownHours: Int? = null
+) {
+    /** Combined loading state based on selected tab */
+    val isLoading: Boolean
+        get() = if (selectedTab == RequestTab.INCOMING) isLoadingIncoming else isLoadingOutgoing
+    
+    /** Combined error state based on selected tab */
+    val error: String?
+        get() = if (selectedTab == RequestTab.INCOMING) incomingError else outgoingError
+}
 
 /**
  * ViewModel for the Friend Requests screen.
@@ -117,11 +131,17 @@ class FriendRequestsViewModel(
     // ==================== Tab Selection ====================
 
     /**
-     * Switches to the specified tab.
+     * Switches to the specified tab and clears tab-specific errors.
      * Requirements: 6.2, 7.1
      */
     fun selectTab(tab: RequestTab) {
-        _uiState.update { it.copy(selectedTab = tab) }
+        _uiState.update { 
+            it.copy(
+                selectedTab = tab,
+                incomingError = if (tab == RequestTab.INCOMING) null else it.incomingError,
+                outgoingError = if (tab == RequestTab.OUTGOING) null else it.outgoingError
+            )
+        }
     }
 
     // ==================== Request Loading ====================
@@ -137,22 +157,22 @@ class FriendRequestsViewModel(
             friendsRepository.getIncomingRequestsRealtime(userId).collect { state ->
                 when (state) {
                     is RequestState.Loading -> {
-                        _uiState.update { it.copy(isLoading = true, error = null) }
+                        _uiState.update { it.copy(isLoadingIncoming = true, incomingError = null) }
                     }
                     is RequestState.Success -> {
                         _uiState.update { 
                             it.copy(
                                 incomingRequests = state.data,
-                                isLoading = false,
-                                error = null
+                                isLoadingIncoming = false,
+                                incomingError = null
                             )
                         }
                     }
                     is RequestState.Error -> {
                         _uiState.update { 
                             it.copy(
-                                isLoading = false,
-                                error = state.message
+                                isLoadingIncoming = false,
+                                incomingError = state.message
                             )
                         }
                     }
@@ -174,20 +194,29 @@ class FriendRequestsViewModel(
         launchWithKey("load_outgoing") {
             friendsRepository.getOutgoingRequestsRealtime(userId).collect { state ->
                 when (state) {
+                    is RequestState.Loading -> {
+                        _uiState.update { it.copy(isLoadingOutgoing = true, outgoingError = null) }
+                    }
                     is RequestState.Success -> {
                         _uiState.update { 
-                            it.copy(outgoingRequests = state.data)
+                            it.copy(
+                                outgoingRequests = state.data,
+                                isLoadingOutgoing = false,
+                                outgoingError = null
+                            )
                         }
                     }
                     is RequestState.Error -> {
-                        // Only update error if we're on the outgoing tab
-                        if (_uiState.value.selectedTab == RequestTab.OUTGOING) {
-                            _uiState.update { 
-                                it.copy(error = state.message)
-                            }
+                        _uiState.update { 
+                            it.copy(
+                                isLoadingOutgoing = false,
+                                outgoingError = state.message
+                            )
                         }
                     }
-                    else -> {}
+                    is RequestState.Idle -> {
+                        // No-op
+                    }
                 }
             }
         }
@@ -198,7 +227,7 @@ class FriendRequestsViewModel(
      * Requirements: 6.16
      */
     fun retry() {
-        _uiState.update { it.copy(error = null) }
+        _uiState.update { it.copy(incomingError = null, outgoingError = null) }
         loadIncomingRequests()
         loadOutgoingRequests()
     }
@@ -312,7 +341,10 @@ class FriendRequestsViewModel(
                             it.copy(
                                 isActionInProgress = false,
                                 processingRequestId = null,
-                                actionSuccess = "Friend request declined"
+                                actionSuccess = "Friend request declined",
+                                showActionSnackbar = true,
+                                actionSnackbarMessage = "Friend request declined",
+                                actionTargetName = request.fromUsername
                             )
                         }
                     }
@@ -370,7 +402,10 @@ class FriendRequestsViewModel(
                             it.copy(
                                 isActionInProgress = false,
                                 processingRequestId = null,
-                                actionSuccess = "Friend request cancelled"
+                                actionSuccess = "Friend request cancelled",
+                                showActionSnackbar = true,
+                                actionSnackbarMessage = "Friend request cancelled",
+                                actionTargetName = request.toUsername
                             )
                         }
                     }
@@ -443,7 +478,7 @@ class FriendRequestsViewModel(
      * Requirements: 6.11
      */
     fun dismissLimitDialog() {
-        _uiState.update { it.copy(limitReachedType = null) }
+        _uiState.update { it.copy(limitReachedType = null, cooldownHours = null) }
     }
 
     fun dismissActionSnackbar() {

@@ -33,10 +33,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -73,27 +73,9 @@ fun FriendsScreen(
     currentUserId: String,
     viewModel: FriendsViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
-    
-    // Detect when user scrolls near the end for pagination
-    val shouldLoadMore by remember {
-        derivedStateOf {
-            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null && 
-                lastVisibleItem.index >= uiState.friends.size - 5 &&
-                uiState.canLoadMore &&
-                !uiState.isLoadingMore &&
-                !uiState.isLoading
-        }
-    }
-    
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore) {
-            viewModel.loadMoreFriends()
-        }
-    }
     
     LaunchedEffect(uiState.actionError) {
         uiState.actionError?.let { error ->
@@ -149,7 +131,6 @@ fun FriendsScreen(
                         else -> {
                             FriendsList(
                                 friends = uiState.friends,
-                                isLoadingMore = uiState.isLoadingMore,
                                 listState = listState,
                                 onFriendClick = onNavigateToProfile
                             )
@@ -160,7 +141,9 @@ fun FriendsScreen(
 
             PremiumFloatingActionButton(
                 onClick = { 
-                    if (!uiState.isOffline) {
+                    if (uiState.isOffline) {
+                        viewModel.showOfflineError()
+                    } else {
                         viewModel.showAddFriendsSheet() 
                     }
                 },
@@ -221,15 +204,13 @@ fun FriendsScreen(
         }
     )
     
-    if (uiState.reciprocalRequest != null && uiState.reciprocalRequestTargetUser != null) {
-        val targetUser = uiState.reciprocalRequestTargetUser
-        targetUser?.let { user ->
-            ReciprocalRequestDialog(
-                username = user.username,
-                onAccept = { viewModel.acceptReciprocalRequest() },
-                onDismiss = { viewModel.dismissReciprocalRequestDialog() }
-            )
-        }
+    val reciprocalTargetUser = uiState.reciprocalRequestTargetUser
+    if (uiState.reciprocalRequest != null && reciprocalTargetUser != null) {
+        ReciprocalRequestDialog(
+            username = reciprocalTargetUser.username,
+            onAccept = { viewModel.acceptReciprocalRequest() },
+            onDismiss = { viewModel.dismissReciprocalRequestDialog() }
+        )
     }
     
     uiState.limitReachedType?.let { limitType ->
@@ -307,7 +288,6 @@ private fun FriendsTopBar(
 @Composable
 private fun FriendsList(
     friends: List<com.example.arcadia.domain.model.friend.Friend>,
-    isLoadingMore: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onFriendClick: (String) -> Unit
 ) {
@@ -323,23 +303,6 @@ private fun FriendsList(
                     friend = friend,
                     onClick = { onFriendClick(friend.userId) }
                 )
-            }
-        }
-        
-        if (isLoadingMore) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        color = ButtonPrimary,
-                        modifier = Modifier.size(32.dp),
-                        strokeWidth = 3.dp
-                    )
-                }
             }
         }
     }

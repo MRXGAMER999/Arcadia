@@ -20,7 +20,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,7 +29,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -44,8 +42,6 @@ import com.example.arcadia.presentation.screens.home.tabs.LibraryTabContent
 import com.example.arcadia.ui.theme.Surface
 import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // Custom Saver for LazyListState to ensure scroll position is preserved
@@ -76,7 +72,8 @@ fun NewHomeScreen(
     val snackbarState by viewModel.snackbarState.collectAsState()
     val pendingFriendRequestCount by viewModel.pendingFriendRequestCount.collectAsState()
     val scope = rememberCoroutineScope()
-    // Keep paging collection alive across tab switches to avoid flicker
+    
+    // Keep paging collection alive across tab switches to avoid list refresh
     val aiPagingItems = viewModel.aiRecommendationsPaged.collectAsLazyPagingItems()
     
     // Double back to exit logic

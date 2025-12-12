@@ -28,7 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.arcadia.data.remote.mapper.toGameListEntry
-import com.example.arcadia.domain.model.Game
 import com.example.arcadia.presentation.components.ScrollToTopFAB
 import com.example.arcadia.presentation.components.UnsavedChangesSnackbar
 import com.example.arcadia.presentation.components.game_rating.GameRatingSheet
@@ -46,13 +45,12 @@ import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 
 import androidx.compose.runtime.LaunchedEffect
+import com.example.arcadia.domain.model.Game
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 
 /**
  * Home tab content displaying Popular Games, Upcoming Games, and Playlist Recommendations.
@@ -234,10 +232,7 @@ fun HomeTabContent(
                     // Show cached data (limit to 3)
                     items(
                         count = minOf(aiPagingItems.itemCount, 3),
-                        key = { index -> 
-                            val item = aiPagingItems[index]
-                            if (item != null) "${item.id}-$index" else index
-                        }
+                        key = { index -> aiPagingItems[index]?.id ?: index }
                     ) { index ->
                         val game = aiPagingItems[index]
                         if (game != null) {

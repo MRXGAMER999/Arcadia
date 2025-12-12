@@ -63,7 +63,7 @@ object FriendMapper {
         }
     }
 
-    private fun parseTimestamp(value: Any?): Long {
+    fun parseTimestamp(value: Any?): Long {
         return when (value) {
             is Number -> value.toLong()
             is String -> {
