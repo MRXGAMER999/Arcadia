@@ -31,6 +31,7 @@ class OneSignalNotificationService(
 
     /**
      * Sends a push notification when a friend request is sent.
+     * Includes Accept/Decline action buttons.
      * 
      * Requirement 10.6: WHEN a friend request is sent THEN the Arcadia System SHALL send 
      * a notification to the recipient with title "New Friend Request" and body 
@@ -38,16 +39,23 @@ class OneSignalNotificationService(
      * 
      * @param recipientPlayerId The OneSignal player ID of the recipient
      * @param senderUsername The username of the sender
+     * @param requestId The friend request document ID for action handling
+     * @param fromUserId The user ID of the sender
      * @return True if notification was sent successfully, false otherwise
      */
     suspend fun sendFriendRequestNotification(
         recipientPlayerId: String,
-        senderUsername: String
+        senderUsername: String,
+        requestId: String? = null,
+        fromUserId: String? = null
     ): Boolean {
         return sendNotification(
             playerId = recipientPlayerId,
             title = "New Friend Request",
-            body = "@$senderUsername wants to be your friend!"
+            body = "@$senderUsername wants to be your friend!",
+            requestId = requestId,
+            fromUserId = fromUserId,
+            includeActionButtons = true
         )
     }
 
@@ -82,12 +90,18 @@ class OneSignalNotificationService(
      * @param playerId The OneSignal player ID to send the notification to
      * @param title The notification title
      * @param body The notification body
+     * @param requestId Optional friend request ID for action buttons
+     * @param fromUserId Optional sender user ID for action buttons
+     * @param includeActionButtons Whether to include Accept/Decline buttons
      * @return True if notification was sent successfully, false otherwise
      */
     private suspend fun sendNotification(
         playerId: String,
         title: String,
-        body: String
+        body: String,
+        requestId: String? = null,
+        fromUserId: String? = null,
+        includeActionButtons: Boolean = false
     ): Boolean = withContext(Dispatchers.IO) {
         // Validate configuration
         if (appId.isBlank() || restApiKey.isBlank()) {
@@ -106,6 +120,34 @@ class OneSignalNotificationService(
                 put("include_player_ids", JSONArray().put(playerId))
                 put("headings", JSONObject().put("en", title))
                 put("contents", JSONObject().put("en", body))
+                // Force OneSignal to use the app-created Android notification channel.
+                // NOTE: v2 channel is used because Android can't increase channel importance once created.
+                put("existing_android_channel_id", "arcadia_friends_v2")
+                // Use Android BigTextStyle so the notification expands in the shade.
+                // Note: Android may still collapse it in heads-up; full expansion is OS-controlled.
+                put("android_big_text", body)
+                
+                // Add action buttons for friend requests
+                if (includeActionButtons && requestId != null) {
+                    // On tap (without expanding), open the Friend Requests screen directly.
+                    put("app_url", "arcadia://friends/requests")
+                    put("buttons", JSONArray().apply {
+                        put(JSONObject().put("id", "accept").put("text", "Accept"))
+                        put(JSONObject().put("id", "decline").put("text", "Decline"))
+                    })
+                    put("data", JSONObject().apply {
+                        put("type", "friend_request")
+                        put("requestId", requestId)
+                        put("fromUserId", fromUserId ?: "")
+                    })
+                }
+                
+                // Android notification settings.
+                // Heads-up display is controlled by the Android notification channel importance
+                // (we bind to the app-created channel via existing_android_channel_id above).
+                put("priority", 10)
+                put("small_icon", "ic_notification")
+                put("android_accent_color", "FF6200EE")
             }
 
             val request = Request.Builder()

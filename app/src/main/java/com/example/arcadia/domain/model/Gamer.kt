@@ -20,6 +20,7 @@ data class Gamer(
     val steamId: String? = null,
     val xboxGamertag: String? = null,
     val psnId: String? = null,
+    val discordUsername: String? = null,
     // Custom profile sections
     val customSections: List<ProfileSection> = emptyList(),
     // Profile visibility settings

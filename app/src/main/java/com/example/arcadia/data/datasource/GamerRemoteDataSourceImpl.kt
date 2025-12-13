@@ -9,8 +9,10 @@ import io.appwrite.models.Row
 import io.appwrite.services.Realtime
 import io.appwrite.services.Storage
 import io.appwrite.services.TablesDB
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 
@@ -85,7 +87,10 @@ class GamerRemoteDataSourceImpl(
 
     override fun observeUser(userId: String): Flow<Row<Map<String, Any>>> = callbackFlow {
         try {
-            trySend(getUser(userId))
+            val result = trySend(getUser(userId))
+            if (result.isFailure) {
+                Log.w(TAG, "Failed to send initial user data")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching initial user: ${e.message}", e)
         }
@@ -93,9 +98,13 @@ class GamerRemoteDataSourceImpl(
         val subscription = realtime.subscribe(
             "databases.$DATABASE_ID.tables.$USERS_COLLECTION_ID.rows.$userId"
         ) {
+            Log.d(TAG, "Realtime update received for user: $userId")
             launch {
                 try {
-                    trySend(getUser(userId))
+                    val result = trySend(getUser(userId))
+                    if (result.isFailure) {
+                        Log.w(TAG, "Failed to send updated user data, buffer may be full")
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error refreshing user: ${e.message}", e)
                 }
@@ -103,5 +112,5 @@ class GamerRemoteDataSourceImpl(
         }
 
         awaitClose { subscription.close() }
-    }
+    }.buffer(Channel.CONFLATED)
 }

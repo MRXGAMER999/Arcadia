@@ -14,6 +14,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -137,11 +138,14 @@ class FriendsRemoteDataSourceImpl(
         val subscription = realtime.subscribe(
             "databases.$DATABASE_ID.tables.$FRIEND_REQUESTS_COLLECTION_ID.rows"
         ) {
+            Log.d(TAG, "Realtime update received for friend requests collection")
             launch {
                 try {
                     val result = trySend(fetchIncomingRequests(userId))
                     if (result.isFailure) {
                         Log.w(TAG, "Failed to send updated incoming requests, buffer may be full")
+                    } else {
+                        Log.d(TAG, "Successfully sent updated incoming requests")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error refreshing incoming requests: ${e.message}", e)
@@ -209,8 +213,9 @@ class FriendsRemoteDataSourceImpl(
         toUserId: String,
         toUsername: String,
         toProfileImageUrl: String?
-    ) {
+    ): String {
         val currentTime = System.currentTimeMillis()
+        val requestId = ID.unique()
         val requestData = mapOf(
             "fromUserId" to fromUserId,
             "fromUsername" to fromUsername,
@@ -225,9 +230,10 @@ class FriendsRemoteDataSourceImpl(
         tablesDb.createRow(
             databaseId = DATABASE_ID,
             tableId = FRIEND_REQUESTS_COLLECTION_ID,
-            rowId = ID.unique(),
+            rowId = requestId,
             data = requestData
         )
+        return requestId
     }
 
     override suspend fun acceptFriendRequest(
@@ -242,6 +248,28 @@ class FriendsRemoteDataSourceImpl(
         val currentTime = System.currentTimeMillis()
         val currentTimeIso = toIso8601(currentTime)
 
+        // Check if friendship already exists (prevents duplicate creation on double-tap or retry)
+        val existingFriendship = getFriendship(fromUserId, toUserId)
+        if (existingFriendship != null) {
+            Log.d(TAG, "Friendship already exists between $fromUserId and $toUserId, skipping creation")
+            // Still update the request status to accepted if needed
+            try {
+                tablesDb.updateRow(
+                    databaseId = DATABASE_ID,
+                    tableId = FRIEND_REQUESTS_COLLECTION_ID,
+                    rowId = requestId,
+                    data = mapOf(
+                        "status" to FriendRequestStatus.ACCEPTED.name.lowercase(),
+                        "updatedAt" to currentTime
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Request may already be accepted: ${e.message}")
+            }
+            return
+        }
+
+        // Update request status first
         tablesDb.updateRow(
             databaseId = DATABASE_ID,
             tableId = FRIEND_REQUESTS_COLLECTION_ID,
@@ -252,31 +280,43 @@ class FriendsRemoteDataSourceImpl(
             )
         )
 
-        tablesDb.createRow(
-            databaseId = DATABASE_ID,
-            tableId = FRIENDSHIPS_COLLECTION_ID,
-            rowId = ID.unique(),
-            data = mapOf(
-                "userId" to fromUserId,
-                "friendUserId" to toUserId,
-                "friendUsername" to toUsername,
-                "friendProfileImageUrl" to toProfileImageUrl,
-                "addedAt" to currentTimeIso
+        // Create friendship for sender (fromUser -> toUser)
+        try {
+            tablesDb.createRow(
+                databaseId = DATABASE_ID,
+                tableId = FRIENDSHIPS_COLLECTION_ID,
+                rowId = ID.unique(),
+                data = mapOf(
+                    "userId" to fromUserId,
+                    "friendUserId" to toUserId,
+                    "friendUsername" to toUsername,
+                    "friendProfileImageUrl" to toProfileImageUrl,
+                    "addedAt" to currentTimeIso
+                )
             )
-        )
+        } catch (e: Exception) {
+            // If it fails due to duplicate, the friendship may already exist from a concurrent request
+            Log.w(TAG, "Failed to create friendship for sender, may already exist: ${e.message}")
+        }
 
-        tablesDb.createRow(
-            databaseId = DATABASE_ID,
-            tableId = FRIENDSHIPS_COLLECTION_ID,
-            rowId = ID.unique(),
-            data = mapOf(
-                "userId" to toUserId,
-                "friendUserId" to fromUserId,
-                "friendUsername" to fromUsername,
-                "friendProfileImageUrl" to fromProfileImageUrl,
-                "addedAt" to currentTimeIso
+        // Create friendship for receiver (toUser -> fromUser)
+        try {
+            tablesDb.createRow(
+                databaseId = DATABASE_ID,
+                tableId = FRIENDSHIPS_COLLECTION_ID,
+                rowId = ID.unique(),
+                data = mapOf(
+                    "userId" to toUserId,
+                    "friendUserId" to fromUserId,
+                    "friendUsername" to fromUsername,
+                    "friendProfileImageUrl" to fromProfileImageUrl,
+                    "addedAt" to currentTimeIso
+                )
             )
-        )
+        } catch (e: Exception) {
+            // If it fails due to duplicate, the friendship may already exist from a concurrent request
+            Log.w(TAG, "Failed to create friendship for receiver, may already exist: ${e.message}")
+        }
     }
 
     override suspend fun declineFriendRequest(requestId: String) {
@@ -342,41 +382,25 @@ class FriendsRemoteDataSourceImpl(
     override fun observeUsersByIds(userIds: List<String>): Flow<List<Row<Map<String, Any>>>> = callbackFlow {
         if (userIds.isEmpty()) {
             trySend(emptyList())
+            // Keep the flow alive - don't close immediately
             awaitClose { }
             return@callbackFlow
         }
 
-        // Initial fetch
+        // Fetch users once.
+        // Realtime updates for all these users would be too heavy (requires subscribing to entire Users table).
+        // We accept that user details (name/avatar) are fetched once per list update.
         try {
-            val initialUsers = getUsers(userIds)
-            val result = trySend(initialUsers)
-            if (result.isFailure) {
-                Log.w(TAG, "Failed to send initial users data")
-            }
+            trySend(getUsers(userIds))
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching initial users: ${e.message}", e)
+            Log.e(TAG, "Error fetching users: ${e.message}", e)
             trySend(emptyList())
         }
-
-        // Subscribe to users table changes
-        val subscription = realtime.subscribe(
-            "databases.$DATABASE_ID.tables.$USERS_COLLECTION_ID.rows"
-        ) {
-            launch {
-                try {
-                    val users = getUsers(userIds)
-                    val result = trySend(users)
-                    if (result.isFailure) {
-                        Log.w(TAG, "Failed to send updated users data, buffer may be full")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error refreshing users: ${e.message}", e)
-                }
-            }
-        }
-
-        awaitClose { subscription.close() }
-    }.buffer(Channel.CONFLATED)
+        
+        // Keep the flow alive so flatMapLatest doesn't complete the chain
+        // The flow will be cancelled when flatMapLatest switches to a new inner flow
+        awaitClose { }
+    }
 
     override fun observePendingRequestCount(userId: String): Flow<Int> = callbackFlow {
         val query = listOf(
@@ -397,9 +421,11 @@ class FriendsRemoteDataSourceImpl(
         val subscription = realtime.subscribe(
             "databases.$DATABASE_ID.tables.$FRIEND_REQUESTS_COLLECTION_ID.rows"
         ) {
+            Log.d(TAG, "Realtime update received for pending request count")
             launch {
                 try {
                     val count = tablesDb.listRows(DATABASE_ID, FRIEND_REQUESTS_COLLECTION_ID, query).total.toInt()
+                    Log.d(TAG, "Updated pending request count: $count")
                     val result = trySend(count)
                     if (result.isFailure) {
                         Log.w(TAG, "Failed to send updated pending count, buffer may be full")

@@ -187,6 +187,7 @@ fun FriendsScreen(
         isSearching = uiState.isSearching,
         searchHint = uiState.searchHint,
         isActionInProgress = uiState.isActionInProgress,
+        actioningUserId = uiState.actioningUserId,
         onDismiss = { viewModel.hideBottomSheet() },
         onModeChange = { mode ->
             when (mode) {

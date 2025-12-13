@@ -27,7 +27,8 @@ data class EditProfileScreenState(
     val profileComplete: Boolean = false,
     val steamId: String = "",
     val xboxGamertag: String = "",
-    val psnId: String = ""
+    val psnId: String = "",
+    val discordUsername: String = ""
 )
 
 // Local editing state (not yet saved)
@@ -41,7 +42,8 @@ data class EditProfileLocalState(
     val profileImageUrl: String? = null,
     val steamId: String = "",
     val xboxGamertag: String = "",
-    val psnId: String = ""
+    val psnId: String = "",
+    val discordUsername: String = ""
 )
 
 class EditProfileViewModel(
@@ -128,7 +130,8 @@ class EditProfileViewModel(
                         profileComplete = fetchedGamer.profileComplete,
                         steamId = fetchedGamer.steamId ?: "",
                         xboxGamertag = fetchedGamer.xboxGamertag ?: "",
-                        psnId = fetchedGamer.psnId ?: ""
+                        psnId = fetchedGamer.psnId ?: "",
+                        discordUsername = fetchedGamer.discordUsername ?: ""
                     )
                     
                     // Initialize local state with saved values
@@ -142,7 +145,8 @@ class EditProfileViewModel(
                         profileImageUrl = fetchedGamer.profileImageUrl,
                         steamId = fetchedGamer.steamId ?: "",
                         xboxGamertag = fetchedGamer.xboxGamertag ?: "",
-                        psnId = fetchedGamer.psnId ?: ""
+                        psnId = fetchedGamer.psnId ?: "",
+                        discordUsername = fetchedGamer.discordUsername ?: ""
                     )
                     
                     screenReady = RequestState.Success(Unit)
@@ -190,6 +194,10 @@ class EditProfileViewModel(
         localState = localState.copy(psnId = value)
     }
     
+    fun updateLocalDiscordUsername(value: String) {
+        localState = localState.copy(discordUsername = value)
+    }
+    
     // Handle profile image selection and upload
     fun uploadProfileImage(
         imageUri: Uri,
@@ -234,7 +242,8 @@ class EditProfileViewModel(
                     profileComplete = true,
                     steamId = localState.steamId.takeIf { it.isNotEmpty() },
                     xboxGamertag = localState.xboxGamertag.takeIf { it.isNotEmpty() },
-                    psnId = localState.psnId.takeIf { it.isNotEmpty() }
+                    psnId = localState.psnId.takeIf { it.isNotEmpty() },
+                    discordUsername = localState.discordUsername.takeIf { it.isNotEmpty() }
                 ),
                 onSuccess = {
                     // Update saved state with local state after successful save
@@ -249,7 +258,8 @@ class EditProfileViewModel(
                         profileComplete = true,
                         steamId = localState.steamId,
                         xboxGamertag = localState.xboxGamertag,
-                        psnId = localState.psnId
+                        psnId = localState.psnId,
+                        discordUsername = localState.discordUsername
                     )
                     onSuccess()
                 },
@@ -270,7 +280,8 @@ class EditProfileViewModel(
             profileImageUrl = screenState.profileImageUrl,
             steamId = screenState.steamId,
             xboxGamertag = screenState.xboxGamertag,
-            psnId = screenState.psnId
+            psnId = screenState.psnId,
+            discordUsername = screenState.discordUsername
         )
     }
 }

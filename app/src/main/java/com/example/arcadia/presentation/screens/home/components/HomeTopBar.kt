@@ -1,6 +1,7 @@
 package com.example.arcadia.presentation.screens.home.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
@@ -14,8 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.arcadia.R
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.Surface
 import com.example.arcadia.ui.theme.TextSecondary
@@ -61,9 +66,10 @@ fun HomeTopBar(
         actions = {
             IconButton(onClick = onSearchClick) {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    painter = painterResource(R.drawable.search),
                     contentDescription = "Search",
-                    tint = ButtonPrimary
+                    tint = ButtonPrimary,
+                    modifier = Modifier.size(28.dp)
                 )
             }
             // Friends icon with badge - Requirements: 2.1, 2.3, 2.4, 2.5
@@ -84,24 +90,27 @@ fun HomeTopBar(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.People,
+                            painter = painterResource(R.drawable.users),
                             contentDescription = "Friends",
-                            tint = ButtonPrimary
+                            tint = ButtonPrimary,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 } else {
                     Icon(
-                        imageVector = Icons.Default.People,
+                        painter = painterResource(R.drawable.users),
                         contentDescription = "Friends",
-                        tint = ButtonPrimary
+                        tint = ButtonPrimary,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
             IconButton(onClick = onSettingsClick) {
                 Icon(
-                    imageVector = Icons.Default.Settings,
+                    painter = painterResource(R.drawable.profile),
                     contentDescription = "Settings",
-                    tint = ButtonPrimary
+                    tint = ButtonPrimary,
+                    modifier = Modifier.size(28.dp)
                 )
             }
         },

@@ -68,6 +68,7 @@ data class ProfileState(
     val steamId: String? = null,
     val xboxGamertag: String? = null,
     val psnId: String? = null,
+    val discordUsername: String? = null,
     val isProfilePublic: Boolean = true
 )
 
@@ -232,6 +233,7 @@ class ProfileViewModel(
                         steamId = gamer.steamId,
                         xboxGamertag = gamer.xboxGamertag,
                         psnId = gamer.psnId,
+                        discordUsername = gamer.discordUsername,
                         isProfilePublic = gamer.isProfilePublic
                     )
                     customSections = gamer.customSections

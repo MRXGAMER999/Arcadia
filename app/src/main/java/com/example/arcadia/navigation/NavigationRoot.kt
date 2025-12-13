@@ -79,19 +79,23 @@ fun NavigationRoot(
     val isUserAuthenticated = FirebaseAuth.getInstance().currentUser != null
     val isOnBoardingCompleted = preferencesManager.isOnBoardingCompleted()
     
-    // Handle Deep Link (arcadia://profile/{userId} or https://mrxgamer999.github.io/Arcadia/profile?id={userId})
+    // Handle Deep Link (arcadia://profile/{userId}, arcadia://friends/requests, or https://mrxgamer999.github.io/Arcadia/profile?id={userId})
     val activity = context as? Activity
     val intent = activity?.intent
-    val deepLinkUserId = remember(intent) {
+    val deepLink = remember(intent) {
         intent?.data?.let { uri ->
             when {
                 // Custom scheme: arcadia://profile/{userId}
                 uri.scheme == "arcadia" && uri.host == "profile" -> {
-                    uri.pathSegments.firstOrNull()
+                    ProfileScreenKey(uri.pathSegments.firstOrNull())
+                }
+                // Custom scheme: arcadia://friends/requests
+                uri.scheme == "arcadia" && uri.host == "friends" && uri.path?.startsWith("/requests") == true -> {
+                    FriendRequestsScreenKey
                 }
                 // GitHub Pages: https://mrxgamer999.github.io/Arcadia/profile?id={userId}
                 uri.host == "mrxgamer999.github.io" && uri.path?.startsWith("/Arcadia/profile") == true -> {
-                    uri.getQueryParameter("id")
+                    ProfileScreenKey(uri.getQueryParameter("id"))
                 }
                 else -> null
             }
@@ -100,7 +104,7 @@ fun NavigationRoot(
     
     // Determine the starting screen based on onboarding and authentication status
     val startDestination = when {
-        deepLinkUserId != null -> ProfileScreenKey(deepLinkUserId)
+        deepLink != null && isOnBoardingCompleted && isUserAuthenticated -> deepLink
         !isOnBoardingCompleted -> OnboardingScreenKey
         !isUserAuthenticated -> AuthScreenKey
         else -> HomeScreenKey

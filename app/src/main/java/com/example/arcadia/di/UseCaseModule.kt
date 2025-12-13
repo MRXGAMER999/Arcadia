@@ -17,6 +17,15 @@ import com.example.arcadia.domain.usecase.RemoveGameFromLibraryUseCase
 import com.example.arcadia.domain.usecase.SearchGamesUseCase
 import com.example.arcadia.domain.usecase.SortGamesUseCase
 import com.example.arcadia.domain.usecase.UpdateGameEntryUseCase
+import com.example.arcadia.domain.usecase.friend.AcceptFriendRequestUseCase
+import com.example.arcadia.domain.usecase.friend.CancelFriendRequestUseCase
+import com.example.arcadia.domain.usecase.friend.DeclineFriendRequestUseCase
+import com.example.arcadia.domain.usecase.friend.GetFriendshipStatusUseCase
+import com.example.arcadia.domain.usecase.friend.GetPendingRequestsUseCase
+import com.example.arcadia.domain.usecase.friend.GetSentRequestsUseCase
+import com.example.arcadia.domain.usecase.friend.RemoveFriendUseCase
+import com.example.arcadia.domain.usecase.friend.SearchUsersUseCase
+import com.example.arcadia.domain.usecase.friend.SendFriendRequestUseCase
 import com.example.arcadia.domain.usecase.studio.GetLocalStudioSuggestionsUseCase
 import com.example.arcadia.domain.usecase.studio.GetStudioExpansionUseCase
 import com.example.arcadia.domain.usecase.studio.SearchStudiosUseCase
@@ -86,10 +95,37 @@ val useCaseModule = module {
     /** Filters games by various criteria */
     factory { FilterGamesUseCase() }
     
-    // ==================== Social Use Cases ====================
+    // ==================== Social / Friends Use Cases ====================
     
     /** Observes pending friend requests for badge display */
     factory { GetPendingFriendRequestsCountUseCase(get(), get()) }
+    
+    /** Sends a friend request with full validation (auth, reciprocal, cooldown, limits) */
+    factory { SendFriendRequestUseCase(get(), get()) }
+    
+    /** Accepts a friend request with friends limit validation */
+    factory { AcceptFriendRequestUseCase(get(), get()) }
+    
+    /** Declines a friend request (marks as declined for cooldown tracking) */
+    factory { DeclineFriendRequestUseCase(get()) }
+    
+    /** Cancels a sent friend request */
+    factory { CancelFriendRequestUseCase(get()) }
+    
+    /** Removes a friend from both users' lists */
+    factory { RemoveFriendUseCase(get(), get()) }
+    
+    /** Searches users with enriched friendship status */
+    factory { SearchUsersUseCase(get(), get()) }
+    
+    /** Gets realtime friendship status for profile screens */
+    factory { GetFriendshipStatusUseCase(get(), get()) }
+    
+    /** Gets incoming friend requests with realtime updates */
+    factory { GetPendingRequestsUseCase(get(), get()) }
+    
+    /** Gets outgoing friend requests with realtime updates */
+    factory { GetSentRequestsUseCase(get(), get()) }
     
     // ==================== Studio Use Cases ====================
     

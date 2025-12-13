@@ -11,6 +11,8 @@ import com.example.arcadia.presentation.screens.friends.components.LimitType
 import com.example.arcadia.domain.repository.FriendsRepository
 import com.example.arcadia.domain.repository.GamerRepository
 import com.example.arcadia.presentation.base.BaseViewModel
+import com.example.arcadia.domain.usecase.GetPendingFriendRequestsCountUseCase
+import com.example.arcadia.domain.usecase.friend.SearchUsersUseCase
 import com.example.arcadia.util.NetworkMonitor
 import com.example.arcadia.util.RequestState
 import kotlinx.coroutines.Job
@@ -73,6 +75,8 @@ data class FriendsUiState(
     val searchHint: String? = null,
     /** Whether a friend action is in progress */
     val isActionInProgress: Boolean = false,
+    /** ID of user currently being actioned (for button loading) */
+    val actioningUserId: String? = null,
     /** Action error message */
     val actionError: String? = null,
     /** Action success message */
@@ -106,7 +110,9 @@ data class FriendsUiState(
 class FriendsViewModel(
     private val friendsRepository: FriendsRepository,
     private val gamerRepository: GamerRepository,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val getPendingFriendRequestsCountUseCase: GetPendingFriendRequestsCountUseCase,
+    private val searchUsersUseCase: SearchUsersUseCase
 ) : BaseViewModel() {
 
     companion object {
@@ -210,10 +216,8 @@ class FriendsViewModel(
      * Requirements: 2.3, 2.4, 2.5
      */
     private fun observePendingRequestCount() {
-        val userId = currentUserId ?: return
-        
         launchWithKey("pending_count") {
-            friendsRepository.getPendingRequestCountRealtime(userId).collect { state ->
+            getPendingFriendRequestsCountUseCase().collect { state ->
                 when (state) {
                     is RequestState.Success -> _uiState.update { it.copy(pendingRequestCount = state.data) }
                     is RequestState.Error -> {
@@ -350,14 +354,13 @@ class FriendsViewModel(
 
     /**
      * Performs the actual search operation.
+     * Uses SearchUsersUseCase to enrich results with friendship status.
      * Requirements: 3.5, 3.6, 3.7
      */
     private suspend fun performSearch(query: String) {
-        val userId = currentUserId ?: return
-        
         _uiState.update { it.copy(isSearching = true, searchHint = null) }
         
-        when (val result = friendsRepository.searchUsers(query, userId)) {
+        when (val result = searchUsersUseCase(query)) {
             is RequestState.Success -> {
                 val results = result.data
                 _uiState.update { 
@@ -440,6 +443,7 @@ class FriendsViewModel(
         _uiState.update { state ->
             state.copy(
                 isActionInProgress = true,
+                actioningUserId = targetUser.userId,
                 actionError = null,
                 // Optimistic UI: mark as REQUEST_SENT immediately
                 searchResults = state.searchResults.map { user ->
@@ -459,6 +463,7 @@ class FriendsViewModel(
                     _uiState.update { 
                         it.copy(
                             isActionInProgress = false,
+                            actioningUserId = null,
                             reciprocalRequest = reciprocalRequest,
                             reciprocalRequestTargetUser = targetUser
                         )
@@ -472,6 +477,7 @@ class FriendsViewModel(
                     _uiState.update { 
                         it.copy(
                             isActionInProgress = false,
+                            actioningUserId = null,
                             declinedCooldownHours = cooldownHours,
                             limitReachedType = LimitType.COOLDOWN
                         )
@@ -491,6 +497,7 @@ class FriendsViewModel(
                     _uiState.update { 
                         it.copy(
                             isActionInProgress = false,
+                            actioningUserId = null,
                             requestValidation = validation,
                             limitReachedType = limitType
                         )
@@ -504,6 +511,7 @@ class FriendsViewModel(
                     _uiState.update { 
                         it.copy(
                             isActionInProgress = false,
+                            actioningUserId = null,
                             actionError = "Failed to get user information"
                         )
                     }
@@ -525,6 +533,7 @@ class FriendsViewModel(
                         _uiState.update { 
                             it.copy(
                                 isActionInProgress = false,
+                                actioningUserId = null,
                                 actionSuccess = null,
                                 showActionSnackbar = true,
                                 actionSnackbarMessage = "Friend request sent",
@@ -537,6 +546,7 @@ class FriendsViewModel(
                         _uiState.update { 
                             it.copy(
                                 isActionInProgress = false,
+                                actioningUserId = null,
                                 actionError = result.message,
                                 // Revert optimistic state on failure
                                 searchResults = it.searchResults.map { user ->
@@ -553,6 +563,7 @@ class FriendsViewModel(
                 _uiState.update { 
                     it.copy(
                         isActionInProgress = false,
+                        actioningUserId = null,
                         actionError = "Failed to send friend request",
                         // Revert optimistic state on failure
                         searchResults = it.searchResults.map { user ->
@@ -583,7 +594,7 @@ class FriendsViewModel(
         }
         
         viewModelScope.launch {
-            _uiState.update { it.copy(isActionInProgress = true, actionError = null) }
+            _uiState.update { it.copy(isActionInProgress = true, actioningUserId = targetUser.userId, actionError = null) }
             
             try {
                 // Find the pending request from target user
@@ -592,6 +603,7 @@ class FriendsViewModel(
                     _uiState.update { 
                         it.copy(
                             isActionInProgress = false,
+                            actioningUserId = null,
                             actionError = "Request not found"
                         )
                     }
@@ -604,6 +616,7 @@ class FriendsViewModel(
                     _uiState.update { 
                         it.copy(
                             isActionInProgress = false,
+                            actioningUserId = null,
                             limitReachedType = LimitType.FRIENDS_LIMIT
                         )
                     }
@@ -618,6 +631,7 @@ class FriendsViewModel(
                         _uiState.update { 
                             it.copy(
                                 isActionInProgress = false,
+                                actioningUserId = null,
                                 actionSuccess = null,
                                 showActionSnackbar = true,
                                 actionSnackbarMessage = "Friend added",
@@ -633,6 +647,7 @@ class FriendsViewModel(
                         _uiState.update { 
                             it.copy(
                                 isActionInProgress = false,
+                                actioningUserId = null,
                                 actionError = result.message
                             )
                         }
@@ -644,6 +659,7 @@ class FriendsViewModel(
                 _uiState.update { 
                     it.copy(
                         isActionInProgress = false,
+                        actioningUserId = null,
                         actionError = "Failed to accept friend request"
                     )
                 }

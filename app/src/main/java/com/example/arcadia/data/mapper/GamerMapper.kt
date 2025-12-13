@@ -54,6 +54,7 @@ object GamerMapper {
             steamId = data["steamId"] as? String,
             xboxGamertag = data["xboxGamertag"] as? String,
             psnId = data["psnId"] as? String,
+            discordUsername = data["discordUsername"] as? String,
             customSections = customSections,
             isProfilePublic = data["isProfilePublic"] as? Boolean ?: true,
             featuredBadges = featuredBadges,

@@ -147,6 +147,7 @@ fun AddFriendsBottomSheet(
     isSearching: Boolean,
     searchHint: String?,
     isActionInProgress: Boolean,
+    actioningUserId: String? = null,
     onDismiss: () -> Unit,
     onModeChange: (BottomSheetMode) -> Unit,
     onQRCodeModeChange: (QRCodeMode) -> Unit,
@@ -194,6 +195,7 @@ fun AddFriendsBottomSheet(
                         isSearching = isSearching,
                         searchHint = searchHint,
                         isActionInProgress = isActionInProgress,
+                        actioningUserId = actioningUserId,
                         onBackClick = { onModeChange(BottomSheetMode.OPTIONS) },
                         onSearchQueryChange = onSearchQueryChange,
                         onClearSearch = onClearSearch,
@@ -357,6 +359,7 @@ private fun SearchContent(
     isSearching: Boolean,
     searchHint: String?,
     isActionInProgress: Boolean,
+    actioningUserId: String? = null,
     onBackClick: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit,
@@ -492,7 +495,7 @@ private fun SearchContent(
                     ) { user ->
                         UserSearchResultItem(
                             user = user,
-                            isActionInProgress = isActionInProgress,
+                            isActionInProgress = isActionInProgress && actioningUserId == user.userId,
                             onSendFriendRequest = { onSendFriendRequest(user) },
                             onAcceptFriendRequest = { onAcceptFriendRequest(user) },
                             onNavigateToProfile = { onNavigateToProfile(user.userId) }

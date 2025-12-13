@@ -47,6 +47,7 @@ fun ProfileTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    leadingIcon: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null
 ) {
     OutlinedTextField(
@@ -79,6 +80,7 @@ fun ProfileTextField(
         keyboardActions = keyboardActions,
         visualTransformation = visualTransformation,
         interactionSource = interactionSource,
+        leadingIcon = leadingIcon,
         trailingIcon = if (trailingIcon != null) {
             trailingIcon
         } else if (isError) {

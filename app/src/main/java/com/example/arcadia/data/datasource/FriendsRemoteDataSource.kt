@@ -19,7 +19,7 @@ interface FriendsRemoteDataSource {
         toUserId: String,
         toUsername: String,
         toProfileImageUrl: String?
-    )
+    ): String
     suspend fun acceptFriendRequest(requestId: String, fromUserId: String, toUserId: String, toUsername: String, toProfileImageUrl: String?, fromUsername: String, fromProfileImageUrl: String?)
     suspend fun declineFriendRequest(requestId: String)
     suspend fun cancelFriendRequest(requestId: String)

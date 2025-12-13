@@ -4,7 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
+import com.example.arcadia.R
 import androidx.compose.material.icons.filled.VideogameAsset
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.TextSecondary
@@ -77,7 +78,7 @@ fun HomeBottomBar(
             onClick = { onSelectedItemIndexChange(1) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    painter = painterResource(id = R.drawable.icons8_spyglass),
                     contentDescription = "Discover",
                     modifier = Modifier
                         .scale(discoverScale)
@@ -109,8 +110,9 @@ fun HomeBottomBar(
             onClick = { onSelectedItemIndexChange(2) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.VideogameAsset,
+                    painter = painterResource(R.drawable.my_games),
                     contentDescription = "My Games",
+                    tint = Color.Unspecified,
                     modifier = Modifier
                         .scale(libraryScale)
                         .size(24.dp)

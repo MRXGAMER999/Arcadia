@@ -242,6 +242,9 @@ class FriendRequestsViewModel(
     fun acceptRequest(request: FriendRequest) {
         val userId = currentUserId ?: return
         
+        // Prevent double-taps while an action is in progress
+        if (_uiState.value.isActionInProgress) return
+        
         // Check network connectivity - Requirements: 13.1, 13.4
         if (!isOnline()) {
             _uiState.update { it.copy(actionError = NETWORK_ERROR_MESSAGE) }
@@ -276,8 +279,11 @@ class FriendRequestsViewModel(
                 
                 when (result) {
                     is RequestState.Success -> {
-                        _uiState.update { 
-                            it.copy(
+                        // Optimistically remove the request from the list immediately
+                        // The realtime subscription will also update, but this ensures instant UI feedback
+                        _uiState.update { currentState ->
+                            currentState.copy(
+                                incomingRequests = currentState.incomingRequests.filter { it.id != request.id },
                                 isActionInProgress = false,
                                 processingRequestId = null,
                                 actionSuccess = null,
@@ -317,6 +323,9 @@ class FriendRequestsViewModel(
      * Requirements: 6.13, 13.1, 13.2
      */
     fun declineRequest(request: FriendRequest) {
+        // Prevent double-taps while an action is in progress
+        if (_uiState.value.isActionInProgress) return
+        
         // Check network connectivity - Requirements: 13.1, 13.4
         if (!isOnline()) {
             _uiState.update { it.copy(actionError = NETWORK_ERROR_MESSAGE) }
@@ -337,8 +346,11 @@ class FriendRequestsViewModel(
                 
                 when (result) {
                     is RequestState.Success -> {
-                        _uiState.update { 
-                            it.copy(
+                        // Optimistically remove the request from the list immediately
+                        // The realtime subscription will also update, but this ensures instant UI feedback
+                        _uiState.update { currentState ->
+                            currentState.copy(
+                                incomingRequests = currentState.incomingRequests.filter { it.id != request.id },
                                 isActionInProgress = false,
                                 processingRequestId = null,
                                 actionSuccess = "Friend request declined",
@@ -378,6 +390,9 @@ class FriendRequestsViewModel(
      * Requirements: 7.4, 13.1, 13.2
      */
     fun cancelRequest(request: FriendRequest) {
+        // Prevent double-taps while an action is in progress
+        if (_uiState.value.isActionInProgress) return
+        
         // Check network connectivity - Requirements: 13.1, 13.4
         if (!isOnline()) {
             _uiState.update { it.copy(actionError = NETWORK_ERROR_MESSAGE) }
@@ -398,8 +413,11 @@ class FriendRequestsViewModel(
                 
                 when (result) {
                     is RequestState.Success -> {
-                        _uiState.update { 
-                            it.copy(
+                        // Optimistically remove the request from the list immediately
+                        // The realtime subscription will also update, but this ensures instant UI feedback
+                        _uiState.update { currentState ->
+                            currentState.copy(
+                                outgoingRequests = currentState.outgoingRequests.filter { it.id != request.id },
                                 isActionInProgress = false,
                                 processingRequestId = null,
                                 actionSuccess = "Friend request cancelled",

@@ -70,7 +70,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.LayoutDirection
+import com.example.arcadia.R
 import com.example.arcadia.presentation.base.UndoableViewModel
 import com.example.arcadia.presentation.components.BottomSlideSnackbarHost
 import com.example.arcadia.presentation.components.LibraryEmptyState
@@ -383,9 +385,11 @@ fun MyGamesScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center
                                 ) {
-                                    Text(
-                                        text = "🔍",
-                                        fontSize = 48.sp
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.icons8_spyglass),
+                                        contentDescription = null,
+                                        tint = Color.Unspecified,
+                                        modifier = Modifier.size(48.dp)
                                     )
                                     Text(
                                         text = "No games match your filters",

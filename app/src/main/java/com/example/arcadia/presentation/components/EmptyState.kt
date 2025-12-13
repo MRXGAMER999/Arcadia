@@ -1,7 +1,9 @@
 package com.example.arcadia.presentation.components
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -9,19 +11,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.arcadia.R
 
 @Composable
 fun EmptyState(
-    emoji: String = "🎮",
+    @DrawableRes iconRes: Int,
     title: String = "Nothing here yet",
     message: String = "Start exploring to add games!",
     modifier: Modifier = Modifier
 ) {
-    // Bouncing animation for emoji
+    // Bouncing animation for icon
     val infiniteTransition = rememberInfiniteTransition(label = "empty_state_bounce")
     val bounceOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -33,7 +37,7 @@ fun EmptyState(
         label = "bounce"
     )
     
-    // Scale animation for emoji
+    // Scale animation for icon
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = 1.1f,
@@ -63,11 +67,13 @@ fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Animated emoji
-        Text(
-            text = emoji,
-            fontSize = 120.sp,
+        // Animated icon
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            tint = Color.Unspecified,
             modifier = Modifier
+                .size(120.dp)
                 .offset(y = bounceOffset.dp)
                 .scale(scale)
                 .graphicsLayer { this.alpha = alpha }
@@ -101,7 +107,7 @@ fun EmptyState(
 @Composable
 fun SearchEmptyState(modifier: Modifier = Modifier) {
     EmptyState(
-        emoji = "🔍",
+        iconRes = R.drawable.icons8_spyglass,
         title = "No games found",
         message = "Try searching with different keywords or filters",
         modifier = modifier
@@ -111,7 +117,7 @@ fun SearchEmptyState(modifier: Modifier = Modifier) {
 @Composable
 fun LibraryEmptyState(modifier: Modifier = Modifier) {
     EmptyState(
-        emoji = "📚",
+        iconRes = R.drawable.libirary_empty_,
         title = "Your library is empty",
         message = "Add games to your library to see them here!",
         modifier = modifier
@@ -120,13 +126,13 @@ fun LibraryEmptyState(modifier: Modifier = Modifier) {
 
 @Composable
 fun GenericEmptyState(
-    emoji: String = "🎯",
+    @DrawableRes iconRes: Int = R.drawable.controller,
     title: String,
     message: String,
     modifier: Modifier = Modifier
 ) {
     EmptyState(
-        emoji = emoji,
+        iconRes = iconRes,
         title = title,
         message = message,
         modifier = modifier

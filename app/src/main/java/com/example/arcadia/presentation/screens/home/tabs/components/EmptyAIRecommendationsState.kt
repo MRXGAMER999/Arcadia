@@ -4,15 +4,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.arcadia.R
 import com.example.arcadia.ui.theme.ButtonPrimary
 import com.example.arcadia.ui.theme.TextSecondary
 
@@ -33,9 +38,13 @@ fun EmptyAIRecommendationsState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = if (isLibraryEmpty) "🎮" else "🤖",
-            fontSize = 48.sp
+        Icon(
+            painter = painterResource(
+                id = if (isLibraryEmpty) R.drawable.crafting_table else R.drawable.ai_controller
+            ),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(48.dp)
         )
         
         Text(

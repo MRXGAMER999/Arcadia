@@ -12,12 +12,9 @@ import com.example.arcadia.domain.model.friend.RequestValidation
 import com.example.arcadia.domain.model.friend.UserSearchResult
 import com.example.arcadia.domain.repository.FriendsRepository
 import com.example.arcadia.util.RequestState
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -28,7 +25,7 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
- * Refactored FriendsRepository implementation.
+ * FriendsRepository implementation.
  * Delegates data operations to FriendsRemoteDataSource and mapping to FriendMapper.
  */
 class FriendsRepositoryImpl(
@@ -48,40 +45,11 @@ class FriendsRepositoryImpl(
 
     override fun getFriendsRealtime(userId: String): Flow<RequestState<List<Friend>>> {
         return remoteDataSource.observeFriends(userId)
-            .map { friendshipRows ->
-                // Extract friend user IDs and addedAt timestamps
-                val friendships = friendshipRows.mapNotNull { row ->
-                    val friendUserId = row.data["friendUserId"] as? String
-                    val addedAt = FriendMapper.parseTimestamp(row.data["addedAt"])
-                    if (friendUserId != null) friendUserId to addedAt else null
-                }
-                friendships
+            .map { rows ->
+                val friends = rows.mapNotNull { FriendMapper.toFriend(it) }
+                    .sortedBy { it.username.lowercase() }
+                RequestState.Success(friends) as RequestState<List<Friend>>
             }
-            .flatMapLatest { friendships ->
-                val friendIds = friendships.map { it.first }
-                // Always use observeUsersByIds to maintain persistent subscription
-                remoteDataSource.observeUsersByIds(friendIds)
-                    .map { userRows ->
-                        if (friendships.isEmpty()) {
-                            emptyList()
-                        } else {
-                            val userMap = userRows.associate { 
-                                it.id to (it.data["username"] as? String to it.data["profileImageUrl"] as? String)
-                            }
-                            // Build Friend objects with fresh user data
-                            friendships.mapNotNull { (friendId, addedAt) ->
-                                val (username, profileImageUrl) = userMap[friendId] ?: return@mapNotNull null
-                                Friend(
-                                    userId = friendId,
-                                    username = username ?: "",
-                                    profileImageUrl = profileImageUrl,
-                                    addedAt = addedAt
-                                )
-                            }.sortedBy { it.username.lowercase() }
-                        }
-                    }
-            }
-            .map { friends -> RequestState.Success(friends) as RequestState<List<Friend>> }
             .onStart { emit(RequestState.Loading) }
             .catch { e ->
                 Log.e(TAG, "Error getting friends: ${e.message}", e)
@@ -109,6 +77,7 @@ class FriendsRepositoryImpl(
         }
     }
 
+
     // ==================== Friend Request Operations ====================
 
     override suspend fun sendFriendRequest(
@@ -122,44 +91,37 @@ class FriendsRepositoryImpl(
         return try {
             validateAndResetDailyLimit(fromUserId)
             
-            // Check for existing pending request in either direction
-            val existingOutgoing = remoteDataSource.getFriendRequest(fromUserId, toUserId)
-            if (existingOutgoing != null) {
-                return RequestState.Error("You already have a pending request to this user")
-            }
-            
-            val existingIncoming = remoteDataSource.getFriendRequest(toUserId, fromUserId)
-            if (existingIncoming != null) {
-                return RequestState.Error("This user has already sent you a request. Check your incoming requests.")
-            }
-            
             // Get current count before sending to ensure we can update it
             val userDoc = remoteDataSource.getUser(fromUserId)
             val currentCount = (userDoc.data["friendRequestsSentToday"] as? Number)?.toInt() ?: 0
             
-            // Send the friend request
-            remoteDataSource.sendFriendRequest(
+            // Send the friend request and get the request ID
+            val requestId = remoteDataSource.sendFriendRequest(
                 fromUserId, fromUsername, fromProfileImageUrl,
                 toUserId, toUsername, toProfileImageUrl
             )
             
-            // Increment daily limit - this is critical for rate limiting
+            // Increment daily limit
             try {
                 remoteDataSource.updateUser(fromUserId, mapOf("friendRequestsSentToday" to (currentCount + 1)))
             } catch (e: Exception) {
-                // Log as error since this affects rate limiting
-                Log.e(TAG, "Failed to update daily request counter - rate limiting may be affected: ${e.message}", e)
+                Log.e(TAG, "Failed to update daily request counter: ${e.message}", e)
             }
             
-            // Notification - failure is acceptable, just log it
+            // Send notification with requestId for action buttons
             try {
                 val recipientDoc = remoteDataSource.getUser(toUserId)
                 val recipientPlayerId = recipientDoc.data["oneSignalPlayerId"] as? String
                 if (!recipientPlayerId.isNullOrBlank()) {
-                    notificationService.sendFriendRequestNotification(recipientPlayerId, fromUsername)
+                    notificationService.sendFriendRequestNotification(
+                        recipientPlayerId = recipientPlayerId,
+                        senderUsername = fromUsername,
+                        requestId = requestId,
+                        fromUserId = fromUserId
+                    )
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to send notification (non-critical): ${e.message}")
+                Log.w(TAG, "Failed to send notification: ${e.message}")
             }
             
             RequestState.Success(Unit)
@@ -181,7 +143,7 @@ class FriendsRepositoryImpl(
                 request.fromProfileImageUrl
             )
             
-            // Notification
+            // Send notification
             try {
                 val senderDoc = remoteDataSource.getUser(request.fromUserId)
                 val senderPlayerId = senderDoc.data["oneSignalPlayerId"] as? String
@@ -246,48 +208,15 @@ class FriendsRepositoryImpl(
         return formatter.format(Date())
     }
 
+
     // ==================== Request Queries and Listeners ====================
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     override fun getIncomingRequestsRealtime(userId: String): Flow<RequestState<List<FriendRequest>>> {
         return remoteDataSource.observeIncomingFriendRequests(userId)
-            .map { requestRows ->
-                // Extract request data and fromUserIds
-                val requests = requestRows.mapNotNull { FriendMapper.toFriendRequest(it) }
-                requests
+            .map { rows ->
+                val requests = rows.mapNotNull { FriendMapper.toFriendRequest(it) }
+                RequestState.Success(requests) as RequestState<List<FriendRequest>>
             }
-            .flatMapLatest { requests ->
-                val fromUserIds = requests.map { it.fromUserId }.distinct()
-                // Always use observeUsersByIds to maintain persistent subscription
-                remoteDataSource.observeUsersByIds(fromUserIds)
-                    .map { userRows ->
-                        if (requests.isEmpty()) {
-                            emptyList()
-                        } else {
-                            val userMap = userRows.associate { 
-                                it.id to (it.data["username"] as? String to it.data["profileImageUrl"] as? String)
-                            }
-                            // Enrich requests with fresh user data
-                            requests.map { request ->
-                                val userInfo = userMap[request.fromUserId]
-                                if (userInfo != null) {
-                                    val (username, profileImageUrl) = userInfo
-                                    if (username != null) {
-                                        request.copy(
-                                            fromUsername = username,
-                                            fromProfileImageUrl = profileImageUrl
-                                        )
-                                    } else {
-                                        request // Fallback to stored data
-                                    }
-                                } else {
-                                    request // Fallback to stored data
-                                }
-                            }
-                        }
-                    }
-            }
-            .map { requests -> RequestState.Success(requests) as RequestState<List<FriendRequest>> }
             .onStart { emit(RequestState.Loading) }
             .catch { e ->
                 Log.e(TAG, "Error getting incoming requests: ${e.message}", e)
@@ -297,43 +226,10 @@ class FriendsRepositoryImpl(
 
     override fun getOutgoingRequestsRealtime(userId: String): Flow<RequestState<List<FriendRequest>>> {
         return remoteDataSource.observeOutgoingFriendRequests(userId)
-            .map { requestRows ->
-                // Extract request data and toUserIds
-                val requests = requestRows.mapNotNull { FriendMapper.toFriendRequest(it) }
-                requests
+            .map { rows ->
+                val requests = rows.mapNotNull { FriendMapper.toFriendRequest(it) }
+                RequestState.Success(requests) as RequestState<List<FriendRequest>>
             }
-            .flatMapLatest { requests ->
-                val toUserIds = requests.map { it.toUserId }.distinct()
-                // Always use observeUsersByIds to maintain persistent subscription
-                remoteDataSource.observeUsersByIds(toUserIds)
-                    .map { userRows ->
-                        if (requests.isEmpty()) {
-                            emptyList()
-                        } else {
-                            val userMap = userRows.associate { 
-                                it.id to (it.data["username"] as? String to it.data["profileImageUrl"] as? String)
-                            }
-                            // Enrich requests with fresh user data
-                            requests.map { request ->
-                                val userInfo = userMap[request.toUserId]
-                                if (userInfo != null) {
-                                    val (username, profileImageUrl) = userInfo
-                                    if (username != null) {
-                                        request.copy(
-                                            toUsername = username,
-                                            toProfileImageUrl = profileImageUrl
-                                        )
-                                    } else {
-                                        request // Fallback to stored data
-                                    }
-                                } else {
-                                    request // Fallback to stored data
-                                }
-                            }
-                        }
-                    }
-            }
-            .map { requests -> RequestState.Success(requests) as RequestState<List<FriendRequest>> }
             .onStart { emit(RequestState.Loading) }
             .catch { e ->
                 Log.e(TAG, "Error getting outgoing requests: ${e.message}", e)
@@ -347,7 +243,7 @@ class FriendsRepositoryImpl(
         return try {
             val rows = remoteDataSource.searchUsers(query, currentUserId)
             val results = rows.mapNotNull { FriendMapper.toUserSearchResult(it) }
-                .filter { it.userId != currentUserId } // Filter out self
+                .filter { it.userId != currentUserId }
             RequestState.Success(results)
         } catch (e: Exception) {
             Log.e(TAG, "Error searching users: ${e.message}", e)
@@ -407,88 +303,71 @@ class FriendsRepositoryImpl(
     override suspend fun checkReciprocalRequest(currentUserId: String, targetUserId: String): FriendRequest? {
         val row = remoteDataSource.getFriendRequest(targetUserId, currentUserId)
         val request = row?.let { FriendMapper.toFriendRequest(it) }
-        // Only return if status is actually PENDING
         return if (request?.status == FriendRequestStatus.PENDING) request else null
     }
 
     override suspend fun canSendRequest(userId: String): RequestValidation {
         return try {
-            // Reset daily counters if day changed (matches original behavior)
             validateAndResetDailyLimit(userId)
-
+            
             val userDoc = remoteDataSource.getUser(userId)
-            val sentToday = (userDoc.data["friendRequestsSentToday"] as? Number)?.toInt() ?: 0
-
-            // Get current friends count to check if limit is reached
-            val friendsCount = try {
-                remoteDataSource.observeFriends(userId)
-                    .map { rows -> rows.size }
-                    .first()
-            } catch (e: Exception) {
-                Log.w(TAG, "canSendRequest friend count fallback: ${e.message}")
-                0
-            }
-
-            val outgoingPendingCount = try {
-                remoteDataSource.observeOutgoingFriendRequests(userId)
-                    .map { rows -> rows.mapNotNull { FriendMapper.toFriendRequest(it) } }
-                    .first()
-                    .count { it.status == FriendRequestStatus.PENDING }
-            } catch (e: Exception) {
-                Log.w(TAG, "canSendRequest pending count fallback: ${e.message}")
-                0
-            }
-
-            val dailyLimitReached = sentToday >= DAILY_REQUEST_LIMIT
-            val friendsLimitReached = friendsCount >= FRIENDS_LIMIT
-            val pendingLimitReached = outgoingPendingCount >= PENDING_LIMIT
-            val canSend = !(dailyLimitReached || friendsLimitReached || pendingLimitReached)
-
+            val dailySent = (userDoc.data["friendRequestsSentToday"] as? Number)?.toInt() ?: 0
+            
+            // Get counts from flows (first emission)
+            val friendsCount = remoteDataSource.observeFriends(userId).first().size
+            val pendingCount = remoteDataSource.observeOutgoingFriendRequests(userId).first().size
+            
             RequestValidation(
-                canSend = canSend,
-                dailyLimitReached = dailyLimitReached,
-                pendingLimitReached = pendingLimitReached,
-                friendsLimitReached = friendsLimitReached
+                canSend = dailySent < DAILY_REQUEST_LIMIT && 
+                         pendingCount < PENDING_LIMIT && 
+                         friendsCount < FRIENDS_LIMIT,
+                dailyLimitReached = dailySent >= DAILY_REQUEST_LIMIT,
+                pendingLimitReached = pendingCount >= PENDING_LIMIT,
+                friendsLimitReached = friendsCount >= FRIENDS_LIMIT
             )
         } catch (e: Exception) {
-            Log.w(TAG, "canSendRequest fallback to allow: ${e.message}")
-            RequestValidation(canSend = true)
+            Log.e(TAG, "Error checking request validation: ${e.message}", e)
+            RequestValidation(canSend = false)
         }
     }
 
     override suspend fun getDeclinedRequestCooldown(fromUserId: String, toUserId: String): Int? {
-        val declined = remoteDataSource.getDeclinedRequests(toUserId, fromUserId)
-        val lastDeclined = declined.maxByOrNull { (it.data["updatedAt"] as? Number)?.toLong() ?: 0L }
-        
-        if (lastDeclined != null) {
-            val updatedAt = (lastDeclined.data["updatedAt"] as? Number)?.toLong()
-            // Guard against null or invalid timestamps
-            if (updatedAt == null || updatedAt == 0L) {
-                Log.w(TAG, "Invalid updatedAt timestamp for declined request")
-                return null
-            }
+        return try {
+            val declinedRequests = remoteDataSource.getDeclinedRequests(toUserId, fromUserId)
+            if (declinedRequests.isEmpty()) return null
             
-            val diff = System.currentTimeMillis() - updatedAt
-            // Guard against negative diff (clock skew or future timestamp)
-            if (diff < 0) {
-                Log.w(TAG, "Negative time difference for declined request cooldown")
-                return null
-            }
+            val latestDeclined = declinedRequests.maxByOrNull { 
+                (it.data["updatedAt"] as? String)?.let { date ->
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).parse(date)?.time
+                } ?: 0L
+            } ?: return null
             
-            val hours = TimeUnit.MILLISECONDS.toHours(diff)
-            if (hours < DECLINE_COOLDOWN_HOURS) {
-                return (DECLINE_COOLDOWN_HOURS - hours).toInt()
-            }
+            val declinedTime = (latestDeclined.data["updatedAt"] as? String)?.let { date ->
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).parse(date)?.time
+            } ?: return null
+            
+            val hoursSinceDecline = TimeUnit.MILLISECONDS.toHours(System.currentTimeMillis() - declinedTime)
+            val remaining = DECLINE_COOLDOWN_HOURS - hoursSinceDecline.toInt()
+            
+            if (remaining > 0) remaining else null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking declined cooldown: ${e.message}", e)
+            null
         }
-        return null
     }
 
-    override suspend fun updateFriendProfileData(userId: String, friendUserId: String, newUsername: String?, newProfileImageUrl: String?): RequestState<Unit> {
+    override suspend fun updateFriendProfileData(
+        userId: String,
+        friendUserId: String,
+        newUsername: String?,
+        newProfileImageUrl: String?
+    ): RequestState<Unit> {
         return try {
             remoteDataSource.updateFriendshipProfile(userId, friendUserId, newUsername, newProfileImageUrl)
             RequestState.Success(Unit)
         } catch (e: Exception) {
-            RequestState.Error(e.message ?: "Error updating friend profile")
+            Log.e(TAG, "Error updating friend profile data: ${e.message}", e)
+            RequestState.Error("Failed to update friend profile: ${e.message}")
         }
     }
 
@@ -497,17 +376,32 @@ class FriendsRepositoryImpl(
             remoteDataSource.updateUser(userId, mapOf("oneSignalPlayerId" to playerId))
             RequestState.Success(Unit)
         } catch (e: Exception) {
-            RequestState.Error(e.message ?: "Error updating player ID")
+            Log.e(TAG, "Error updating OneSignal player ID: ${e.message}", e)
+            RequestState.Error("Failed to update player ID: ${e.message}")
         }
     }
 
     override suspend fun getUserPlayerIds(userIds: List<String>): Map<String, String?> {
-        val users = remoteDataSource.getUsers(userIds)
-        return users.associate { it.id to (it.data["oneSignalPlayerId"] as? String) }
+        return try {
+            if (userIds.isEmpty()) return emptyMap()
+            val users = remoteDataSource.getUsers(userIds)
+            users.associate { row ->
+                val id = row.data["\$id"] as? String ?: ""
+                val playerId = row.data["oneSignalPlayerId"] as? String
+                id to playerId
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting user player IDs: ${e.message}", e)
+            emptyMap()
+        }
     }
 
     override suspend fun cleanupOldDeclinedRequests(userId: String, maxDeletes: Int) {
-        val olderThan = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30)
-        remoteDataSource.deleteOldDeclinedRequests(userId, olderThan, maxDeletes)
+        try {
+            val thirtyDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30)
+            remoteDataSource.deleteOldDeclinedRequests(userId, thirtyDaysAgo, maxDeletes)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up old declined requests: ${e.message}", e)
+        }
     }
 }

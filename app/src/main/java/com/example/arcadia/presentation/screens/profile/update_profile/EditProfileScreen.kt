@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import com.example.arcadia.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -316,7 +319,15 @@ fun EditProfileScreen(
                             value = localState.steamId,
                             onValueChange = viewModel::updateLocalSteamId,
                             label = "Steam ID (Optional)",
-                            placeholder = "Your Steam username or ID"
+                            placeholder = "Your Steam username or ID",
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.steam_profile),
+                                    contentDescription = "Steam",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         )
 
                         // Xbox Gamertag Field (Optional)
@@ -324,7 +335,15 @@ fun EditProfileScreen(
                             value = localState.xboxGamertag,
                             onValueChange = viewModel::updateLocalXboxGamertag,
                             label = "Xbox Gamertag (Optional)",
-                            placeholder = "Your Xbox Gamertag"
+                            placeholder = "Your Xbox Gamertag",
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.xbox_profile),
+                                    contentDescription = "Xbox",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         )
 
                         // PSN ID Field (Optional)
@@ -332,7 +351,31 @@ fun EditProfileScreen(
                             value = localState.psnId,
                             onValueChange = viewModel::updateLocalPsnId,
                             label = "PSN ID (Optional)",
-                            placeholder = "Your PlayStation Network ID"
+                            placeholder = "Your PlayStation Network ID",
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.playstation_profile),
+                                    contentDescription = "PlayStation",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        )
+
+                        // Discord Username Field (Optional)
+                        ProfileTextField(
+                            value = localState.discordUsername,
+                            onValueChange = viewModel::updateLocalDiscordUsername,
+                            label = "Discord Username (Optional)",
+                            placeholder = "Your Discord username",
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.discord_profile),
+                                    contentDescription = "Discord",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         )
                     }
 

@@ -316,7 +316,8 @@ fun ProfileScreen(
                                 GamingPlatformsCard(
                                     steamId = profileState.steamId,
                                     xboxGamertag = profileState.xboxGamertag,
-                                    psnId = profileState.psnId
+                                    psnId = profileState.psnId,
+                                    discordUsername = profileState.discordUsername
                                 )
                             }
 

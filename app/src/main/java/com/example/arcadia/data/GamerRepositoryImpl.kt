@@ -144,7 +144,8 @@ class GamerRepositoryImpl(
                 "profileComplete" to gamer.profileComplete,
                 "steamId" to gamer.steamId,
                 "xboxGamertag" to gamer.xboxGamertag,
-                "psnId" to gamer.psnId
+                "psnId" to gamer.psnId,
+                "discordUsername" to gamer.discordUsername
             )
 
             if (gamer.profileImageUrl != null) {

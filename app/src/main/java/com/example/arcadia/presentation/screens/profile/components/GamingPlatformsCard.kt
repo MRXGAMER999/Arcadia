@@ -39,10 +39,11 @@ private val NeonBlue = Color(0xFF00D4FF)
 private val SteamColor = Color(0xFF1B2838)
 private val XboxColor = Color(0xFF107C10)
 private val PlayStationColor = Color(0xFF003087)
+private val DiscordColor = Color(0xFF5865F2)
 
 @Composable
-fun GamingPlatformsCard(steamId: String?, xboxGamertag: String?, psnId: String?) {
-    val hasAnyPlatform = !steamId.isNullOrEmpty() || !xboxGamertag.isNullOrEmpty() || !psnId.isNullOrEmpty()
+fun GamingPlatformsCard(steamId: String?, xboxGamertag: String?, psnId: String?, discordUsername: String? = null) {
+    val hasAnyPlatform = !steamId.isNullOrEmpty() || !xboxGamertag.isNullOrEmpty() || !psnId.isNullOrEmpty() || !discordUsername.isNullOrEmpty()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -62,13 +63,16 @@ fun GamingPlatformsCard(steamId: String?, xboxGamertag: String?, psnId: String?)
             if (hasAnyPlatform) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!steamId.isNullOrEmpty()) {
-                        PlatformBadge("Steam", steamId, SteamColor, R.drawable.pc_ic)
+                        PlatformBadge("Steam", steamId, SteamColor, R.drawable.steam_profile)
                     }
                     if (!xboxGamertag.isNullOrEmpty()) {
-                        PlatformBadge("Xbox", xboxGamertag, XboxColor, R.drawable.xbox_ic)
+                        PlatformBadge("Xbox", xboxGamertag, XboxColor, R.drawable.xbox_profile)
                     }
                     if (!psnId.isNullOrEmpty()) {
-                        PlatformBadge("PlayStation", psnId, PlayStationColor, R.drawable.playstation_ic)
+                        PlatformBadge("PlayStation", psnId, PlayStationColor, R.drawable.playstation_profile)
+                    }
+                    if (!discordUsername.isNullOrEmpty()) {
+                        PlatformBadge("Discord", discordUsername, DiscordColor, R.drawable.discord_profile)
                     }
                 }
             } else {
@@ -83,7 +87,7 @@ fun GamingPlatformsCard(steamId: String?, xboxGamertag: String?, psnId: String?)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(text = "No gaming platforms linked", fontSize = 14.sp, color = TextSecondary.copy(alpha = 0.5f))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = "Add your Steam, Xbox, or PSN ID", fontSize = 14.sp, color = ButtonPrimary.copy(alpha = 0.8f))
+                        Text(text = "Add your Steam, Xbox, PSN, or Discord", fontSize = 14.sp, color = ButtonPrimary.copy(alpha = 0.8f))
                     }
                 }
             }
@@ -106,11 +110,16 @@ private fun PlatformBadge(platformName: String, gamertag: String, platformColor:
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(platformColor)
-                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape), 
+                .background(Color.White)
+                .border(1.dp, platformColor.copy(alpha = 0.3f), CircleShape), 
             contentAlignment = Alignment.Center
         ) {
-            Icon(painter = painterResource(id = iconRes), contentDescription = platformName, tint = Color.White, modifier = Modifier.size(24.dp))
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = platformName,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(28.dp)
+            )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
